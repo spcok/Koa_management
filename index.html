@@ -1,104 +1,59 @@
-
 <!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>KOA Institutional Management</title>
-    
-    <!-- PWA / Mobile Capable Tags -->
-    <meta name="theme-color" content="#1e293b" />
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="KOA Manager">
-    
-    <link rel="manifest" href="/manifest.json" />
-    <link rel="apple-touch-icon" href="/logo.png">
-    
-    <script src="https://cdn.tailwindcss.com?plugins=typography"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&family=Homemade+Apple&display=swap" rel="stylesheet">
-    
+    <title>Kent Owl Academy - Institutional Management</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/buffer/6.0.3/buffer.min.js"></script>
+    <script>
+      (function() {
+        const originalFetch = window.fetch;
+        try {
+          Object.defineProperty(window, 'fetch', {
+            value: originalFetch,
+            configurable: true,
+            writable: true,
+            enumerable: true
+          });
+        } catch (e) {}
+      })();
+      window.global = window;
+      window.Buffer = window.Buffer || Buffer.Buffer;
+      window.process = { 
+        env: { NODE_ENV: 'production' },
+        cwd: () => '/',
+        browser: true,
+        version: '',
+        nextTick: (fn) => setTimeout(fn, 0)
+      };
+    </script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-
-    <style>
-      body { 
-        font-family: 'Inter', sans-serif; 
-        -webkit-font-smoothing: antialiased;
-        overscroll-behavior-y: contain;
-      }
-      .font-mono { font-family: 'JetBrains Mono', monospace; }
-      .font-signature { font-family: 'Homemade Apple', cursive; }
-      
-      /* Safe area padding for iPhones with notches */
-      .safe-area-pb {
-        padding-bottom: env(safe-area-inset-bottom);
-      }
-      
-      ::-webkit-scrollbar {
-        width: 5px;
-        height: 5px;
-      }
-      ::-webkit-scrollbar-track {
-        background: transparent;
-      }
-      ::-webkit-scrollbar-thumb {
-        background: #cbd5e1;
-        border-radius: 10px;
-      }
-      ::-webkit-scrollbar-thumb:hover {
-        background: #94a3b8;
-      }
-
-      .scrollbar-hide::-webkit-scrollbar { display: none; }
-      .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
-
-      @media print {
-        @page { 
-          size: A4 portrait; 
-          margin: 0; 
-        }
-        .no-print { display: none !important; }
-        body { 
-          background-color: white !important;
-          height: auto !important;
-          overflow: visible !important;
-        }
-        #root, main { 
-          height: auto !important; 
-          width: 100% !important;
-          overflow: visible !important; 
-          margin: 0 !important;
-          padding: 0 !important;
-          display: block !important;
-        }
-        .print-container {
-          width: 210mm !important;
-          min-height: 297mm !important;
-          margin: 0 auto !important;
-          padding: 15mm !important;
-          box-shadow: none !important;
-          border: none !important;
-        }
-      }
-    </style>
+    <script src="https://cdn.tailwindcss.com?plugins=typography"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
   <script type="importmap">
 {
   "imports": {
+    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@^2.95.3",
+    "@google/genai": "https://esm.sh/@google/genai@^1.41.0",
+    "lucide-react": "https://esm.sh/lucide-react@^0.564.0",
+    "recharts": "https://esm.sh/recharts@^3.7.0",
+    "react-markdown": "https://esm.sh/react-markdown@^10.1.0",
+    "react/": "https://esm.sh/react@^19.2.4/",
     "react": "https://esm.sh/react@^19.2.4",
     "react-dom/": "https://esm.sh/react-dom@^19.2.4/",
-    "react/": "https://esm.sh/react@^19.2.4/",
-    "@google/genai": "https://esm.sh/@google/genai@^1.39.0",
-    "lucide-react": "https://esm.sh/lucide-react@^0.563.0",
-    "recharts": "https://esm.sh/recharts@^3.7.0",
-    "react-markdown": "https://esm.sh/react-markdown@9?bundle",
-    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.39.3"
+    "vite": "https://esm.sh/vite@^7.3.1",
+    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.4",
+    "path": "https://esm.sh/path@^0.12.7",
+    "docx": "https://esm.sh/docx@^9.5.2",
+    "file-saver": "https://esm.sh/file-saver@^2.0.5",
+    "html2canvas": "https://esm.sh/html2canvas@^1.4.1"
   }
 }
 </script>
 </head>
   <body class="bg-slate-100 text-slate-800 h-screen overflow-hidden">
     <div id="root" class="h-full"></div>
+    <script type="module" src="./index.tsx"></script>
   </body>
 </html>

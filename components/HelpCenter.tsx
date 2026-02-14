@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { 
   HelpCircle, FileText, Wifi, AlertTriangle, Database, Smartphone, Printer, 
   ChevronDown, ChevronUp, Wrench, ShieldCheck, User as UserIcon, Activity, 
-  Settings, Clock, Scale, Utensils, ClipboardList, BarChart3, CloudSun, Droplets 
+  Settings, Clock, Scale, Utensils 
 } from 'lucide-react';
 import { User, UserRole } from '../types';
 
@@ -15,7 +15,7 @@ const HelpCenter: React.FC<HelpCenterProps> = ({ currentUser }) => {
   const [openSection, setOpenSection] = useState<string | null>('general');
 
   const isAdmin = currentUser?.role === UserRole.ADMIN;
-  // const isVolunteer = currentUser?.role === UserRole.VOLUNTEER; // Not currently used but good for context
+  const isVolunteer = currentUser?.role === UserRole.VOLUNTEER;
 
   const toggle = (id: string) => setOpenSection(openSection === id ? null : id);
 
@@ -51,7 +51,7 @@ const HelpCenter: React.FC<HelpCenterProps> = ({ currentUser }) => {
           <h1 className="text-3xl font-black text-slate-900 uppercase tracking-tight">Help & Support</h1>
           <p className="text-slate-500 font-medium">
             Welcome, {currentUser?.name}. 
-            {isAdmin ? ' Accessing Administrator Knowledge Base.' : ' Accessing Staff & Volunteer Guide.'}
+            {isAdmin ? ' Accessing Administrator Knowledge Base.' : ' Accessing Volunteer Guide.'}
           </p>
         </div>
       </div>
@@ -89,83 +89,32 @@ const HelpCenter: React.FC<HelpCenterProps> = ({ currentUser }) => {
           </div>
         </Section>
 
-        {/* --- SECTION 2: WEIGHING --- */}
-        <Section id="weighing" title="Daily Routine: Weighing" icon={Scale} color="bg-emerald-50 text-emerald-600">
+        {/* --- SECTION 2: VOLUNTEER SPECIFIC --- */}
+        <Section id="husbandry" title="Husbandry Protocols" icon={Scale} color="bg-emerald-50 text-emerald-600">
           <div className="space-y-6 text-sm text-slate-600">
-            <p className="font-medium">Accurate weight records are the primary indicator of animal health.</p>
-            
             <div className="bg-emerald-50/50 p-4 rounded-xl border border-emerald-100">
-                <h4 className="font-bold text-emerald-800 text-base mb-2">How to Record Weights</h4>
+                <h4 className="font-bold text-emerald-800 text-base mb-2">Logging Daily Weights</h4>
                 <ol className="list-decimal list-inside space-y-2 ml-1">
-                    <li>Navigate to <strong>Dashboard</strong> or <strong>Daily Log</strong>.</li>
+                    <li>Navigate to <strong>Daily Log</strong>.</li>
+                    <li>Ensure the correct <strong>Category</strong> (e.g., Owls, Raptors) is selected.</li>
                     <li>Tap the <strong>Weight</strong> cell next to the animal's name.</li>
-                    <li>
-                        <strong>Select Unit:</strong> Ensure you are using the correct unit for the animal.
-                        <ul className="list-disc list-inside ml-4 mt-1 text-xs text-slate-500">
-                            <li><strong>Grams (g):</strong> Standard for most mammals and small birds.</li>
-                            <li><strong>Ounces (oz):</strong> Common for medium raptors.</li>
-                            <li><strong>Lbs/Oz:</strong> Used for large Eagles (e.g., 8lb 4oz). Note: The system supports "Eighths" of an ounce for precision falconry.</li>
-                        </ul>
-                    </li>
+                    <li>Enter the weight. The system accepts Grams (g), Ounces (oz), or Lbs/Oz depending on the bird settings.</li>
                     <li>Click <strong>Save Entry</strong>.</li>
                 </ol>
             </div>
 
             <div>
-                <h4 className="font-bold text-slate-800 text-base mb-2">Target Weights</h4>
-                <p className="mb-2">The dashboard displays "Target" ranges for Flying and Winter weights.</p>
+                <h4 className="font-bold text-slate-800 text-base mb-2">Feeding Logs</h4>
+                <p className="mb-2">Always record food <strong>after</strong> the animal has eaten or when food is put in the enclosure (for overnight feeds).</p>
                 <ul className="list-disc list-inside space-y-1 ml-1">
-                    <li><strong>Flying Weight:</strong> The ideal weight for operational duties/displays.</li>
-                    <li><strong>Winter Weight:</strong> A slightly higher maintenance weight for resting periods.</li>
+                    <li><strong>Raptors:</strong> Record quantity and type (e.g., "1 Chick"). Note if casting has occurred.</li>
+                    <li><strong>Mammals:</strong> You can add multiple items (e.g., "Bowl of Veg" + "2 Eggs").</li>
+                    <li><strong>Exotics:</strong> Record misting and water changes using the quick-tap icons in the Daily Log.</li>
                 </ul>
-                <p className="text-xs italic mt-2 text-slate-400">If an animal is significantly under/over target, create a Task for the senior keeper.</p>
             </div>
           </div>
         </Section>
 
-        {/* --- SECTION 3: FEEDING --- */}
-        <Section id="feeding" title="Daily Routine: Feeding" icon={Utensils} color="bg-orange-50 text-orange-600">
-          <div className="space-y-6 text-sm text-slate-600">
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="border p-4 rounded-xl bg-white">
-                    <h4 className="font-bold text-slate-900 mb-2 flex items-center gap-2"><Utensils size={14} className="text-orange-500"/> Raptors (Birds of Prey)</h4>
-                    <p className="text-xs mb-2">Record the exact quantity and type of whole prey.</p>
-                    <ul className="list-disc list-inside text-xs space-y-1">
-                        <li><strong>Input:</strong> "1 Chick", "2 Mice", "1/2 Rat".</li>
-                        <li><strong>Casting:</strong> You must record if the bird has produced a cast (pellet) from the previous meal. Toggle "Cast Produced?" to Yes/No.</li>
-                    </ul>
-                </div>
-
-                <div className="border p-4 rounded-xl bg-white">
-                    <h4 className="font-bold text-slate-900 mb-2 flex items-center gap-2"><ClipboardList size={14} className="text-blue-500"/> Mammals</h4>
-                    <p className="text-xs mb-2">Mammal diets are often composite (multiple items).</p>
-                    <ul className="list-disc list-inside text-xs space-y-1">
-                        <li>Use the <strong>"Add Food Item"</strong> button to list multiple ingredients (e.g., "1 Bowl Veg", "2 Eggs", "50g Mealworms").</li>
-                        <li>The system saves this as a single comma-separated log entry.</li>
-                    </ul>
-                </div>
-            </div>
-
-            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
-                <h4 className="font-bold text-slate-800 text-base mb-2">Exotics & Reptiles</h4>
-                <p className="mb-2">For reptiles and invertebrates, you can perform quick-actions directly from the <strong>Daily Log</strong>:</p>
-                <div className="flex gap-4">
-                    <div className="flex items-center gap-2 bg-white px-3 py-2 rounded border border-slate-200">
-                        <Droplets size={16} className="text-emerald-500"/> 
-                        <span className="text-xs font-bold">Mist</span>
-                    </div>
-                    <div className="flex items-center gap-2 bg-white px-3 py-2 rounded border border-slate-200">
-                        <CloudSun size={16} className="text-blue-500"/> 
-                        <span className="text-xs font-bold">Water</span>
-                    </div>
-                </div>
-                <p className="text-xs mt-2 text-slate-500">Tap these icons to instantly log "Completed - Misting" or "Completed - Waters" with the current timestamp.</p>
-            </div>
-          </div>
-        </Section>
-
-        {/* --- SECTION 4: SAFETY --- */}
         <Section id="safety" title="Health & Safety" icon={ShieldCheck} color="bg-rose-50 text-rose-600">
              <div className="space-y-4 text-sm text-slate-600">
                 <p className="font-medium">All staff must adhere to site safety protocols.</p>
@@ -188,80 +137,77 @@ const HelpCenter: React.FC<HelpCenterProps> = ({ currentUser }) => {
              </div>
         </Section>
 
-        {/* --- SECTION 5: REPORTS & ADMIN --- */}
-        <Section id="reports" title="Reporting & Analytics" icon={BarChart3} color="bg-purple-50 text-purple-600">
-            <div className="space-y-6 text-sm text-slate-600">
-                <p>The <strong>Reports</strong> tab is the central hub for printing statutory ledgers and analyzing data.</p>
-
-                <div className="grid grid-cols-1 gap-3">
-                    <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm flex gap-4">
-                        <div className="bg-slate-100 p-2 rounded h-fit"><ClipboardList size={20} className="text-slate-600"/></div>
-                        <div>
-                            <h5 className="font-bold text-slate-900">Husbandry Ledger (Daily Summary)</h5>
-                            <p className="text-xs text-slate-500 mt-1">Prints a complete breakdown of a specific day (or date range) showing Weights, Feeds, Casting, and Training notes for every animal.</p>
-                        </div>
-                    </div>
-                    <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm flex gap-4">
-                        <div className="bg-slate-100 p-2 rounded h-fit"><Scale size={20} className="text-slate-600"/></div>
-                        <div>
-                            <h5 className="font-bold text-slate-900">Weight Matrix</h5>
-                            <p className="text-xs text-slate-500 mt-1">Generates a grid view of weights over a 7-day period to easily spot trends or drops in condition.</p>
-                        </div>
-                    </div>
-                    <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm flex gap-4">
-                        <div className="bg-slate-100 p-2 rounded h-fit"><FileText size={20} className="text-slate-600"/></div>
-                        <div>
-                            <h5 className="font-bold text-slate-900">Annual Stock Audit (Section 9)</h5>
-                            <p className="text-xs text-slate-500 mt-1">ZLA Compliance. Auto-calculates Opening Stock, Births, Deaths, Movements, and Closing Stock for the year.</p>
-                        </div>
-                    </div>
-                </div>
-
-                <div className="bg-purple-50/50 p-4 rounded-xl border border-purple-100 mt-4">
-                    <h4 className="font-bold text-purple-900 text-base mb-2 flex items-center gap-2"><Printer size={16}/> How to Print</h4>
-                    <ol className="list-decimal list-inside space-y-1">
-                        <li>Select the <strong>Report Type</strong> from the left menu.</li>
-                        <li>Use the <strong>Date Picker</strong> to define the range (e.g., "Past 7 Days").</li>
-                        <li>Filter by <strong>Section</strong> (e.g., "Owls Only") if needed.</li>
-                        <li>Click <strong>Authenticate & Print</strong>. This opens the browser print dialog formatted for A4 paper.</li>
-                    </ol>
-                </div>
-            </div>
-        </Section>
-
-        {/* --- SECTION 6: ADMIN ONLY (System Config) --- */}
+        {/* --- SECTION 3: ADMIN ONLY --- */}
         {isAdmin && (
-            <Section id="admin_system" title="Administrator: System Config" icon={Settings} color="bg-slate-800 text-white">
-                <div className="space-y-6 text-sm text-slate-600">
-                    <div>
-                        <h4 className="font-bold text-slate-900 mb-2">Managing Users</h4>
-                        <p>Go to <strong>Settings {'>'} Access Control</strong>.</p>
-                        <ul className="list-disc list-inside mt-2 space-y-1">
-                            <li><strong>Add User:</strong> Create new logins. Set a 4-digit PIN.</li>
-                            <li><strong>Permissions:</strong> Use presets (Volunteer, Keeper, Curator) to quickly assign rights.</li>
-                            <li><strong>Suspension:</strong> Toggle "Active" to false to prevent login without deleting history.</li>
-                        </ul>
-                    </div>
+            <>
+                <Section id="admin_compliance" title="Administrator: Compliance" icon={FileText} color="bg-purple-50 text-purple-600">
+                    <div className="space-y-6 text-sm text-slate-600">
+                        <p className="font-medium text-purple-800 bg-purple-50 p-3 rounded-lg border border-purple-100 inline-block">
+                            Guides for Zoo Licensing Act 1981 (Section 9) Compliance.
+                        </p>
 
-                    <div>
-                        <h4 className="font-bold text-slate-900 mb-2">Data Integrity & Backup</h4>
-                        <p>Go to <strong>Settings {'>'} Data Integrity</strong>.</p>
-                        <div className="flex gap-4 mt-2">
-                            <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 flex-1">
-                                <span className="font-black block mb-1">Export Database</span>
-                                Downloads a JSON file. Do this weekly and store off-site.
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                                <h4 className="font-bold text-slate-900 mb-2">Stock Movements</h4>
+                                <p className="mb-2">Use the <strong>Stock Movements</strong> tab for all acquisitions, dispositions, and transfers.</p>
+                                <ul className="list-disc list-inside text-xs space-y-1">
+                                    <li><strong>Acquisition:</strong> Animals entering the collection. Requires Origin.</li>
+                                    <li><strong>Disposition:</strong> Animals leaving (Death, Sale, Transfer out).</li>
+                                </ul>
                             </div>
-                            <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 flex-1">
-                                <span className="font-black block mb-1">Sync Engine</span>
-                                Forces an AI refresh of IUCN statuses and Latin names.
+                            <div>
+                                <h4 className="font-bold text-slate-900 mb-2">Annual Audits</h4>
+                                <p className="mb-2">Go to <strong>Reports</strong> and select "Annual Audit".</p>
+                                <p className="text-xs">This auto-calculates opening/closing stock based on movement logs. Ensure all movement logs are up to date before generating.</p>
+                            </div>
+                        </div>
+
+                        <div className="border-t border-slate-100 pt-4">
+                            <h4 className="font-bold text-slate-900 mb-2">Medical Records & Deceased Protocols</h4>
+                            <p>To mark an animal as deceased:</p>
+                            <ol className="list-decimal list-inside ml-2 mt-1 space-y-1">
+                                <li>Go to <strong>Medical Centre</strong>.</li>
+                                <li>Click <strong>New Record</strong> (or use the modal in Animal Profile).</li>
+                                <li>Select Condition: <strong>Deceased</strong>.</li>
+                                <li>You MUST provide <strong>Cause of Death</strong> and <strong>Disposal Method</strong>.</li>
+                                <li>This will automatically Archive the animal and update the stock ledger.</li>
+                            </ol>
+                        </div>
+                    </div>
+                </Section>
+
+                <Section id="admin_system" title="Administrator: System Config" icon={Settings} color="bg-slate-800 text-white">
+                    <div className="space-y-6 text-sm text-slate-600">
+                        <div>
+                            <h4 className="font-bold text-slate-900 mb-2">Managing Users</h4>
+                            <p>Go to <strong>Settings {'>'} Access Control</strong>.</p>
+                            <ul className="list-disc list-inside mt-2 space-y-1">
+                                <li><strong>Add User:</strong> Create new logins. Set a 4-digit PIN.</li>
+                                <li><strong>Permissions:</strong> Use presets (Volunteer, Keeper, Curator) to quickly assign rights.</li>
+                                <li><strong>Suspension:</strong> Toggle "Active" to false to prevent login without deleting history.</li>
+                            </ul>
+                        </div>
+
+                        <div>
+                            <h4 className="font-bold text-slate-900 mb-2">Data Integrity & Backup</h4>
+                            <p>Go to <strong>Settings {'>'} Data Integrity</strong>.</p>
+                            <div className="flex gap-4 mt-2">
+                                <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 flex-1">
+                                    <span className="font-black block mb-1">Export Database</span>
+                                    Downloads a JSON file. Do this weekly and store off-site.
+                                </div>
+                                <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 flex-1">
+                                    <span className="font-black block mb-1">Sync Engine</span>
+                                    Forces an AI refresh of IUCN statuses and Latin names.
+                                </div>
                             </div>
                         </div>
                     </div>
-                </div>
-            </Section>
+                </Section>
+            </>
         )}
 
-        {/* --- SECTION 7: TROUBLESHOOTING (EVERYONE) --- */}
+        {/* --- SECTION 4: TROUBLESHOOTING (EVERYONE) --- */}
         <Section id="troubleshoot" title="Troubleshooting" icon={Wrench} color="bg-orange-50 text-orange-600">
           <div className="space-y-6 text-sm text-slate-600">
             <div>

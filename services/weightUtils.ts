@@ -1,36 +1,42 @@
 
 /**
- * Optimized weight utility for Kent Owl Academy.
- * Handles precision conversion between grams and imperial falconry units.
+ * Utility for formatting weights according to animal preference.
+ * Specifically handles Grams, Ounces, and Lbs/Oz with eighths.
  */
 export const formatWeightDisplay = (grams: number | undefined, unit: 'g' | 'oz' | 'lbs_oz' = 'g') => {
-    if (grams === undefined || grams === null || isNaN(grams) || grams < 0) return '-';
+    if (grams === undefined || grams === null || isNaN(grams)) return '';
     
-    if (unit === 'g') return `${Math.round(grams)}g`;
-
-    // High precision conversion: 1 gram = 0.0352739619 ounces
-    const totalOz = grams * 0.0352739619;
-    
-    // Falconry precision: 1/8th of an ounce increments
-    const wholeOz = Math.floor(totalOz);
-    const remainder = totalOz - wholeOz;
-    let eighths = Math.round(remainder * 8);
-    
-    let finalOz = wholeOz;
-    if (eighths === 8) {
-        finalOz += 1;
-        eighths = 0;
+    if (unit === 'g') {
+        return `${Math.round(grams)}g`;
     }
 
-    const eighthsStr = eighths > 0 ? ` ${eighths}/8` : '';
+    // Conversion: 1 gram = 0.035274 ounces
+    const totalOz = grams * 0.035274;
+    const wholeOz = Math.floor(totalOz);
+    const fraction = totalOz - wholeOz;
+    
+    // Falconry standard uses eighths of an ounce
+    let eighths = Math.round(fraction * 8);
+    let displayOz = wholeOz;
+    let displayEighths = '';
+    
+    if (eighths === 8) {
+        displayOz += 1;
+    } else if (eighths > 0) {
+        displayEighths = ` ${eighths}/8`;
+    }
 
-    if (unit === 'oz') return `${finalOz}${eighthsStr}oz`;
+    if (unit === 'oz') {
+        return `${displayOz}${displayEighths}oz`;
+    }
 
     if (unit === 'lbs_oz') {
-        const lbs = Math.floor(finalOz / 16);
-        const remOz = finalOz % 16;
-        if (lbs === 0) return `${remOz}${eighthsStr}oz`;
-        return `${lbs}lb ${remOz}${eighthsStr}oz`;
+        const lbs = Math.floor(displayOz / 16);
+        const remOz = displayOz % 16;
+        if (lbs === 0) {
+            return `${remOz}${displayEighths}oz`;
+        }
+        return `${lbs}lb ${remOz}${displayEighths}oz`;
     }
 
     return `${Math.round(grams)}g`;

@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { Task, Animal, LogType, User, SiteLogEntry } from '../types';
-import { CheckCircle2, Circle, Plus, Calendar, User as UserIcon, AlertCircle, ListTodo, X } from 'lucide-react';
+import { CheckCircle2, Circle, Plus, Calendar, User as UserIcon, AlertCircle, ListTodo } from 'lucide-react';
 import AddEntryModal from './AddEntryModal';
 
 interface TasksProps {
@@ -24,14 +24,6 @@ const Tasks: React.FC<TasksProps> = ({
   const [selectedAnimalForEntry, setSelectedAnimalForEntry] = useState<Animal | null>(null);
   const [showEntryModal, setShowEntryModal] = useState(false);
   const [completingTask, setCompletingTask] = useState<Task | null>(null);
-
-  // New Task Form State
-  const [newTaskTitle, setNewTaskTitle] = useState('');
-  const [newTaskType, setNewTaskType] = useState<LogType>(LogType.GENERAL);
-  const [newTaskDate, setNewTaskDate] = useState(new Date().toISOString().split('T')[0]);
-  const [newTaskAssignee, setNewTaskAssignee] = useState('');
-  const [newTaskNotes, setNewTaskNotes] = useState('');
-  const [newTaskAnimalId, setNewTaskAnimalId] = useState('');
 
   const filteredTasks = tasks.filter(t => {
       if (filter === 'assigned') return !t.completed && (t.assignedTo === currentUser?.id);
@@ -58,28 +50,6 @@ const Tasks: React.FC<TasksProps> = ({
           onUpdateTask({ ...task, completed: true });
       }
   };
-
-  const handleCreateTask = (e: React.FormEvent) => {
-      e.preventDefault();
-      onAddTask({
-          id: `t_${Date.now()}`,
-          title: newTaskTitle,
-          type: newTaskType,
-          dueDate: newTaskDate,
-          assignedTo: newTaskAssignee || undefined,
-          animalId: newTaskAnimalId || undefined,
-          notes: newTaskNotes,
-          completed: false,
-          recurring: false
-      });
-      setShowModal(false);
-      setNewTaskTitle('');
-      setNewTaskNotes('');
-      setNewTaskAssignee('');
-      setNewTaskAnimalId('');
-  };
-
-  const inputClass = "w-full px-3 py-2 bg-slate-100 text-slate-800 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 placeholder-slate-400 transition-all";
 
   return (
     <div className="p-4 md:p-8 space-y-6 animate-in fade-in duration-500 max-w-[1600px] mx-auto">
@@ -140,57 +110,6 @@ const Tasks: React.FC<TasksProps> = ({
                 </div>
             )}
         </div>
-
-        {showModal && (
-            <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
-                <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-0 animate-in zoom-in-95 border-2 border-slate-300 overflow-hidden">
-                    <div className="p-6 border-b-2 border-slate-100 flex justify-between items-center bg-slate-50/50">
-                        <div>
-                            <h2 className="text-xl font-bold text-slate-900 uppercase tracking-tight">New Duty</h2>
-                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Assign Task to Rota</p>
-                        </div>
-                        <button onClick={() => setShowModal(false)} className="text-slate-300 hover:text-slate-900 p-1"><X size={24}/></button>
-                    </div>
-                    <form onSubmit={handleCreateTask} className="p-6 space-y-4">
-                        <div>
-                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Task Title</label>
-                            <input type="text" required value={newTaskTitle} onChange={e => setNewTaskTitle(e.target.value)} className={inputClass} placeholder="e.g. Clean Aviary 1"/>
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Category</label>
-                                <select value={newTaskType} onChange={e => setNewTaskType(e.target.value as any)} className={inputClass}>
-                                    {Object.values(LogType).map(t => <option key={t} value={t}>{t}</option>)}
-                                </select>
-                            </div>
-                            <div>
-                                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Due Date</label>
-                                <input type="date" required value={newTaskDate} onChange={e => setNewTaskDate(e.target.value)} className={inputClass}/>
-                            </div>
-                        </div>
-                        <div>
-                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Assign To</label>
-                            <select value={newTaskAssignee} onChange={e => setNewTaskAssignee(e.target.value)} className={inputClass}>
-                                <option value="">-- Unassigned --</option>
-                                {users?.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-                            </select>
-                        </div>
-                        <div>
-                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Linked Animal (Optional)</label>
-                            <select value={newTaskAnimalId} onChange={e => setNewTaskAnimalId(e.target.value)} className={inputClass}>
-                                <option value="">-- None --</option>
-                                {animals.map(a => <option key={a.id} value={a.id}>{a.name} ({a.species})</option>)}
-                            </select>
-                        </div>
-                        <div>
-                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Notes</label>
-                            <textarea rows={3} value={newTaskNotes} onChange={e => setNewTaskNotes(e.target.value)} className={`${inputClass} resize-none`} placeholder="Additional details..."/>
-                        </div>
-                        <button type="submit" className="w-full py-4 bg-slate-900 text-white rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-black transition-all shadow-xl active:scale-95">Add to Schedule</button>
-                    </form>
-                </div>
-            </div>
-        )}
 
         {showEntryModal && selectedAnimalForEntry && (
             <AddEntryModal isOpen={showEntryModal} onClose={() => setShowEntryModal(false)} onSave={(entry) => {

@@ -1,65 +1,273 @@
-
 import { supabase } from './supabaseClient';
-import { Animal, AnimalCategory, Task, User, UserRole, SiteLogEntry, Contact, OrganizationProfile, Incident, FirstAidLogEntry, TimeLogEntry } from '../types';
+import { Animal, AnimalCategory, Task, User, UserRole, SiteLogEntry, Contact, OrganizationProfile, Incident, FirstAidLogEntry, TimeLogEntry, GlobalDocument, AuditLogEntry, LocalBackupConfig, LocalBackupEntry } from '../types';
 import { DEFAULT_FOOD_OPTIONS, DEFAULT_FEED_METHODS, MOCK_ANIMALS } from '../constants';
+import { RealtimeChannel } from '@supabase/supabase-js';
 
 const DEFAULT_USERS: User[] = [
     { 
         id: 'u1', name: 'Duty Manager', initials: 'DM', role: UserRole.ADMIN, pin: '8888',
-        jobPosition: 'Duty Manager', active: true,
+        // Fix: Added missing required properties 'jobPosition' and 'active'
+        jobPosition: 'Duty Manager',
+        active: true,
         permissions: { 
             dashboard: true, dailyLog: true, tasks: true, medical: true, movements: true, 
-            safety: true, maintenance: true, reports: true, settings: true,
-            flightRecords: true, feedingSchedule: true, attendance: true, attendanceManager: true, missingRecords: true
+            safety: true, maintenance: true, settings: true,
+            flightRecords: true, feedingSchedule: true, attendance: true, attendanceManager: true, missingRecords: true,
+            reports: true
+        }
+    },
+    { 
+        id: 'u2', name: 'Bird Team', initials: 'BT', role: UserRole.VOLUNTEER, pin: '1234',
+        // Fix: Added missing required properties 'jobPosition' and 'active'
+        jobPosition: 'Keeper',
+        active: true,
+        permissions: { 
+            dashboard: true, dailyLog: true, tasks: true, medical: false, movements: false, 
+            safety: false, maintenance: true, settings: false,
+            flightRecords: true, feedingSchedule: false, attendance: false, attendanceManager: false, missingRecords: false,
+            reports: false
         }
     }
 ];
 
+const DEFAULT_LOCAL_BACKUP_CONFIG: LocalBackupConfig = {
+    enabled: true,
+    frequency: 'daily',
+    retentionCount: 10
+};
+
+const handleSupabaseError = (error: any, context: string) => {
+    if (error?.code === 'PGRST204' || error?.code === 'PGRST205') {
+        console.warn(`[Statutory Records] Table for ${context} is pending creation. Using offline mocks.`);
+        return true; 
+    }
+    console.error(`[Supabase Critical] ${context}:`, error);
+    return false;
+};
+
 export const dataService = {
-    fetchAnimals: async (): Promise<Animal[]> => {
-        const { data, error } = await supabase.from('animals').select('json');
-        if (error) return MOCK_ANIMALS;
-        return data && data.length > 0 ? data.map((row: any) => row.json) : MOCK_ANIMALS;
+    // ... Subscriptions ...
+    subscribeToAnimals: (onUpdate: (eventType: string, animal: Animal | string) => void): RealtimeChannel => {
+        return supabase
+            .channel('animals-channel')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'animals' }, (payload) => {
+                if (payload.eventType === 'DELETE') {
+                    onUpdate('DELETE', payload.old.id);
+                } else {
+                    onUpdate(payload.eventType, payload.new.json as Animal);
+                }
+            })
+            .subscribe();
     },
-    saveAnimal: async (animal: Animal) => supabase.from('animals').upsert({ id: animal.id, json: animal }),
-    saveAnimalsBulk: async (animals: Animal[]) => supabase.from('animals').upsert(animals.map(a => ({ id: a.id, json: a }))),
-    deleteAnimal: async (id: string) => supabase.from('animals').delete().eq('id', id),
+
+    // ... Core Data Methods ...
+    fetchAnimals: async (): Promise<Animal[]> => {
+        try {
+            const { data, error } = await supabase.from('animals').select('json');
+            if (error) {
+                handleSupabaseError(error, 'fetchAnimals');
+                return MOCK_ANIMALS; 
+            }
+            return data.map((row: any) => row.json);
+        } catch (e) {
+            return MOCK_ANIMALS;
+        }
+    },
+
+    saveAnimal: async (animal: Animal): Promise<void> => {
+        const { error } = await supabase.from('animals').upsert({ id: animal.id, json: animal });
+        if (error) { handleSupabaseError(error, 'saveAnimal'); throw error; }
+    },
+
+    saveAnimalsBulk: async (animals: Animal[]): Promise<void> => {
+        const rows = animals.map(a => ({ id: a.id, json: a }));
+        const { error } = await supabase.from('animals').upsert(rows);
+        if (error) { handleSupabaseError(error, 'saveAnimalsBulk'); throw error; }
+    },
+
+    deleteAnimal: async (id: string): Promise<void> => {
+        const { error } = await supabase.from('animals').delete().eq('id', id);
+        if (error) { handleSupabaseError(error, 'deleteAnimal'); throw error; }
+    },
+
     fetchUsers: async (): Promise<User[]> => {
         const { data, error } = await supabase.from('users').select('json');
-        if (error) return DEFAULT_USERS;
-        return data && data.length > 0 ? data.map((row: any) => row.json) : DEFAULT_USERS;
+        if (error) { handleSupabaseError(error, 'fetchUsers'); return DEFAULT_USERS; }
+        if (!data || data.length === 0) return DEFAULT_USERS;
+        return data.map((row: any) => row.json);
     },
-    saveUsers: async (users: User[]) => supabase.from('users').upsert(users.map(u => ({ id: u.id, json: u }))),
-    fetchTasks: async () => { const { data } = await supabase.from('tasks').select('json'); return (data || []).map(r => r.json); },
-    saveTasks: async (tasks: Task[]) => supabase.from('tasks').upsert(tasks.map(t => ({ id: t.id, json: t }))),
-    deleteTask: async (id: string) => supabase.from('tasks').delete().eq('id', id),
-    fetchTimeLogs: async () => { const { data } = await supabase.from('time_logs').select('json'); return (data || []).map(r => r.json); },
-    saveTimeLog: async (log: TimeLogEntry) => supabase.from('time_logs').upsert({ id: log.id, json: log }),
-    deleteTimeLog: async (id: string) => supabase.from('time_logs').delete().eq('id', id),
-    fetchSettingsKey: async (key: string, defaultValue: any) => {
+
+    saveUsers: async (users: User[]): Promise<void> => {
+        const rows = users.map(u => ({ id: u.id, json: u }));
+        const { error } = await supabase.from('users').upsert(rows);
+        if (error) throw error;
+    },
+
+    importAnimals: async (animals: Animal[]): Promise<void> => {
+        await dataService.saveAnimalsBulk(animals);
+    },
+
+    fetchTasks: async (): Promise<Task[]> => {
+        const { data, error } = await supabase.from('tasks').select('json');
+        if (error) { handleSupabaseError(error, 'fetchTasks'); return []; }
+        return data.map((row: any) => row.json);
+    },
+
+    saveTasks: async (tasks: Task[]): Promise<void> => {
+        const rows = tasks.map(t => ({ id: t.id, json: t }));
+        const { error } = await supabase.from('tasks').upsert(rows);
+        if (error) throw error;
+    },
+    
+    deleteTask: async (id: string): Promise<void> => {
+        const { error } = await supabase.from('tasks').delete().eq('id', id);
+        if (error) throw error;
+    },
+
+    fetchSiteLogs: async (): Promise<SiteLogEntry[]> => {
+        const { data, error } = await supabase.from('site_logs').select('json');
+        if (error) { handleSupabaseError(error, 'fetchSiteLogs'); return []; }
+        return data.map((row: any) => row.json);
+    },
+
+    saveSiteLog: async (log: SiteLogEntry): Promise<void> => {
+        const { error } = await supabase.from('site_logs').upsert({ id: log.id, json: log });
+        if (error) throw error;
+    },
+
+    deleteSiteLog: async (id: string): Promise<void> => {
+        const { error } = await supabase.from('site_logs').delete().eq('id', id);
+        if (error) throw error;
+    },
+
+    fetchIncidents: async (): Promise<Incident[]> => {
+        const { data, error } = await supabase.from('incidents').select('json');
+        if (error) {
+            handleSupabaseError(error, 'fetchIncidents');
+            return [];
+        }
+        return data.map((row: any) => row.json);
+    },
+
+    saveIncident: async (incident: Incident): Promise<void> => {
+        const { error } = await supabase.from('incidents').upsert({ id: incident.id, json: incident });
+        if (error) throw error;
+    },
+
+    deleteIncident: async (id: string): Promise<void> => {
+        const { error } = await supabase.from('incidents').delete().eq('id', id);
+        if (error) throw error;
+    },
+
+    fetchFirstAidLogs: async (): Promise<FirstAidLogEntry[]> => {
+        const { data, error } = await supabase.from('first_aid_logs').select('json');
+        if (error) {
+            handleSupabaseError(error, 'fetchFirstAidLogs');
+            return [];
+        }
+        return data.map((row: any) => row.json);
+    },
+
+    saveFirstAidLog: async (log: FirstAidLogEntry): Promise<void> => {
+        const { error } = await supabase.from('first_aid_logs').upsert({ id: log.id, json: log });
+        if (error) throw error;
+    },
+
+    deleteFirstAidLog: async (id: string): Promise<void> => {
+        const { error } = await supabase.from('first_aid_logs').delete().eq('id', id);
+        if (error) throw error;
+    },
+
+    fetchTimeLogs: async (): Promise<TimeLogEntry[]> => {
+        const { data, error } = await supabase.from('time_logs').select('json');
+        if (error) { handleSupabaseError(error, 'fetchTimeLogs'); return []; }
+        return (data || []).map((row: any) => row.json);
+    },
+
+    saveTimeLog: async (log: TimeLogEntry): Promise<void> => {
+        const { error } = await supabase.from('time_logs').upsert({ id: log.id, json: log });
+        if (error) throw error;
+    },
+
+    deleteTimeLog: async (id: string): Promise<void> => {
+        const { error } = await supabase.from('time_logs').delete().eq('id', id);
+        if (error) throw error;
+    },
+
+    // --- GLOBAL INSTITUTIONAL METHODS ---
+    fetchGlobalDocuments: async (): Promise<GlobalDocument[]> => {
+        const { data, error } = await supabase.from('global_documents').select('json');
+        if (error) { handleSupabaseError(error, 'fetchGlobalDocuments'); return []; }
+        return (data || []).map((row: any) => row.json);
+    },
+
+    saveGlobalDocument: async (doc: GlobalDocument): Promise<void> => {
+        const { error } = await supabase.from('global_documents').upsert({ id: doc.id, json: doc });
+        if (error) throw error;
+    },
+
+    deleteGlobalDocument: async (id: string): Promise<void> => {
+        const { error } = await supabase.from('global_documents').delete().eq('id', id);
+        if (error) throw error;
+    },
+
+    fetchAuditLogs: async (): Promise<AuditLogEntry[]> => {
+        const { data, error } = await supabase.from('audit_logs').select('json');
+        if (error) { handleSupabaseError(error, 'fetchAuditLogs'); return []; }
+        return (data || []).map((row: any) => row.json);
+    },
+
+    saveAuditLog: async (entry: AuditLogEntry): Promise<void> => {
+        const { error } = await supabase.from('audit_logs').upsert({ id: entry.id, json: entry });
+        if (error) throw error;
+    },
+
+    // --- LOCAL BACKUP METHODS ---
+    fetchLocalBackups: async (): Promise<LocalBackupEntry[]> => {
+        const { data, error } = await supabase.from('local_backups').select('json');
+        if (error) { handleSupabaseError(error, 'fetchLocalBackups'); return []; }
+        return (data || []).map((row: any) => row.json).sort((a, b) => b.timestamp - a.timestamp);
+    },
+
+    saveLocalBackup: async (entry: LocalBackupEntry): Promise<void> => {
+        const { error } = await supabase.from('local_backups').upsert({ id: entry.id, json: entry });
+        if (error) throw error;
+    },
+
+    deleteLocalBackup: async (id: string): Promise<void> => {
+        const { error } = await supabase.from('local_backups').delete().eq('id', id);
+        if (error) throw error;
+    },
+
+    // ... Settings ...
+    fetchSettingsKey: async (key: string, defaultValue: any): Promise<any> => {
         const { data, error } = await supabase.from('settings').select('value').eq('key', key).single();
-        if (error) return defaultValue;
+        if (error && error.code !== 'PGRST116') {
+            handleSupabaseError(error, `fetchSettings:${key}`);
+        }
         return data ? data.value : defaultValue;
     },
-    saveSettingsKey: async (key: string, value: any) => supabase.from('settings').upsert({ key, value }),
+
+    saveSettingsKey: async (key: string, value: any): Promise<void> => {
+        const { error } = await supabase.from('settings').upsert({ key, value });
+        if (error) throw error;
+    },
+
     fetchFoodOptions: async () => dataService.fetchSettingsKey('food_options', DEFAULT_FOOD_OPTIONS),
     saveFoodOptions: async (val: any) => dataService.saveSettingsKey('food_options', val),
+
     fetchFeedMethods: async () => dataService.fetchSettingsKey('feed_methods', DEFAULT_FEED_METHODS),
     saveFeedMethods: async (val: any) => dataService.saveSettingsKey('feed_methods', val),
+
     fetchLocations: async () => dataService.fetchSettingsKey('locations', []),
     saveLocations: async (val: string[]) => dataService.saveSettingsKey('locations', val),
+
     fetchContacts: async () => dataService.fetchSettingsKey('contacts', []),
     saveContacts: async (val: Contact[]) => dataService.saveSettingsKey('contacts', val),
+
     fetchOrgProfile: async () => dataService.fetchSettingsKey('org_profile', null),
     saveOrgProfile: async (val: OrganizationProfile) => dataService.saveSettingsKey('org_profile', val),
-    fetchSiteLogs: async () => { const { data } = await supabase.from('site_logs').select('json'); return (data || []).map(r => r.json); },
-    saveSiteLog: async (l: any) => supabase.from('site_logs').upsert({ id: l.id, json: l }),
-    deleteSiteLog: async (id: string) => supabase.from('site_logs').delete().eq('id', id),
-    fetchIncidents: async () => { const { data } = await supabase.from('incidents').select('json'); return (data || []).map(r => r.json); },
-    saveIncident: async (i: any) => supabase.from('incidents').upsert({ id: i.id, json: i }),
-    deleteIncident: async (id: string) => supabase.from('incidents').delete().eq('id', id),
-    fetchFirstAidLogs: async () => { const { data } = await supabase.from('first_aid_logs').select('json'); return (data || []).map(r => r.json); },
-    saveFirstAidLog: async (l: any) => supabase.from('first_aid_logs').upsert({ id: l.id, json: l }),
-    deleteFirstAidLog: async (id: string) => supabase.from('first_aid_logs').delete().eq('id', id),
-    importAnimals: async (a: Animal[]) => dataService.saveAnimalsBulk(a)
+
+    fetchLocalBackupConfig: async (): Promise<LocalBackupConfig> => dataService.fetchSettingsKey('local_backup_config', DEFAULT_LOCAL_BACKUP_CONFIG),
+    saveLocalBackupConfig: async (val: LocalBackupConfig) => dataService.saveSettingsKey('local_backup_config', val),
 };

@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { TimeLogEntry, User, UserRole } from '../types';
 import { Clock, Calendar, ArrowRight, Timer, Edit2, Trash2, X, Check, AlertCircle } from 'lucide-react';
@@ -67,7 +66,6 @@ const TimeSheets: React.FC<TimeSheetsProps> = ({ timeLogs, currentUser, users, o
                             className="w-full px-3 py-2.5 bg-white border-2 border-slate-200 rounded-xl text-[10px] font-black uppercase tracking-widest focus:border-emerald-500 focus:outline-none transition-all shadow-sm"
                         />
                     </div>
-                    <button onClick={() => window.print()} className="flex-1 md:flex-none bg-slate-900 border-2 border-slate-900 text-white px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-black transition-all shadow-sm">Print Ledger</button>
                 </div>
             </div>
 

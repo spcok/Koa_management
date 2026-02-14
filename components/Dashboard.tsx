@@ -371,14 +371,24 @@ const Dashboard: React.FC<DashboardProps> = ({
                               >
                                   {sortOption === 'custom' && !isOrderLocked && (
                                       <td className="px-2 text-slate-300 group-hover:text-slate-400 border-b border-slate-100 sticky left-0 z-10 bg-inherit">
-                                          <GripVertical size={14} md:size={16} />
+                                          {/* Fix: removed md:size from GripVertical */}
+                                          <GripVertical size={16} />
                                       </td>
                                   )}
                                   <td className={`px-2 md:px-4 py-2 md:py-3 font-bold text-slate-900 border-b border-slate-100 sticky z-10 bg-inherit shadow-[2px_0_5px_rgba(0,0,0,0.03)] group-hover:bg-emerald-50/60 ${sortOption === 'custom' && !isOrderLocked ? 'left-8 md:left-10' : 'left-0'}`} onClick={() => onSelectAnimal(animal)}>
                                       <div className="flex items-center gap-1 md:gap-2">
                                         <span className="truncate max-w-[120px] md:max-w-none">{animal.name}</span>
-                                        {isHighHazard && <Skull size={12} className="text-rose-600 shrink-0" title={animal.isVenomous ? 'Venomous Subject' : 'High Hazard Subject'}/>}
-                                        {isMedHazard && !isHighHazard && <AlertTriangle size={12} className="text-amber-600 shrink-0" title="Medium Hazard Subject"/>}
+                                        {/* Fix: move title to wrapper span for accessibility */}
+                                        {isHighHazard && (
+                                            <span title={animal.isVenomous ? 'Venomous Subject' : 'High Hazard Subject'}>
+                                                <Skull size={12} className="text-rose-600 shrink-0" />
+                                            </span>
+                                        )}
+                                        {isMedHazard && !isHighHazard && (
+                                            <span title="Medium Hazard Subject">
+                                                <AlertTriangle size={12} className="text-amber-600 shrink-0" />
+                                            </span>
+                                        )}
                                       </div>
                                   </td>
                                   <td className="hidden md:table-cell px-3 md:px-4 py-3 border-b border-slate-100" onClick={() => onSelectAnimal(animal)}>

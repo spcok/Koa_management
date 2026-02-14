@@ -12,7 +12,6 @@ interface SiteMaintenanceProps {
 const SiteMaintenance: React.FC<SiteMaintenanceProps> = ({ logs, currentUser, onAddLog, onDeleteLog }) => {
   const [filterStatus, setFilterStatus] = useState<'ALL' | 'Pending' | 'In Progress' | 'Completed'>('ALL');
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isReportMode, setIsReportMode] = useState(false);
 
   // Form State
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -97,12 +96,6 @@ const SiteMaintenance: React.FC<SiteMaintenanceProps> = ({ logs, currentUser, on
         </div>
         <div className="flex gap-2 w-full md:w-auto">
             <button 
-                onClick={() => setIsReportMode(!isReportMode)}
-                className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-2.5 rounded-lg text-xs font-black uppercase tracking-widest border-2 transition-all shadow-sm ${isReportMode ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'}`}
-            >
-                <Printer size={16} /> {isReportMode ? 'Exit Audit' : 'Generate Report'}
-            </button>
-            <button 
                 onClick={() => handleOpenModal()}
                 className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2.5 rounded-lg transition-all shadow-lg shadow-emerald-900/20 text-xs font-black uppercase tracking-widest"
             >
@@ -140,7 +133,7 @@ const SiteMaintenance: React.FC<SiteMaintenanceProps> = ({ logs, currentUser, on
                           <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Priority</th>
                           <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Status</th>
                           <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest text-right">Budget</th>
-                          <th className={`px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest text-right print:hidden ${isReportMode ? 'hidden' : ''}`}>Actions</th>
+                          <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest text-right print:hidden">Actions</th>
                       </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 text-sm">
@@ -182,7 +175,7 @@ const SiteMaintenance: React.FC<SiteMaintenanceProps> = ({ logs, currentUser, on
                                       {log.cost?.toLocaleString(undefined, {minimumFractionDigits: 2}) || '0.00'}
                                   </div>
                               </td>
-                              <td className={`px-6 py-4 text-right align-top print:hidden ${isReportMode ? 'hidden' : ''}`}>
+                              <td className="px-6 py-4 text-right align-top print:hidden">
                                   <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                                       <button onClick={() => handleOpenModal(log)} className="p-2 text-slate-400 hover:text-emerald-600 bg-white border border-slate-200 rounded-lg shadow-sm transition-colors"><Edit2 size={14}/></button>
                                       <button onClick={() => handleDelete(log.id)} className="p-2 text-slate-400 hover:text-rose-600 bg-white border border-slate-200 rounded-lg shadow-sm transition-colors"><Trash2 size={14}/></button>

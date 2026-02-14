@@ -8,11 +8,18 @@ interface IUCNBadgeProps {
     className?: string;
 }
 
+// Interface for each IUCN configuration entry to support optional 'border'
+interface IUCNConfigEntry {
+    label: string;
+    code: string;
+    color: string;
+    text: string;
+    border?: string;
+}
+
 export const IUCNBadge: React.FC<IUCNBadgeProps> = ({ status, size = 'md', className = '' }) => {
     const config = useMemo(() => {
-        // Fix: Explicitly type the configuration map to include the optional 'border' property
-        // This prevents the TypeScript error on line 42 where 'border' was not recognized on common inferred type.
-        const base: Record<string, { label: string; code: string; color: string; text: string; border?: string }> = {
+        const base: Record<ConservationStatus, IUCNConfigEntry> = {
             [ConservationStatus.LC]: { label: 'LEAST CONCERN', code: 'LC', color: 'bg-[#60B044]', text: 'text-white' },
             [ConservationStatus.NT]: { label: 'NEAR THREATENED', code: 'NT', color: 'bg-[#CCE226]', text: 'text-white' },
             [ConservationStatus.VU]: { label: 'VULNERABLE', code: 'VU', color: 'bg-[#F9E814]', text: 'text-slate-900' },

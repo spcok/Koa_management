@@ -48,23 +48,6 @@ export enum LogType {
   WEATHERING = 'Weathering'
 }
 
-export interface UserPermissions {
-  dashboard: boolean;
-  dailyLog: boolean;
-  tasks: boolean;
-  medical: boolean;
-  movements: boolean;
-  safety: boolean; 
-  maintenance: boolean;
-  reports: boolean;
-  settings: boolean;
-  flightRecords: boolean;
-  feedingSchedule: boolean;
-  attendance: boolean;
-  attendanceManager: boolean;
-  missingRecords: boolean;
-}
-
 export enum HealthRecordType {
   OBSERVATION = 'Observation',
   EXAMINATION = 'Examination',
@@ -74,8 +57,6 @@ export enum HealthRecordType {
   QUARANTINE = 'Quarantine Check',
   RELEASE = 'Release Check',
   BEHAVIOUR = 'Behavioural',
-  PARASITOLOGY = 'Parasitology',
-  PATHOLOGY = 'Pathology',
   OTHER = 'Other'
 }
 
@@ -108,6 +89,23 @@ export enum UserRole {
   VOLUNTEER = 'Volunteer'
 }
 
+export interface UserPermissions {
+  dashboard: boolean;
+  dailyLog: boolean;
+  tasks: boolean;
+  medical: boolean;
+  movements: boolean;
+  safety: boolean; 
+  maintenance: boolean;
+  settings: boolean;
+  flightRecords: boolean;
+  feedingSchedule: boolean;
+  attendance: boolean;
+  attendanceManager: boolean;
+  missingRecords: boolean;
+  reports: boolean;
+}
+
 export enum DocumentType {
   LEGAL = 'Legal / CITES',
   MEDICAL = 'Medical / Vet Report',
@@ -116,7 +114,6 @@ export enum DocumentType {
   INSTITUTIONAL = 'Institutional License'
 }
 
-/* Added GlobalDocument interface */
 export interface GlobalDocument {
   id: string;
   name: string;
@@ -127,7 +124,6 @@ export interface GlobalDocument {
   notes?: string;
 }
 
-/* Added AuditLogEntry interface */
 export interface AuditLogEntry {
   id: string;
   timestamp: number;
@@ -139,7 +135,22 @@ export interface AuditLogEntry {
   severity: 'Info' | 'Warning' | 'Critical';
 }
 
-/* Added AnimalDocument interface */
+export interface LocalBackupConfig {
+  enabled: boolean;
+  frequency: '6h' | 'daily' | 'weekly';
+  lastBackup?: string;
+  retentionCount: number;
+}
+
+export interface LocalBackupEntry {
+  id: string;
+  timestamp: number;
+  date: string;
+  data: any;
+  size: string;
+  officerInitials?: string;
+}
+
 export interface AnimalDocument {
   id: string;
   name: string;
@@ -150,7 +161,6 @@ export interface AnimalDocument {
   notes?: string;
 }
 
-/* Added UserPreferences interface */
 export interface UserPreferences {
   dashboardOrder?: string[];
   darkMode?: boolean;
@@ -169,7 +179,6 @@ export interface User {
   permissions: UserPermissions;
 }
 
-/* Added Contact interface */
 export interface Contact {
   id: string;
   name: string;
@@ -189,11 +198,9 @@ export interface OrganizationProfile {
   logoUrl: string;
   contactEmail: string;
   contactPhone: string;
-  websiteUrl?: string;
   adoptionUrl?: string;
 }
 
-/* Added Task interface */
 export interface Task {
   id: string;
   animalId?: string;
@@ -208,7 +215,6 @@ export interface Task {
   assignedTo?: string;
 }
 
-/* Added Incident interface */
 export interface Incident {
   id: string;
   date: string;
@@ -224,7 +230,6 @@ export interface Incident {
   timestamp: number;
 }
 
-/* Added FirstAidLogEntry interface */
 export interface FirstAidLogEntry {
   id: string;
   date: string;
@@ -239,7 +244,6 @@ export interface FirstAidLogEntry {
   timestamp: number;
 }
 
-/* Added TimeLogEntry interface */
 export interface TimeLogEntry {
   id: string;
   userId: string;
@@ -251,7 +255,6 @@ export interface TimeLogEntry {
   status: 'Active' | 'Completed';
 }
 
-/* Updated LogEntry with missing properties identified from error reports */
 export interface LogEntry {
   id: string;
   date: string;
@@ -274,8 +277,6 @@ export interface LogEntry {
   medicationFrequency?: string;
   medicationEndDate?: string;
   prescribedBy?: string;
-  sampleType?: string;
-  labResult?: string;
   causeOfDeath?: string;
   disposalMethod?: string;
   postMortemResults?: string;
@@ -304,11 +305,8 @@ export interface LogEntry {
   weatheringStart?: string;
   weatheringEnd?: string;
   hasCast?: boolean;
-  bodyPart?: string;
-  bodyMapCoords?: {x: number, y: number};
 }
 
-/* Added SiteLogEntry interface */
 export interface SiteLogEntry {
   id: string;
   date: string;
@@ -322,7 +320,6 @@ export interface SiteLogEntry {
   timestamp: number;
 }
 
-/* Updated Animal with missing properties identified from constants.ts and AnimalFormModal.tsx */
 export interface Animal {
   id: string;
   name: string;
@@ -342,6 +339,13 @@ export interface Animal {
   ringNumber?: string;
   logs: LogEntry[];
   documents: AnimalDocument[];
+  targetDayTemp?: number;
+  targetNightTemp?: number;
+  targetBaskingTemp?: number;
+  targetCoolTemp?: number;
+  targetHumidity?: number;
+  mistingFrequency?: string;
+  waterType?: string;
   archived?: boolean;
   archiveReason?: string;
   order?: number;
@@ -354,19 +358,12 @@ export interface Animal {
   origin?: string;
   sire?: string;
   dam?: string;
-  sex?: 'Male' | 'Female' | 'Unknown' | 'N/A';
-  hazardRating?: HazardRating;
+  sex?: 'Male' | 'Female' | 'Unknown';
   isVenomous?: boolean;
   isHazardous?: boolean;
+  hazardRating?: HazardRating;
   isDobUnknown?: boolean;
   redListStatus?: ConservationStatus;
-  targetDayTemp?: number;
-  targetNightTemp?: number;
-  targetBaskingTemp?: number;
-  targetCoolTemp?: number;
-  targetHumidity?: number;
-  mistingFrequency?: string;
-  waterType?: string;
   hasNoId?: boolean;
 }
 

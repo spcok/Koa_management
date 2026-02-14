@@ -1,36 +1,120 @@
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { getFullWeather, FullWeatherData } from '../services/weatherService';
-import { CloudSun, Wind, Droplets, MapPin, CloudRain, Sun, Cloud, CloudLightning, Snowflake, Navigation, RefreshCw, ExternalLink } from 'lucide-react';
+import { CloudSun, Wind, Droplets, Calendar, MapPin, Clock, CloudRain, Sun, Cloud, CloudLightning, Snowflake, Sunrise, Sunset, Gauge, Navigation, Thermometer, Info, Map as MapIcon, Layers, Play } from 'lucide-react';
+
+declare global {
+  interface Window {
+    L: any;
+  }
+}
 
 const WeatherView: React.FC = () => {
   const [data, setData] = useState<FullWeatherData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState<string>('');
   
-  // Default Location (Kent, UK)
-  const LAT = 51.2787;
-  const LON = 0.5217;
+  // Radar State
+  const mapRef = useRef<HTMLDivElement>(null);
+  const leafletMap = useRef<any>(null);
+  const radarLayer = useRef<any>(null);
+  const [radarTimestamps, setRadarTimestamps] = useState<number[]>([]);
+  const [isPlayingRadar, setIsPlayingRadar] = useState(false);
+  const [radarIndex, setRadarIndex] = useState(0);
 
   useEffect(() => {
     const loadData = async () => {
       setIsLoading(true);
-      // 1. Fetch Weather Data (Open-Meteo is reliable for numbers)
+      
+      // 1. Fetch Weather
       const weather = await getFullWeather();
       setData(weather);
       if (weather && weather.daily.length > 0) {
           setSelectedDate(weather.daily[0].date);
       }
+
+      // 2. Fetch Radar Info from RainViewer
+      try {
+          const rvResp = await fetch('https://api.rainviewer.com/public/weather-maps.json');
+          const rvData = await rvResp.json();
+          // rvData.radar.past contains past timestamps, .nowcast contains future
+          if (rvData.radar && rvData.radar.past) {
+              setRadarTimestamps(rvData.radar.past.map((frame: any) => frame.path));
+          }
+      } catch (e) {
+          console.warn("Radar data fetch failed", e);
+      }
+
       setIsLoading(false);
     };
     loadData();
   }, []);
 
-  const getWindDirection = (degrees: number) => {
-    const directions = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
-    const index = Math.round(degrees / 45) % 8;
-    return directions[index];
-  };
+  // Initialize Map
+  useEffect(() => {
+      if (!isLoading && mapRef.current && window.L && !leafletMap.current) {
+          // Default to Kent, UK
+          const lat = 51.2787;
+          const lon = 0.5217;
+
+          const map = window.L.map(mapRef.current, {
+              center: [lat, lon],
+              zoom: 8,
+              zoomControl: false,
+              attributionControl: false
+          });
+
+          // Dark Matter Base Layer (CartoDB)
+          window.L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+              attribution: '&copy; OpenStreetMap &copy; CartoDB',
+              subdomains: 'abcd',
+              maxZoom: 19
+          }).addTo(map);
+
+          // Add Marker for Centre
+          const icon = window.L.divIcon({
+              className: 'custom-div-icon',
+              html: `<div style="background-color:#10b981; width:12px; height:12px; border-radius:50%; border:2px solid white; box-shadow: 0 0 10px #10b981;"></div>`,
+              iconSize: [12, 12],
+              iconAnchor: [6, 6]
+          });
+          window.L.marker([lat, lon], { icon }).addTo(map);
+
+          leafletMap.current = map;
+      }
+  }, [isLoading]);
+
+  // Update Radar Layer
+  useEffect(() => {
+      if (leafletMap.current && radarTimestamps.length > 0) {
+          const latestPath = radarTimestamps[radarTimestamps.length - 1];
+          const layerUrl = `https://tile.rainviewer.com${latestPath}/256/{z}/{x}/{y}/2/1_1.png`;
+
+          if (radarLayer.current) {
+              radarLayer.current.remove();
+          }
+
+          radarLayer.current = window.L.tileLayer(layerUrl, {
+              opacity: 0.8,
+              zIndex: 100
+          }).addTo(leafletMap.current);
+      }
+  }, [radarTimestamps]);
+
+  if (isLoading) {
+    return (
+        <div className="flex flex-col items-center justify-center h-96 text-stone-400 gap-3">
+            <CloudSun size={48} className="animate-bounce opacity-50" />
+            <p className="font-medium animate-pulse">Calibrating instruments...</p>
+        </div>
+    );
+  }
+
+  if (!data) return <div className="p-12 text-center">Unable to load weather data.</div>;
+
+  const { current, daily, hourly } = data;
+  const selectedDaily = daily.find(d => d.date === selectedDate) || daily[0];
+  const selectedHourly = hourly.filter(h => h.time.startsWith(selectedDate));
 
   const WeatherIcon = ({ code, size = 24, className = "" }: { code: number, size?: number, className?: string }) => {
      if (code === 0) return <Sun size={size} className={`text-yellow-400 ${className}`} fill="currentColor" />;
@@ -43,19 +127,11 @@ const WeatherView: React.FC = () => {
      return <Cloud size={size} className={`text-stone-400 ${className}`} />;
   };
 
-  if (isLoading) {
-    return (
-        <div className="flex flex-col items-center justify-center h-96 text-stone-400 gap-3">
-            <RefreshCw size={48} className="animate-spin opacity-50" />
-            <p className="font-medium animate-pulse">Calibrating instruments...</p>
-        </div>
-    );
-  }
-
-  if (!data) return <div className="p-12 text-center text-slate-500">Weather service unavailable. Check connection.</div>;
-
-  const { current, daily, hourly } = data;
-  const selectedHourly = hourly.filter(h => h.time.startsWith(selectedDate));
+  const getWindDirection = (degrees: number) => {
+    const directions = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+    const index = Math.round(degrees / 45) % 8;
+    return directions[index];
+  };
 
   return (
     <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-6 animate-in fade-in duration-500">
@@ -77,7 +153,7 @@ const WeatherView: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           
           {/* 1. CURRENT CONDITIONS (Compact) */}
-          <div className="lg:col-span-1 bg-slate-900 rounded-[2rem] p-6 text-white shadow-xl relative overflow-hidden flex flex-col justify-between min-h-[350px]">
+          <div className="lg:col-span-1 bg-slate-900 rounded-[2rem] p-6 text-white shadow-xl relative overflow-hidden flex flex-col justify-between">
               <div className="absolute top-0 right-0 w-48 h-48 bg-emerald-500/10 blur-[80px] -mr-12 -mt-12 rounded-full"></div>
               
               <div>
@@ -113,31 +189,15 @@ const WeatherView: React.FC = () => {
               </div>
           </div>
 
-          {/* 2. VENTUSKY MAP EMBED */}
-          <div className="lg:col-span-2 bg-slate-900 rounded-[2rem] overflow-hidden relative shadow-xl border border-slate-800 min-h-[350px] flex flex-col">
-              <div className="flex-1 relative w-full h-full bg-slate-800">
-                  <iframe 
-                    width="100%" 
-                    height="100%" 
-                    src={`https://www.ventusky.com/?p=${LAT};${LON};9&l=radar`}
-                    title="Ventusky Weather Map"
-                    className="w-full h-full absolute inset-0"
-                    loading="lazy"
-                  ></iframe>
-                  
-                  {/* Overlay Badges */}
-                  <div className="absolute top-4 left-4 pointer-events-none flex gap-2">
-                      <div className="bg-slate-900/90 backdrop-blur-md px-3 py-1.5 rounded-full border border-slate-700 flex items-center gap-2 shadow-lg">
-                          <div className="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></div>
-                          <span className="text-[10px] font-black text-white uppercase tracking-widest">Live Radar</span>
-                      </div>
-                  </div>
-
-                  <div className="absolute bottom-4 right-4 pointer-events-auto">
-                      <a href="https://www.ventusky.com/" target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 bg-black/60 backdrop-blur px-3 py-1.5 rounded-full text-[9px] font-bold text-white/90 hover:bg-black/80 transition-colors">
-                          <ExternalLink size={10}/> Ventusky
-                      </a>
-                  </div>
+          {/* 2. RADAR MAP */}
+          <div className="lg:col-span-2 bg-slate-900 rounded-[2rem] overflow-hidden relative shadow-xl border border-slate-800 min-h-[300px]">
+              <div ref={mapRef} className="w-full h-full absolute inset-0 bg-slate-800" />
+              <div className="absolute top-4 left-4 z-[400] bg-slate-900/80 backdrop-blur-md px-3 py-1.5 rounded-full border border-slate-700 flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></div>
+                  <span className="text-[10px] font-black text-white uppercase tracking-widest">Precipitation Radar</span>
+              </div>
+              <div className="absolute bottom-4 right-4 z-[400] text-[8px] font-black text-slate-500 uppercase bg-black/20 px-2 py-1 rounded backdrop-blur">
+                  Data: RainViewer | Map: OSM
               </div>
           </div>
       </div>

@@ -1,7 +1,7 @@
 
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import { Animal, LogType, LogEntry, HealthRecordType, HealthCondition, User } from '../types';
-import { X, Check, Pill, Skull, Camera, Microscope, Target } from 'lucide-react';
+import { X, Check, Pill, Skull } from 'lucide-react';
 
 interface MedicalRecordModalProps {
   isOpen: boolean;
@@ -11,33 +11,6 @@ interface MedicalRecordModalProps {
   preSelectedAnimalId?: string;
   currentUser?: User | null;
 }
-
-const resizeImage = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = (event) => {
-            const img = new Image();
-            img.onload = () => {
-                const canvas = document.createElement('canvas');
-                let width = img.width;
-                let height = img.height;
-                const maxWidth = 1200;
-                if (width > maxWidth) {
-                    height = Math.round((height * maxWidth) / width);
-                    width = maxWidth;
-                }
-                canvas.width = width;
-                canvas.height = height;
-                const ctx = canvas.getContext('2d');
-                ctx?.drawImage(img, 0, 0, width, height);
-                resolve(canvas.toDataURL(file.type));
-            };
-            img.src = event.target?.result as string;
-        };
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-    });
-};
 
 const MedicalRecordModal: React.FC<MedicalRecordModalProps> = ({ 
   isOpen, onClose, onSave, animals, preSelectedAnimalId, currentUser 
@@ -50,13 +23,7 @@ const MedicalRecordModal: React.FC<MedicalRecordModalProps> = ({
   const [bcs, setBcs] = useState(5);
   const [featherCondition, setFeatherCondition] = useState('');
   const [initials, setInitials] = useState(currentUser?.initials || '');
-  const [attachment, setAttachment] = useState<string | null>(null);
   
-  const [showBodyMap, setShowBodyMap] = useState(false);
-  const [bodyPart, setBodyPart] = useState('');
-  const [bodyCoords, setBodyCoords] = useState<{x: number, y: number} | undefined>(undefined);
-  const mapRef = useRef<HTMLDivElement>(null);
-
   const [medName, setMedName] = useState('');
   const [medBatch, setMedBatch] = useState('');
   const [medDosage, setMedDosage] = useState('');
@@ -65,46 +32,33 @@ const MedicalRecordModal: React.FC<MedicalRecordModalProps> = ({
   const [medEndDate, setMedEndDate] = useState('');
   const [prescribedBy, setPrescribedBy] = useState('');
 
-  const [sampleType, setSampleType] = useState('');
-  const [labResult, setLabResult] = useState('');
-
   const [causeOfDeath, setCauseOfDeath] = useState('');
   const [disposalMethod, setDisposalMethod] = useState('');
 
-  const inputClass = "w-full px-4 py-2.5 bg-slate-50 text-slate-800 border-2 border-slate-200 rounded-xl text-sm font-bold focus:border-emerald-500 transition-all shadow-inner";
-
-  const handleBodyMapClick = (e: React.MouseEvent<HTMLDivElement>) => {
-      if (!mapRef.current) return;
-      const rect = mapRef.current.getBoundingClientRect();
-      const x = ((e.clientX - rect.left) / rect.width) * 100;
-      const y = ((e.clientY - rect.top) / rect.height) * 100;
-      setBodyCoords({ x, y });
-      
-      let region = 'General Body';
-      if (y < 25) region = 'Head / Neck';
-      else if (y > 75) region = 'Feet / Tail / Lower Body';
-      else if (x < 35) region = 'Left Wing / Side';
-      else if (x > 65) region = 'Right Wing / Side';
-      else region = 'Keel / Torso';
-      setBodyPart(region);
-  };
+  const inputClass = "w-full px-3 py-2 bg-slate-100 text-slate-800 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 placeholder-slate-400 transition-all";
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedAnimalId || !initials) return;
+    if (!selectedAnimalId) return;
 
     const now = Date.now();
     const isDeceased = condition === HealthCondition.DECEASED;
-    let val = logEntry || recordType;
-    
-    if (isDeceased) val = 'DECEASED STATUS';
-    else if (recordType === HealthRecordType.MEDICATION) val = `${medName} @ ${medDosage}`;
-    else if (recordType === HealthRecordType.PARASITOLOGY) val = `${sampleType}: ${labResult}`;
-    
+    let valueStr = logEntry || recordType;
+    if (isDeceased) valueStr = 'DECEASED';
+    else if (recordType === HealthRecordType.MEDICATION) valueStr = `${medName} (${medDosage})`;
+
     const healthLog: LogEntry = {
-      id: `h_${now}`, date, type: LogType.HEALTH, value: val, notes: logEntry, timestamp: now,
-      healthType: recordType, condition, bcs, featherCondition, userInitials: initials, attachmentUrl: attachment || undefined,
-      bodyPart: showBodyMap ? bodyPart : undefined, bodyMapCoords: showBodyMap ? bodyCoords : undefined,
+      id: `h_${now}`,
+      date: date,
+      type: LogType.HEALTH,
+      value: valueStr,
+      notes: isDeceased ? `Cause: ${causeOfDeath}. Disposal: ${disposalMethod}. Notes: ${logEntry}` : logEntry,
+      timestamp: now,
+      healthType: recordType,
+      condition: condition,
+      bcs: bcs,
+      featherCondition: featherCondition,
+      userInitials: initials,
       medicationName: recordType === HealthRecordType.MEDICATION ? medName : undefined,
       medicationBatch: recordType === HealthRecordType.MEDICATION ? medBatch : undefined,
       medicationDosage: recordType === HealthRecordType.MEDICATION ? medDosage : undefined,
@@ -112,9 +66,8 @@ const MedicalRecordModal: React.FC<MedicalRecordModalProps> = ({
       medicationFrequency: recordType === HealthRecordType.MEDICATION ? medFrequency : undefined,
       medicationEndDate: recordType === HealthRecordType.MEDICATION ? medEndDate : undefined,
       prescribedBy: recordType === HealthRecordType.MEDICATION ? prescribedBy : undefined,
-      sampleType: (recordType === HealthRecordType.PARASITOLOGY || recordType === HealthRecordType.PATHOLOGY) ? sampleType : undefined,
-      labResult: (recordType === HealthRecordType.PARASITOLOGY || recordType === HealthRecordType.PATHOLOGY) ? labResult : undefined,
-      causeOfDeath: isDeceased ? causeOfDeath : undefined, disposalMethod: isDeceased ? disposalMethod : undefined
+      causeOfDeath: isDeceased ? causeOfDeath : undefined,
+      disposalMethod: isDeceased ? disposalMethod : undefined
     };
 
     onSave(healthLog, selectedAnimalId, isDeceased);
@@ -124,104 +77,100 @@ const MedicalRecordModal: React.FC<MedicalRecordModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-md flex items-center justify-center z-[100] p-4 animate-in fade-in duration-300">
-        <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-2xl flex flex-col border-4 border-white/20 overflow-hidden max-h-[95vh]">
+    <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md flex items-center justify-center z-[70] p-4 animate-in fade-in duration-200">
+        <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-xl p-0 animate-in zoom-in-95 border-2 border-slate-300 overflow-hidden">
             <div className="p-8 border-b-2 border-slate-100 flex justify-between items-center bg-slate-50/50">
                 <div>
-                    <h2 className="text-3xl font-black text-slate-800 uppercase tracking-tighter">Clinical Ledger</h2>
-                    <p className="text-[10px] font-black text-emerald-600 uppercase tracking-[0.2em] mt-1">Authorized Statutory Record Entry</p>
+                    <h2 className="text-2xl font-bold text-slate-800 uppercase tracking-tight">Clinical Registry</h2>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Authorized Statutory Health Record</p>
                 </div>
-                <button onClick={onClose} className="p-2 hover:bg-slate-200 rounded-full transition-all text-slate-400"><X size={28}/></button>
+                <button onClick={onClose} className="text-slate-300 hover:text-slate-900 transition-colors p-1"><X size={28}/></button>
             </div>
-            
-            <form onSubmit={handleSubmit} className="p-8 space-y-6 overflow-y-auto scrollbar-thin">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="md:col-span-2">
-                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Patient Subject</label>
+            <form onSubmit={handleSubmit} className="p-8 space-y-6 max-h-[70vh] overflow-y-auto scrollbar-hide">
+                <div className="space-y-4">
+                    <div>
+                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Subject Patient</label>
                         <select required value={selectedAnimalId} onChange={e => setSelectedAnimalId(e.target.value)} className={inputClass} disabled={!!preSelectedAnimalId}>
                             <option value="">-- Choose Subject --</option>
                             {animals.filter(a => !a.archived || a.id === preSelectedAnimalId).map(a => <option key={a.id} value={a.id}>{a.name} ({a.species})</option>)}
                         </select>
                     </div>
                     
-                    <div>
-                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Clinical Type</label>
-                        <select value={recordType} onChange={e => setRecordType(e.target.value as any)} className={inputClass}>
-                            {Object.values(HealthRecordType).map(t => <option key={t} value={t}>{t}</option>)}
-                        </select>
-                    </div>
-                    <div>
-                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Current Condition</label>
-                        <select value={condition} onChange={e => setCondition(e.target.value as any)} className={inputClass}>
-                            {Object.values(HealthCondition).map(c => <option key={c} value={c}>{c}</option>)}
-                        </select>
-                    </div>
-                </div>
-
-                <div className="bg-slate-50 p-6 rounded-3xl border-2 border-slate-100 shadow-inner space-y-6">
-                    <div className="flex justify-between items-center px-1">
-                        <h4 className="text-[10px] font-black text-slate-800 uppercase tracking-widest flex items-center gap-2"><Target size={14} className="text-emerald-500"/> Diagnostics</h4>
-                        <button type="button" onClick={() => setShowBodyMap(!showBodyMap)} className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest border transition-all ${showBodyMap ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-slate-400 border-slate-200'}`}>Body Map</button>
-                    </div>
-
-                    {showBodyMap && (
-                        <div className="space-y-4 animate-in slide-in-from-top-2">
-                             <div 
-                                ref={mapRef} onClick={handleBodyMapClick}
-                                className="relative w-full h-48 bg-white rounded-2xl border-2 border-slate-200 cursor-crosshair overflow-hidden group shadow-sm"
-                            >
-                                <div className="absolute inset-0 flex items-center justify-center opacity-10 font-black text-6xl uppercase tracking-tighter text-slate-400 pointer-events-none">Anatomical Map</div>
-                                {bodyCoords && (
-                                    <div className="absolute w-5 h-5 bg-rose-500 rounded-full border-2 border-white shadow-xl flex items-center justify-center animate-bounce -translate-x-1/2 -translate-y-1/2" style={{ left: `${bodyCoords.x}%`, top: `${bodyCoords.y}%` }}>
-                                        <div className="w-1.5 h-1.5 bg-white rounded-full"></div>
-                                    </div>
-                                )}
-                            </div>
-                            <input type="text" placeholder="Specify Anatomical Region..." value={bodyPart} onChange={e => setBodyPart(e.target.value)} className={inputClass} />
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Clinical Category</label>
+                            <select value={recordType} onChange={e => setRecordType(e.target.value as any)} className={inputClass}>
+                                {Object.values(HealthRecordType).map(t => <option key={t} value={t}>{t}</option>)}
+                            </select>
                         </div>
-                    )}
+                        <div>
+                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Condition Status</label>
+                            <select value={condition} onChange={e => setCondition(e.target.value as any)} className={inputClass}>
+                                {Object.values(HealthCondition).map(c => <option key={c} value={c}>{c}</option>)}
+                            </select>
+                        </div>
+                    </div>
 
                     <div className="grid grid-cols-2 gap-4">
                          <div>
                             <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Body Cond. Score (1-10)</label>
-                            <input type="number" step="0.5" value={bcs} onChange={e => setBcs(parseFloat(e.target.value))} className={inputClass}/>
+                            <input type="number" min="1" max="10" step="0.5" value={bcs} onChange={e => setBcs(parseFloat(e.target.value))} className={inputClass}/>
                          </div>
                          <div>
-                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Feather / Coat</label>
-                            <input type="text" placeholder="Excellent / Molting / Poor" value={featherCondition} onChange={e => setFeatherCondition(e.target.value)} className={inputClass}/>
+                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Feather/Coat Status</label>
+                            <input type="text" value={featherCondition} onChange={e => setFeatherCondition(e.target.value)} className={inputClass} placeholder="Excellent/Molt/Worn"/>
                          </div>
                     </div>
                 </div>
 
                 {recordType === HealthRecordType.MEDICATION && (
                     <div className="bg-blue-50 border-2 border-blue-100 p-6 rounded-3xl space-y-4 animate-in slide-in-from-top-2">
-                         <div className="flex items-center gap-2 text-blue-800 font-black text-[10px] uppercase mb-2"><Pill size={14}/> Medication Details</div>
-                         <input type="text" placeholder="Medication Name" required value={medName} onChange={e => setMedName(e.target.value)} className={inputClass}/>
+                         <div className="flex items-center gap-2 text-blue-800 font-black text-[10px] uppercase mb-2">
+                             <Pill size={14}/> Medication Parameters
+                         </div>
+                         <input type="text" placeholder="Pharmacological Name" required value={medName} onChange={e => setMedName(e.target.value)} className={inputClass}/>
                          <div className="grid grid-cols-2 gap-2">
                              <input type="text" placeholder="Dosage (e.g. 0.5ml)" value={medDosage} onChange={e => setMedDosage(e.target.value)} className={inputClass}/>
-                             <input type="text" placeholder="Frequency (e.g. BID)" value={medFrequency} onChange={e => setMedFrequency(e.target.value)} className={inputClass}/>
+                             <input type="text" placeholder="Route (e.g. Oral)" value={medRoute} onChange={e => setMedRoute(e.target.value)} className={inputClass}/>
+                         </div>
+                         <div className="grid grid-cols-2 gap-2">
+                              <select value={medFrequency} onChange={e => setMedFrequency(e.target.value)} className={inputClass}>
+                                  <option value="SID">SID (Once Daily)</option>
+                                  <option value="BID">BID (Twice Daily)</option>
+                                  <option value="TID">TID (Three Times Daily)</option>
+                                  <option value="EOD">EOD (Every Other Day)</option>
+                                  <option value="Pulse">Pulse Dosing</option>
+                              </select>
+                              <input type="text" placeholder="Authorizing Vet" value={prescribedBy} onChange={e => setPrescribedBy(e.target.value)} className={inputClass}/>
+                         </div>
+                    </div>
+                )}
+
+                {condition === HealthCondition.DECEASED && (
+                    <div className="bg-rose-50 border-2 border-rose-100 p-6 rounded-3xl space-y-4 animate-in slide-in-from-top-2">
+                         <div className="flex items-center gap-2 text-rose-800 font-black text-[10px] uppercase mb-2">
+                             <Skull size={14}/> End of Life Protocol
+                         </div>
+                         <input type="text" placeholder="Primary Cause of Death" required value={causeOfDeath} onChange={e => setCauseOfDeath(e.target.value)} className={inputClass}/>
+                         <input type="text" placeholder="Disposal Method (e.g. Cremation/Incineration)" required value={disposalMethod} onChange={e => setDisposalMethod(e.target.value)} className={inputClass}/>
+                         <div className="p-3 bg-rose-900/10 rounded-xl text-[9px] font-bold text-rose-900 uppercase">
+                             WARNING: This action will archive the animal's record and remove them from the active stock ledger.
                          </div>
                     </div>
                 )}
 
                 <div>
-                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Clinical Account / Observations</label>
-                    <textarea required value={logEntry} onChange={e => setLogEntry(e.target.value)} className={`${inputClass} resize-none h-32`} placeholder="Record detailed observations..."/>
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Clinical Narrative / Notes</label>
+                    <textarea required value={logEntry} onChange={e => setLogEntry(e.target.value)} className={`${inputClass} resize-none h-28`} placeholder="Detail physical signs, behavioural changes, or diagnostics..."/>
                 </div>
 
-                <div className="grid grid-cols-2 gap-6 pt-6 border-t-2 border-slate-100">
-                    <div>
-                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Date</label>
-                        <input type="date" required value={date} onChange={e => setDate(e.target.value)} className={inputClass}/>
-                    </div>
-                    <div>
-                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Auth. Officer</label>
-                        <input type="text" required maxLength={3} value={initials} onChange={e => setInitials(e.target.value.toUpperCase())} className={inputClass}/>
-                    </div>
+                <div className="grid grid-cols-2 gap-4">
+                    <div><label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Event Date</label><input type="date" required value={date} onChange={e => setDate(e.target.value)} className={inputClass}/></div>
+                    <div><label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Auth. Initials</label><input type="text" required maxLength={3} value={initials} onChange={e => setInitials(e.target.value.toUpperCase())} className={inputClass}/></div>
                 </div>
                 
-                <button type="submit" className="w-full py-5 bg-slate-900 text-white rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-black transition-all shadow-xl active:scale-[0.98]">
-                  Commit & Secure Record
+                <button type="submit" className="w-full py-5 bg-slate-900 text-white rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-black transition-all shadow-xl active:scale-95 flex items-center justify-center gap-2">
+                  <Check size={18}/> Commit to Statutory Ledger
                 </button>
             </form>
         </div>
