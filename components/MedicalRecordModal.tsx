@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Animal, LogType, LogEntry, HealthRecordType, HealthCondition, User } from '../types';
 import { X, Check, Pill, Skull } from 'lucide-react';
@@ -76,7 +77,7 @@ const MedicalRecordModal: React.FC<MedicalRecordModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-slate-900/80 flex items-center justify-center z-[100] p-4 animate-in fade-in duration-200">
+    <div className="fixed inset-0 bg-slate-900/0 flex items-center justify-center z-[100] p-4 animate-in fade-in duration-200">
         <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-xl p-0 animate-in zoom-in-95 border-2 border-slate-300 overflow-hidden">
             <div className="p-8 border-b-2 border-slate-100 flex justify-between items-center bg-slate-50/50">
                 <div>

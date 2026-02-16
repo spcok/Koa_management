@@ -8,7 +8,7 @@ import {
   Settings as SettingsIcon, Users, Database, MapPin, 
   Phone, Utensils, Building2, Upload, Download, 
   Trash2, Plus, X, AlertTriangle, FileText, CheckCircle2,
-  RefreshCw, ChevronRight, Link as LinkIcon, Activity, ShieldCheck, AlertCircle, Globe, Lock, Edit2
+  RefreshCw, ChevronRight, Link as LinkIcon, Activity, ShieldCheck, AlertCircle, Globe, Lock, Edit2, PenTool, Eraser
 } from 'lucide-react';
 import { backupService } from '../services/backupService';
 import { dataService } from '../services/dataService';
@@ -94,6 +94,11 @@ const Settings: React.FC<SettingsProps> = ({
       } 
   });
 
+  // Signature Pad State
+  const [isDrawingSignature, setIsDrawingSignature] = useState(false);
+  const signatureCanvasRef = useRef<HTMLCanvasElement>(null);
+  const [isDrawing, setIsDrawing] = useState(false);
+
   // Lists State
   const [listCategory, setListCategory] = useState<AnimalCategory>(AnimalCategory.OWLS);
   const [newItem, setNewItem] = useState('');
@@ -144,6 +149,93 @@ const Settings: React.FC<SettingsProps> = ({
       }
   };
 
+  // --- Signature Drawing Logic ---
+  const getSignatureCoordinates = (event: any) => {
+      if (!signatureCanvasRef.current) return { x: 0, y: 0 };
+      const canvas = signatureCanvasRef.current;
+      const rect = canvas.getBoundingClientRect();
+      let clientX = event.clientX;
+      let clientY = event.clientY;
+      
+      if (event.touches && event.touches.length > 0) {
+          clientX = event.touches[0].clientX;
+          clientY = event.touches[0].clientY;
+      }
+      
+      return {
+          x: (clientX - rect.left) * (canvas.width / rect.width),
+          y: (clientY - rect.top) * (canvas.height / rect.height)
+      };
+  };
+
+  const startSignatureDrawing = (e: any) => {
+      setIsDrawing(true);
+      const { x, y } = getSignatureCoordinates(e);
+      const ctx = signatureCanvasRef.current?.getContext('2d');
+      if (ctx) {
+          ctx.beginPath();
+          ctx.moveTo(x, y);
+          ctx.lineWidth = 3;
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
+          ctx.strokeStyle = '#000000';
+      }
+  };
+
+  const drawSignature = (e: any) => {
+      if (!isDrawing) return;
+      if (e.type === 'touchmove') e.preventDefault(); // Stop scroll
+      const { x, y } = getSignatureCoordinates(e);
+      const ctx = signatureCanvasRef.current?.getContext('2d');
+      if (ctx) {
+          ctx.lineTo(x, y);
+          ctx.stroke();
+      }
+  };
+
+  const stopSignatureDrawing = () => {
+      setIsDrawing(false);
+      const ctx = signatureCanvasRef.current?.getContext('2d');
+      if (ctx) ctx.closePath();
+  };
+
+  const clearSignature = () => {
+      const canvas = signatureCanvasRef.current;
+      if (canvas) {
+          const ctx = canvas.getContext('2d');
+          ctx?.clearRect(0, 0, canvas.width, canvas.height);
+      }
+  };
+
+  const saveSignature = () => {
+      const canvas = signatureCanvasRef.current;
+      if (canvas) {
+          const dataUrl = canvas.toDataURL('image/png');
+          if (editingUser) {
+              setEditingUser({ ...editingUser, signature: dataUrl });
+          } else {
+              setNewUser({ ...newUser, signature: dataUrl });
+          }
+          setIsDrawingSignature(false);
+      }
+  };
+
+  const handleSignatureUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (file) {
+          try {
+              const resized = await resizeImage(file);
+              if (editingUser) {
+                  setEditingUser(prev => prev ? ({ ...prev, signature: resized }) : null);
+              } else {
+                  setNewUser(prev => ({ ...prev, signature: resized }));
+              }
+          } catch (err) {
+              console.error("Signature upload failed", err);
+          }
+      }
+  };
+
   // User Management
   const handleAddUserClick = () => {
       setEditingUser(null);
@@ -157,11 +249,13 @@ const Settings: React.FC<SettingsProps> = ({
               holidayApprover: false, missingRecords: false, reports: false 
           } 
       });
+      setIsDrawingSignature(false);
       setIsUserModalOpen(true);
   };
 
   const handleEditUserClick = (u: User) => {
       setEditingUser(u);
+      setIsDrawingSignature(false);
       setIsUserModalOpen(true);
   };
 
@@ -179,7 +273,8 @@ const Settings: React.FC<SettingsProps> = ({
               role: newUser.role || UserRole.VOLUNTEER,
               pin: newUser.pin,
               active: newUser.active ?? true,
-              permissions: newUser.permissions as UserPermissions
+              permissions: newUser.permissions as UserPermissions,
+              signature: newUser.signature
           };
           onUpdateUsers([...users, user]);
       }
@@ -469,9 +564,9 @@ const Settings: React.FC<SettingsProps> = ({
 
                     {/* USER MODAL */}
                     {isUserModalOpen && (
-                        <div className="fixed inset-0 bg-slate-900/80 z-[100] flex items-center justify-center p-4 animate-in fade-in duration-200">
-                            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl p-0 animate-in zoom-in-95 border-2 border-slate-300 overflow-hidden">
-                                <div className="p-6 border-b-2 border-slate-100 flex justify-between items-center bg-slate-50/50">
+                        <div className="fixed inset-0 bg-slate-900/0 z-[100] flex items-center justify-center p-4 animate-in fade-in duration-200">
+                            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl p-0 animate-in zoom-in-95 border-2 border-slate-300 overflow-hidden flex flex-col max-h-[90vh]">
+                                <div className="p-6 border-b-2 border-slate-100 flex justify-between items-center bg-slate-50/50 shrink-0">
                                     <div>
                                         <h2 className="text-xl font-bold text-slate-900 uppercase tracking-tight flex items-center gap-2">
                                             {editingUser ? <Edit2 size={20}/> : <Plus size={20}/>}
@@ -481,7 +576,7 @@ const Settings: React.FC<SettingsProps> = ({
                                     </div>
                                     <button onClick={() => setIsUserModalOpen(false)} className="text-slate-300 hover:text-slate-900 p-1 transition-colors"><X size={24}/></button>
                                 </div>
-                                <div className="p-6 space-y-6 max-h-[75vh] overflow-y-auto">
+                                <div className="p-6 space-y-6 overflow-y-auto">
                                     <div className="space-y-4">
                                         <div className="grid grid-cols-2 gap-4">
                                             <input 
@@ -512,6 +607,93 @@ const Settings: React.FC<SettingsProps> = ({
                                                 onChange={e => editingUser ? setEditingUser({...editingUser, pin: e.target.value}) : setNewUser({...newUser, pin: e.target.value})} 
                                                 className={inputClass}
                                             />
+                                        </div>
+
+                                        {/* DIGITAL SIGNATURE PAD */}
+                                        <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                                            <div className="flex justify-between items-center mb-3">
+                                                <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                                                    <PenTool size={12}/> Digital Signature
+                                                </h4>
+                                                {(editingUser ? editingUser.signature : newUser.signature) && !isDrawingSignature && (
+                                                    <button 
+                                                        onClick={() => setIsDrawingSignature(true)} 
+                                                        className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded hover:bg-emerald-100 transition-colors uppercase"
+                                                    >
+                                                        Create New Signature
+                                                    </button>
+                                                )}
+                                            </div>
+
+                                            {isDrawingSignature ? (
+                                                <div className="space-y-3">
+                                                    <div className="border-2 border-slate-300 rounded-xl overflow-hidden bg-white touch-none relative shadow-inner">
+                                                        <canvas 
+                                                            ref={signatureCanvasRef} 
+                                                            className="w-full h-40 cursor-crosshair block"
+                                                            width={600}
+                                                            height={200}
+                                                            onMouseDown={startSignatureDrawing}
+                                                            onMouseMove={drawSignature}
+                                                            onMouseUp={stopSignatureDrawing}
+                                                            onMouseLeave={stopSignatureDrawing}
+                                                            onTouchStart={startSignatureDrawing}
+                                                            onTouchMove={drawSignature}
+                                                            onTouchEnd={stopSignatureDrawing}
+                                                        />
+                                                        <div className="absolute top-2 right-2 flex gap-2">
+                                                            <button type="button" onClick={clearSignature} className="bg-slate-100 p-1.5 rounded-lg text-slate-500 hover:text-rose-500 hover:bg-rose-50 transition-colors" title="Clear Pad">
+                                                                <Eraser size={14}/>
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex gap-2">
+                                                        <button 
+                                                            onClick={() => setIsDrawingSignature(false)} 
+                                                            className="flex-1 py-2 bg-white border border-slate-200 text-slate-500 rounded-lg text-[10px] font-black uppercase hover:bg-slate-50"
+                                                        >
+                                                            Cancel
+                                                        </button>
+                                                        <button 
+                                                            onClick={saveSignature} 
+                                                            className="flex-1 py-2 bg-slate-900 text-white rounded-lg text-[10px] font-black uppercase hover:bg-black"
+                                                        >
+                                                            Save Drawing
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <div className="flex items-center gap-4">
+                                                    <div className="h-20 w-40 bg-white border-2 border-dashed border-slate-300 rounded-xl flex items-center justify-center overflow-hidden relative group">
+                                                        {(editingUser ? editingUser.signature : newUser.signature) ? (
+                                                            <img 
+                                                                src={editingUser ? editingUser.signature : newUser.signature} 
+                                                                alt="Signature" 
+                                                                className="w-full h-full object-contain p-2" 
+                                                            />
+                                                        ) : (
+                                                            <span className="text-[10px] font-bold text-slate-300 uppercase">Not Set</span>
+                                                        )}
+                                                        
+                                                        {/* Optional Fallback Upload */}
+                                                        <label className="absolute inset-0 bg-black/5 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
+                                                            <Upload className="text-slate-600" size={16} />
+                                                            <input type="file" accept="image/*" onChange={handleSignatureUpload} className="hidden" />
+                                                        </label>
+                                                    </div>
+                                                    <div className="flex-1 space-y-2">
+                                                        <p className="text-[10px] text-slate-500 leading-tight">
+                                                            Sign in the box to create a digital verification signature for reports.
+                                                        </p>
+                                                        <button 
+                                                            onClick={() => setIsDrawingSignature(true)}
+                                                            className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg text-[10px] font-black uppercase tracking-widest text-slate-700 cursor-pointer hover:bg-slate-50 transition-colors shadow-sm"
+                                                        >
+                                                            <PenTool size={12}/> Draw Signature
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
 
                                         {/* GRANULAR PERMISSIONS */}

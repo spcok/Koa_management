@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { FirstAidLogEntry, User } from '../types';
 import { Stethoscope, Plus, MapPin, Clock, X, Trash2, Calendar, User as UserIcon } from 'lucide-react';
@@ -114,7 +115,7 @@ const FirstAid: React.FC<FirstAidProps> = ({ logs, currentUser, onAddLog, onDele
         </div>
 
         {isModalOpen && (
-            <div className="fixed inset-0 bg-slate-900/80 flex items-center justify-center z-[100] p-4">
+            <div className="fixed inset-0 bg-slate-900/0 flex items-center justify-center z-[100] p-4">
                 <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-0 animate-in zoom-in-95 border-2 border-slate-300 overflow-hidden">
                     <div className="p-6 border-b-2 border-slate-100 flex justify-between items-center bg-slate-50/50 shadow-sm">
                         <div><h2 className="text-xl font-bold text-slate-900 uppercase tracking-tight leading-none">Record Occurrence</h2><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Health & Safety Registry</p></div>

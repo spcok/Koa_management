@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useTransition } from 'react';
 import { Animal, LogType, LogEntry, AnimalCategory, HealthCondition, HealthRecordType } from '../types';
 import { X, Check, Utensils, Scale, Heart, Plane, Trophy, Star, Thermometer, Camera, MapPin, CloudSun, Wind, Droplets, ArrowLeftRight, Sparkles, Clock, Sun, Moon, FileText, Pill, Trash2, Plus, ListFilter, Loader2 } from 'lucide-react';
@@ -354,7 +355,7 @@ const AddEntryModal: React.FC<AddEntryModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4 animate-in fade-in duration-200">
+    <div className="fixed inset-0 bg-black/0 flex items-center justify-center z-[100] p-4 animate-in fade-in duration-200">
         <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col animate-in zoom-in-95 duration-200">
             <div className="p-6 border-b border-slate-200 flex justify-between items-center shrink-0">
                 <div className="flex items-center gap-3">

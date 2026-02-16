@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Animal, LogType, LogEntry, HealthRecordType, User } from '../types';
 import { Biohazard, AlertTriangle, Plus, X, ArrowRight, ShieldCheck, Thermometer } from 'lucide-react';
@@ -149,7 +150,7 @@ const Quarantine: React.FC<QuarantineProps> = ({ animals, onUpdateAnimal, curren
         )}
 
         {isModalOpen && (
-            <div className="fixed inset-0 bg-stone-900/60 flex items-center justify-center z-50 p-4">
+            <div className="fixed inset-0 bg-stone-900/0 flex items-center justify-center z-50 p-4">
                 <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6 animate-in zoom-in-95">
                     <h2 className="text-xl font-bold text-stone-800 mb-4 flex items-center gap-2">
                         <Biohazard className="text-amber-600"/> Isolate Animal

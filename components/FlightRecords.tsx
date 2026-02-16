@@ -1,6 +1,6 @@
-import React, { useState, useMemo, useEffect, useRef, useTransition } from 'react';
-import { Animal, AnimalCategory, LogType, LogEntry } from '../types';
-import { Map, Plane, Thermometer, Wind, CloudSun, Download, Eye, X, Activity, Maximize2, AlertOctagon, Loader2 } from 'lucide-react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { Animal, LogType, LogEntry } from '../types';
+import { Map as MapIcon, Plane, Thermometer, Wind, Activity, X, Maximize2, AlertOctagon, CloudSun } from 'lucide-react';
 
 // Declare Leaflet globally as it is loaded via CDN
 declare global {
@@ -26,69 +26,75 @@ const parseGPX = (gpxContent: string): GPSStats | null => {
   try {
     const parser = new DOMParser();
     const xmlDoc = parser.parseFromString(gpxContent, "text/xml");
-    const trkpts = xmlDoc.getElementsByTagName("trkpt");
+    const trkpts = xmlDoc.querySelectorAll('trkpt');
     
     if (trkpts.length === 0) return null;
 
     const path: [number, number][] = [];
-    let maxSpeed = 0;
-    let maxAlt = 0;
+    let maxAlt = -Infinity;
     let totalDist = 0;
-    let startTime = 0;
-    let endTime = 0;
+    let maxSpeed = 0;
+    let startTime: number | null = null;
+    let endTime: number | null = null;
 
-    for (let i = 0; i < trkpts.length; i++) {
-        const pt = trkpts[i];
-        const lat = parseFloat(pt.getAttribute("lat") || "0");
-        const lon = parseFloat(pt.getAttribute("lon") || "0");
-        const ele = parseFloat(pt.getElementsByTagName("ele")[0]?.textContent || "0");
-        const timeStr = pt.getElementsByTagName("time")[0]?.textContent;
-        const time = timeStr ? new Date(timeStr).getTime() : 0;
+    let prevLat: number | null = null;
+    let prevLon: number | null = null;
+    let prevTime: number | null = null;
+
+    // Helper for Haversine distance in meters
+    const getDist = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+        const R = 6371e3; // metres
+        const φ1 = lat1 * Math.PI/180;
+        const φ2 = lat2 * Math.PI/180;
+        const Δφ = (lat2-lat1) * Math.PI/180;
+        const Δλ = (lon2-lon1) * Math.PI/180;
+
+        const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+                Math.cos(φ1) * Math.cos(φ2) *
+                Math.sin(Δλ/2) * Math.sin(Δλ/2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+
+        return R * c;
+    };
+
+    trkpts.forEach((pt) => {
+        const lat = parseFloat(pt.getAttribute('lat') || '0');
+        const lon = parseFloat(pt.getAttribute('lon') || '0');
+        const ele = parseFloat(pt.querySelector('ele')?.textContent || '0');
+        const timeStr = pt.querySelector('time')?.textContent;
+        const time = timeStr ? new Date(timeStr).getTime() : null;
 
         path.push([lat, lon]);
-        
         if (ele > maxAlt) maxAlt = ele;
-        
-        if (i === 0) startTime = time;
-        if (i === trkpts.length - 1) endTime = time;
 
-        if (i > 0) {
-            const prevPt = trkpts[i-1];
-            const prevLat = parseFloat(prevPt.getAttribute("lat") || "0");
-            const prevLon = parseFloat(prevPt.getAttribute("lon") || "0");
-            const prevTimeStr = prevPt.getElementsByTagName("time")[0]?.textContent;
-            const prevTime = prevTimeStr ? new Date(prevTimeStr).getTime() : 0;
-
-            // Haversine formula for distance
-            const R = 6371e3; // metres
-            const φ1 = prevLat * Math.PI/180;
-            const φ2 = lat * Math.PI/180;
-            const Δφ = (lat-prevLat) * Math.PI/180;
-            const Δλ = (lon-prevLon) * Math.PI/180;
-
-            const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
-                      Math.cos(φ1) * Math.cos(φ2) *
-                      Math.sin(Δλ/2) * Math.sin(Δλ/2);
-            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-            const d = R * c;
-
+        if (prevLat !== null && prevLon !== null) {
+            const d = getDist(prevLat, prevLon, lat, lon);
             totalDist += d;
 
-            // Speed
-            const timeDiff = (time - prevTime) / 1000; // seconds
-            if (timeDiff > 0) {
-                const speedMps = d / timeDiff;
-                const speedKph = speedMps * 3.6;
-                if (speedKph > maxSpeed && speedKph < 200) maxSpeed = speedKph; // Filter outliers
+            if (prevTime !== null && time !== null) {
+                const dt = (time - prevTime) / 1000; // seconds
+                if (dt > 0) {
+                    const speed = (d / dt) * 3.6; // kph
+                    if (speed > maxSpeed && speed < 150) maxSpeed = speed; // filter anomalies
+                }
             }
         }
-    }
+
+        if (startTime === null && time !== null) startTime = time;
+        if (time !== null) endTime = time;
+
+        prevLat = lat;
+        prevLon = lon;
+        prevTime = time;
+    });
+
+    const durationSec = (startTime && endTime) ? (endTime - startTime) / 1000 : 0;
 
     return {
-        maxSpeedKph: parseFloat(maxSpeed.toFixed(1)),
-        maxAltMeters: parseFloat(maxAlt.toFixed(1)),
-        totalDistanceKm: parseFloat((totalDist / 1000).toFixed(2)),
-        durationSec: (endTime - startTime) / 1000,
+        maxSpeedKph: maxSpeed,
+        maxAltMeters: maxAlt === -Infinity ? 0 : maxAlt,
+        totalDistanceKm: totalDist / 1000,
+        durationSec,
         path
     };
   } catch (e) {
@@ -98,285 +104,191 @@ const parseGPX = (gpxContent: string): GPSStats | null => {
 };
 
 const FlightRecords: React.FC<FlightRecordsProps> = ({ animals }) => {
-  const [activeCategory, setActiveCategory] = useState<AnimalCategory>(AnimalCategory.OWLS);
-  const [selectedLog, setSelectedLog] = useState<{log: LogEntry, animal: Animal, stats: GPSStats | null} | null>(null);
-  
-  // React 19 Transition
-  const [isPending, startTransition] = useTransition();
-  
-  const mapRef = useRef<HTMLDivElement>(null);
-  const leafletMap = useRef<any>(null);
+    const [selectedLog, setSelectedLog] = useState<{log: LogEntry, animal: Animal, stats: GPSStats | null} | null>(null);
+    const mapRef = useRef<HTMLDivElement>(null);
+    const leafletMap = useRef<any>(null);
 
-  const filteredAnimals = useMemo(() => 
-    animals.filter(a => a.category === activeCategory), 
-  [animals, activeCategory]);
+    const flightLogs = useMemo(() => {
+        const logs: {log: LogEntry, animal: Animal}[] = [];
+        animals.forEach(a => {
+            (a.logs || []).forEach(l => {
+                if (l.type === LogType.FLIGHT) {
+                    logs.push({ log: l, animal: a });
+                }
+            });
+        });
+        return logs.sort((a, b) => b.log.timestamp - a.log.timestamp);
+    }, [animals]);
 
-  const flightLogs = useMemo(() => {
-      return filteredAnimals.flatMap(animal => 
-          (animal.logs || [])
-            .filter(l => l.type === LogType.FLIGHT)
-            .map(log => ({ ...log, animal }))
-      ).sort((a, b) => b.timestamp - a.timestamp);
-  }, [filteredAnimals]);
+    // Handle GPX loading
+    useEffect(() => {
+        if (selectedLog && selectedLog.log.gpsUrl && !selectedLog.stats) {
+            const loadGpx = async () => {
+                let content = '';
+                if (selectedLog.log.gpsUrl?.trim().startsWith('<')) {
+                    content = selectedLog.log.gpsUrl;
+                } else if (selectedLog.log.gpsUrl) {
+                    try {
+                       const res = await fetch(selectedLog.log.gpsUrl);
+                       content = await res.text();
+                    } catch (e) { console.error("Failed to fetch GPX", e); }
+                }
 
-  const handleDownloadGps = (gpsData: string, filename: string) => {
-      const blob = new Blob([gpsData], { type: 'text/xml' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-  };
+                if (content) {
+                    const stats = parseGPX(content);
+                    setSelectedLog(prev => prev ? ({ ...prev, stats }) : null);
+                }
+            };
+            loadGpx();
+        }
+    }, [selectedLog]);
 
-  const handleViewFlight = (log: LogEntry, animal: Animal) => {
-      startTransition(() => {
-          let stats = null;
-          if (log.gpsUrl && log.gpsUrl.includes('data:')) {
-              // Decode Data URL
-              const base64 = log.gpsUrl.split(',')[1];
-              if (base64) {
-                  try {
-                      const decoded = atob(base64);
-                      stats = parseGPX(decoded);
-                  } catch(e) {
-                      console.error("Decode failed", e);
-                  }
-              }
-          } else if (log.gpsUrl) {
-              // Assume raw string if not data url (fallback)
-              stats = parseGPX(log.gpsUrl);
-          }
-          setSelectedLog({ log, animal, stats });
-      });
-  };
+    // Handle Map
+    useEffect(() => {
+        if (selectedLog && selectedLog.stats && mapRef.current && window.L) {
+            if (!leafletMap.current) {
+                leafletMap.current = window.L.map(mapRef.current);
+                window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '&copy; OpenStreetMap contributors'
+                }).addTo(leafletMap.current);
+            }
+            
+            const map = leafletMap.current;
+            // Clear previous layers
+            map.eachLayer((layer: any) => {
+                if (!layer._url) map.removeLayer(layer); // Keep tiles, remove others
+            });
 
-  // Initialize Map when modal opens
-  useEffect(() => {
-      if (selectedLog && selectedLog.stats && mapRef.current && window.L) {
-          if (leafletMap.current) {
-              leafletMap.current.remove();
-          }
+            if (selectedLog.stats.path.length > 0) {
+                const polyline = window.L.polyline(selectedLog.stats.path, {color: 'red'}).addTo(map);
+                map.fitBounds(polyline.getBounds());
+            }
+        }
+    }, [selectedLog]);
 
-          const map = window.L.map(mapRef.current);
-          
-          window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-              attribution: '&copy; OpenStreetMap contributors'
-          }).addTo(map);
+    // Cleanup map on unmount
+    useEffect(() => {
+        return () => {
+            if (leafletMap.current) {
+                leafletMap.current.remove();
+                leafletMap.current = null;
+            }
+        }
+    }, []);
 
-          if (selectedLog.stats.path.length > 0) {
-              const polyline = window.L.polyline(selectedLog.stats.path, {color: '#059669', weight: 4}).addTo(map);
-              map.fitBounds(polyline.getBounds(), { padding: [50, 50] });
-              
-              // Start/End Markers
-              window.L.circleMarker(selectedLog.stats.path[0], {color: 'green', radius: 6}).addTo(map).bindPopup("Start");
-              window.L.circleMarker(selectedLog.stats.path[selectedLog.stats.path.length-1], {color: 'red', radius: 6}).addTo(map).bindPopup("End");
-          }
+    const formatDuration = (sec: number) => {
+        const m = Math.floor(sec / 60);
+        const s = Math.round(sec % 60);
+        return `${m}m ${s}s`;
+    };
 
-          leafletMap.current = map;
-      }
-  }, [selectedLog]);
-
-  return (
-    <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-6 animate-in fade-in duration-300">
-        <div className="flex flex-col md:flex-row justify-between items-start gap-4">
-             <div>
-                <h1 className="text-2xl md:text-3xl font-bold text-stone-800 flex items-center gap-3">
-                    <Map className="text-emerald-600" /> Flight Records & GPS
-                </h1>
-                <p className="text-stone-500">Analyze flight performance and telemetry data.</p>
-             </div>
-        </div>
-
-        <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-            {Object.values(AnimalCategory).map((cat) => (
-                <button
-                key={cat}
-                onClick={() => setActiveCategory(cat)}
-                className={`px-4 py-2 rounded-full text-sm font-medium transition-colors whitespace-nowrap ${
-                    activeCategory === cat
-                    ? 'bg-stone-800 text-white'
-                    : 'bg-white border border-stone-200 text-stone-600 hover:bg-stone-50'
-                }`}
-                >
-                {cat}
-                </button>
-            ))}
-        </div>
-
-        <div className="bg-white rounded-xl shadow-sm border border-stone-200 overflow-hidden">
-             <div className="overflow-x-auto">
-                 <table className="w-full text-left">
-                     <thead className="bg-stone-50 border-b border-stone-200">
-                         <tr>
-                             <th className="px-6 py-3 text-xs font-semibold text-stone-500 uppercase">Date</th>
-                             <th className="px-6 py-3 text-xs font-semibold text-stone-500 uppercase">Animal</th>
-                             <th className="px-6 py-3 text-xs font-semibold text-stone-500 uppercase">Duration & Quality</th>
-                             <th className="px-6 py-3 text-xs font-semibold text-stone-500 uppercase">Conditions</th>
-                             <th className="px-6 py-3 text-xs font-semibold text-stone-500 uppercase text-right">Actions</th>
-                         </tr>
-                     </thead>
-                     <tbody className="divide-y divide-stone-100">
-                         {flightLogs.map(log => (
-                             <tr key={log.id} className="hover:bg-stone-50 transition-colors">
-                                 <td className="px-6 py-4 whitespace-nowrap">
-                                     <div className="text-sm font-bold text-stone-800">{new Date(log.date).toLocaleDateString()}</div>
-                                     <div className="text-xs text-stone-500">{new Date(log.date).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</div>
-                                 </td>
-                                 <td className="px-6 py-4">
-                                     <div className="flex items-center gap-3">
-                                         <img src={log.animal.imageUrl} alt={log.animal.name} className="w-8 h-8 rounded-full object-cover border border-stone-200"/>
-                                         <span className="font-medium text-stone-700">{log.animal.name}</span>
-                                     </div>
-                                 </td>
-                                 <td className="px-6 py-4">
-                                     <div className="text-sm text-stone-800">
-                                         <span className="font-bold">{log.flightDuration}</span> mins
-                                     </div>
-                                     <div className={`text-xs inline-block px-1.5 rounded mt-1 font-medium ${
-                                         log.flightQuality === 'Excellent' ? 'bg-emerald-100 text-emerald-700' :
-                                         log.flightQuality === 'Poor' || log.flightQuality === 'Refusal' ? 'bg-red-100 text-red-700' :
-                                         'bg-stone-100 text-stone-600'
-                                     }`}>
-                                         {log.flightQuality}
-                                     </div>
-                                 </td>
-                                 <td className="px-6 py-4">
-                                     <div className="flex flex-col gap-1 text-xs text-stone-600">
-                                         {log.temperature && (
-                                             <div className="flex items-center gap-1"><Thermometer size={12}/> {log.temperature}°C</div>
-                                         )}
-                                         {log.windSpeed && (
-                                             <div className="flex items-center gap-1"><Wind size={12}/> {log.windSpeed} mph</div>
-                                         )}
-                                         {log.weatherDesc && (
-                                             <div className="flex items-center gap-1"><CloudSun size={12}/> {log.weatherDesc}</div>
-                                         )}
-                                         {!log.temperature && !log.windSpeed && <span className="text-stone-400 italic">No Data</span>}
-                                     </div>
-                                 </td>
-                                 <td className="px-6 py-4 text-right">
-                                     <div className="flex justify-end gap-2">
-                                        {log.gpsUrl && (
-                                            <button 
-                                                onClick={() => handleViewFlight(log, log.animal)}
-                                                disabled={isPending}
-                                                className="inline-flex items-center gap-2 bg-blue-50 hover:bg-blue-100 text-blue-700 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors border border-blue-200 disabled:opacity-50"
-                                            >
-                                                {isPending && (selectedLog?.log.id === log.id || !selectedLog) ? <Loader2 size={14} className="animate-spin"/> : <Eye size={14} />} 
-                                                Analyze
-                                            </button>
-                                        )}
-                                        {log.gpsUrl ? (
-                                            <button 
-                                                onClick={() => handleDownloadGps(log.gpsUrl!, `flight_${log.animal.name}_${log.date.split('T')[0]}.gpx`)}
-                                                className="inline-flex items-center gap-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors border border-emerald-200"
-                                                title="Download GPX"
-                                            >
-                                                <Download size={14} />
-                                            </button>
-                                        ) : (
-                                            <span className="text-xs text-stone-300 italic">No GPS</span>
-                                        )}
-                                     </div>
-                                 </td>
-                             </tr>
-                         ))}
-                         {flightLogs.length === 0 && (
-                             <tr><td colSpan={5} className="py-12 text-center text-stone-400">No flight records found for this section.</td></tr>
-                         )}
-                     </tbody>
-                 </table>
-             </div>
-        </div>
-
-        {/* Flight Analysis Modal */}
-        {selectedLog && (
-            <div className="fixed inset-0 bg-stone-900/80 flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
-                <div className="bg-white rounded-xl shadow-2xl w-full max-w-5xl h-[85vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
-                    <div className="p-4 border-b border-stone-200 bg-stone-50 flex justify-between items-center">
-                        <div className="flex items-center gap-3">
-                            <div className="bg-emerald-100 p-2 rounded-lg text-emerald-600">
-                                <Activity size={24} />
-                            </div>
-                            <div>
-                                <h2 className="text-lg font-bold text-stone-800">Flight Analysis</h2>
-                                <p className="text-xs text-stone-500">{selectedLog.animal.name} • {new Date(selectedLog.log.date).toLocaleDateString()}</p>
-                            </div>
-                        </div>
-                        <button onClick={() => setSelectedLog(null)} className="text-stone-400 hover:text-stone-600 transition-colors p-2 hover:bg-stone-200 rounded-lg">
-                            <X size={24} />
-                        </button>
-                    </div>
-
-                    <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
-                        {/* Stats Panel */}
-                        <div className="w-full md:w-1/3 bg-white border-r border-stone-200 p-6 overflow-y-auto">
-                            <h3 className="font-bold text-stone-800 mb-4 text-sm uppercase tracking-wider">Telemetry Stats</h3>
-                            
-                            {selectedLog.stats ? (
-                                <div className="space-y-6">
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div className="bg-stone-50 p-4 rounded-xl border border-stone-100">
-                                            <p className="text-xs text-stone-500 uppercase font-bold mb-1">Max Speed</p>
-                                            <p className="text-2xl font-black text-stone-800">{selectedLog.stats.maxSpeedKph} <span className="text-sm font-normal text-stone-500">km/h</span></p>
-                                        </div>
-                                        <div className="bg-stone-50 p-4 rounded-xl border border-stone-100">
-                                            <p className="text-xs text-stone-500 uppercase font-bold mb-1">Max Altitude</p>
-                                            <p className="text-2xl font-black text-stone-800">{selectedLog.stats.maxAltMeters} <span className="text-sm font-normal text-stone-500">m</span></p>
-                                        </div>
-                                        <div className="bg-stone-50 p-4 rounded-xl border border-stone-100">
-                                            <p className="text-xs text-stone-500 uppercase font-bold mb-1">Distance</p>
-                                            <p className="text-2xl font-black text-stone-800">{selectedLog.stats.totalDistanceKm} <span className="text-sm font-normal text-stone-500">km</span></p>
-                                        </div>
-                                        <div className="bg-stone-50 p-4 rounded-xl border border-stone-100">
-                                            <p className="text-xs text-stone-500 uppercase font-bold mb-1">Log Duration</p>
-                                            <p className="text-2xl font-black text-stone-800">{Math.round(selectedLog.stats.durationSec / 60)} <span className="text-sm font-normal text-stone-500">min</span></p>
-                                        </div>
-                                    </div>
-
-                                    <div>
-                                        <h4 className="font-bold text-stone-800 mb-2 text-xs uppercase">Flight Notes</h4>
-                                        <p className="text-sm text-stone-600 bg-stone-50 p-3 rounded-lg border border-stone-100 italic">{selectedLog.log.notes || "No notes recorded."}</p>
-                                    </div>
-
-                                    <div>
-                                        <h4 className="font-bold text-stone-800 mb-2 text-xs uppercase">Conditions</h4>
-                                        <div className="flex gap-4 text-sm text-stone-600">
-                                            <span className="flex items-center gap-1 bg-blue-50 px-3 py-1 rounded-full text-blue-700 border border-blue-100"><Wind size={14}/> {selectedLog.log.windSpeed || '-'} mph</span>
-                                            <span className="flex items-center gap-1 bg-orange-50 px-3 py-1 rounded-full text-orange-700 border border-orange-100"><CloudSun size={14}/> {selectedLog.log.weatherDesc || '-'}</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            ) : (
-                                <div className="text-center py-12 text-stone-400">
-                                    <AlertOctagon size={48} className="mx-auto mb-4 opacity-50"/>
-                                    <p>Could not parse GPS data.</p>
-                                    <p className="text-xs">Ensure the uploaded file is a valid GPX format.</p>
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Map Panel */}
-                        <div className="w-full md:w-2/3 bg-stone-100 relative">
-                            {selectedLog.stats ? (
-                                <div ref={mapRef} className="w-full h-full z-0" />
-                            ) : (
-                                <div className="flex items-center justify-center h-full text-stone-400">
-                                    Map Unavailable
-                                </div>
-                            )}
-                            <div className="absolute bottom-4 right-4 bg-white/90 px-3 py-1 rounded text-[10px] text-stone-500 border border-stone-200 z-10">
-                                OpenStreetMap Data via Leaflet
-                            </div>
-                        </div>
-                    </div>
+    return (
+        <div className="p-4 md:p-8 max-w-[1600px] mx-auto space-y-6 animate-in fade-in duration-500 h-[calc(100vh-100px)] flex flex-col">
+            <div className="flex justify-between items-center shrink-0">
+                <div>
+                    <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-3 uppercase tracking-tight">
+                        <MapIcon className="text-slate-600" size={28} /> Flight Telemetry
+                    </h1>
+                    <p className="text-slate-500 text-sm font-medium">GPS Analysis & Flight Logs</p>
                 </div>
             </div>
-        )}
-    </div>
-  );
+
+            <div className="flex-1 grid grid-cols-1 lg:grid-cols-3 gap-6 min-h-0">
+                {/* LOGS LIST */}
+                <div className="bg-white rounded-2xl border-2 border-slate-300 shadow-sm overflow-hidden flex flex-col">
+                    <div className="p-4 border-b border-slate-200 bg-slate-50">
+                        <h3 className="font-bold text-slate-700 text-sm uppercase tracking-wide">Recent Flights</h3>
+                    </div>
+                    <div className="overflow-y-auto flex-1 p-2 space-y-2">
+                        {flightLogs.map((item) => (
+                            <div 
+                                key={item.log.id}
+                                onClick={() => setSelectedLog({ log: item.log, animal: item.animal, stats: null })}
+                                className={`p-4 rounded-xl border-2 transition-all cursor-pointer ${selectedLog?.log.id === item.log.id ? 'bg-emerald-50 border-emerald-500 shadow-sm' : 'bg-white border-slate-100 hover:border-slate-300'}`}
+                            >
+                                <div className="flex justify-between items-start mb-2">
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-8 h-8 rounded-full bg-slate-200 overflow-hidden">
+                                            <img src={item.animal.imageUrl} className="w-full h-full object-cover" alt={item.animal.name}/>
+                                        </div>
+                                        <div>
+                                            <p className="font-bold text-slate-800 text-xs uppercase">{item.animal.name}</p>
+                                            <p className="text-[10px] text-slate-500 font-bold">{new Date(item.log.date).toLocaleDateString()}</p>
+                                        </div>
+                                    </div>
+                                    <span className="text-[10px] font-black bg-slate-100 text-slate-500 px-2 py-1 rounded uppercase tracking-widest">{item.animal.species}</span>
+                                </div>
+                                <div className="flex items-center gap-4 text-xs font-medium text-slate-600">
+                                    <span className="flex items-center gap-1"><Activity size={12}/> {item.log.flightQuality || 'N/A'}</span>
+                                    <span className="flex items-center gap-1"><Plane size={12}/> {item.log.flightDuration || '-'}m</span>
+                                </div>
+                            </div>
+                        ))}
+                        {flightLogs.length === 0 && (
+                            <div className="p-8 text-center text-slate-400 text-xs font-bold uppercase tracking-widest">No Flight Records Found</div>
+                        )}
+                    </div>
+                </div>
+
+                {/* MAP & STATS */}
+                <div className="lg:col-span-2 flex flex-col gap-6 h-full min-h-0">
+                    {selectedLog ? (
+                        <>
+                            {/* Stats Bar */}
+                            <div className="grid grid-cols-4 gap-4 shrink-0">
+                                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">MAX SPEED</p>
+                                    <p className="text-xl font-black text-slate-800">{selectedLog.stats ? selectedLog.stats.maxSpeedKph.toFixed(1) : '-'} <span className="text-xs text-slate-400">km/h</span></p>
+                                </div>
+                                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">MAX ALTITUDE</p>
+                                    <p className="text-xl font-black text-slate-800">{selectedLog.stats ? selectedLog.stats.maxAltMeters.toFixed(0) : '-'} <span className="text-xs text-slate-400">m</span></p>
+                                </div>
+                                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">DISTANCE</p>
+                                    <p className="text-xl font-black text-slate-800">{selectedLog.stats ? selectedLog.stats.totalDistanceKm.toFixed(2) : '-'} <span className="text-xs text-slate-400">km</span></p>
+                                </div>
+                                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">DURATION</p>
+                                    <p className="text-xl font-black text-slate-800">{selectedLog.stats ? formatDuration(selectedLog.stats.durationSec) : (selectedLog.log.flightDuration ? `${selectedLog.log.flightDuration}m` : '-')}</p>
+                                </div>
+                            </div>
+
+                            {/* Map Container */}
+                            <div className="flex-1 bg-slate-100 rounded-2xl border-2 border-slate-300 shadow-inner relative overflow-hidden">
+                                {selectedLog.log.gpsUrl ? (
+                                    <div ref={mapRef} className="w-full h-full z-0" />
+                                ) : (
+                                    <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-400">
+                                        <AlertOctagon size={48} className="mb-2 opacity-20"/>
+                                        <p className="text-xs font-black uppercase tracking-widest">No GPS Data Attached</p>
+                                    </div>
+                                )}
+                                
+                                <div className="absolute top-4 right-4 bg-white/90 backdrop-blur p-4 rounded-xl border border-slate-200 shadow-lg max-w-xs z-10">
+                                    <h4 className="text-xs font-black uppercase tracking-widest text-slate-800 mb-2">Flight Notes</h4>
+                                    <p className="text-xs font-medium text-slate-600 leading-relaxed italic">
+                                        "{selectedLog.log.notes || 'No notes recorded.'}"
+                                    </p>
+                                    {selectedLog.log.weatherDesc && (
+                                        <div className="mt-3 pt-3 border-t border-slate-200 flex items-center gap-2 text-xs text-slate-500">
+                                            <CloudSun size={14}/> {selectedLog.log.weatherDesc}
+                                            {selectedLog.log.windSpeed && <span className="flex items-center gap-1 ml-2"><Wind size={14}/> {selectedLog.log.windSpeed} mph</span>}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </>
+                    ) : (
+                        <div className="h-full bg-slate-50 rounded-2xl border-2 border-dashed border-slate-300 flex flex-col items-center justify-center text-slate-400">
+                            <Plane size={64} className="mb-4 opacity-20"/>
+                            <p className="text-sm font-black uppercase tracking-widest">Select a flight log to view telemetry</p>
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
 };
 
 export default FlightRecords;

@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Task, Animal, LogType, User, SiteLogEntry } from '../types';
 import { CheckCircle2, Circle, Plus, Calendar, User as UserIcon, AlertCircle, ListTodo, X, Check, ClipboardList, UserCheck } from 'lucide-react';
@@ -144,7 +145,7 @@ const Tasks: React.FC<TasksProps> = ({
 
         {/* CREATE TASK MODAL - z-[100] to be above sidebar */}
         {showAddModal && (
-            <div className="fixed inset-0 bg-slate-900/80 flex items-center justify-center z-[100] p-4">
+            <div className="fixed inset-0 bg-slate-900/0 flex items-center justify-center z-[100] p-4">
                 <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-0 animate-in zoom-in-95 border-2 border-slate-300 overflow-hidden">
                     <div className="p-6 border-b-2 border-slate-100 flex justify-between items-center bg-slate-50/50">
                         <div>
