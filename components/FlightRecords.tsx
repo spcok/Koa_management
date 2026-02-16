@@ -1,7 +1,6 @@
-
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useTransition } from 'react';
 import { Animal, AnimalCategory, LogType, LogEntry } from '../types';
-import { Map, Plane, Thermometer, Wind, CloudSun, Download, Eye, X, Activity, Maximize2, AlertOctagon } from 'lucide-react';
+import { Map, Plane, Thermometer, Wind, CloudSun, Download, Eye, X, Activity, Maximize2, AlertOctagon, Loader2 } from 'lucide-react';
 
 // Declare Leaflet globally as it is loaded via CDN
 declare global {
@@ -101,6 +100,10 @@ const parseGPX = (gpxContent: string): GPSStats | null => {
 const FlightRecords: React.FC<FlightRecordsProps> = ({ animals }) => {
   const [activeCategory, setActiveCategory] = useState<AnimalCategory>(AnimalCategory.OWLS);
   const [selectedLog, setSelectedLog] = useState<{log: LogEntry, animal: Animal, stats: GPSStats | null} | null>(null);
+  
+  // React 19 Transition
+  const [isPending, startTransition] = useTransition();
+  
   const mapRef = useRef<HTMLDivElement>(null);
   const leafletMap = useRef<any>(null);
 
@@ -128,23 +131,25 @@ const FlightRecords: React.FC<FlightRecordsProps> = ({ animals }) => {
   };
 
   const handleViewFlight = (log: LogEntry, animal: Animal) => {
-      let stats = null;
-      if (log.gpsUrl && log.gpsUrl.includes('data:')) {
-          // Decode Data URL
-          const base64 = log.gpsUrl.split(',')[1];
-          if (base64) {
-              try {
-                  const decoded = atob(base64);
-                  stats = parseGPX(decoded);
-              } catch(e) {
-                  console.error("Decode failed", e);
+      startTransition(() => {
+          let stats = null;
+          if (log.gpsUrl && log.gpsUrl.includes('data:')) {
+              // Decode Data URL
+              const base64 = log.gpsUrl.split(',')[1];
+              if (base64) {
+                  try {
+                      const decoded = atob(base64);
+                      stats = parseGPX(decoded);
+                  } catch(e) {
+                      console.error("Decode failed", e);
+                  }
               }
+          } else if (log.gpsUrl) {
+              // Assume raw string if not data url (fallback)
+              stats = parseGPX(log.gpsUrl);
           }
-      } else if (log.gpsUrl) {
-          // Assume raw string if not data url (fallback)
-          stats = parseGPX(log.gpsUrl);
-      }
-      setSelectedLog({ log, animal, stats });
+          setSelectedLog({ log, animal, stats });
+      });
   };
 
   // Initialize Map when modal opens
@@ -256,9 +261,11 @@ const FlightRecords: React.FC<FlightRecordsProps> = ({ animals }) => {
                                         {log.gpsUrl && (
                                             <button 
                                                 onClick={() => handleViewFlight(log, log.animal)}
-                                                className="inline-flex items-center gap-2 bg-blue-50 hover:bg-blue-100 text-blue-700 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors border border-blue-200"
+                                                disabled={isPending}
+                                                className="inline-flex items-center gap-2 bg-blue-50 hover:bg-blue-100 text-blue-700 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors border border-blue-200 disabled:opacity-50"
                                             >
-                                                <Eye size={14} /> Analyze
+                                                {isPending && (selectedLog?.log.id === log.id || !selectedLog) ? <Loader2 size={14} className="animate-spin"/> : <Eye size={14} />} 
+                                                Analyze
                                             </button>
                                         )}
                                         {log.gpsUrl ? (
@@ -286,7 +293,7 @@ const FlightRecords: React.FC<FlightRecordsProps> = ({ animals }) => {
 
         {/* Flight Analysis Modal */}
         {selectedLog && (
-            <div className="fixed inset-0 bg-stone-900/80 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
+            <div className="fixed inset-0 bg-stone-900/80 flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
                 <div className="bg-white rounded-xl shadow-2xl w-full max-w-5xl h-[85vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
                     <div className="p-4 border-b border-stone-200 bg-stone-50 flex justify-between items-center">
                         <div className="flex items-center gap-3">
@@ -360,7 +367,7 @@ const FlightRecords: React.FC<FlightRecordsProps> = ({ animals }) => {
                                     Map Unavailable
                                 </div>
                             )}
-                            <div className="absolute bottom-4 right-4 bg-white/90 backdrop-blur px-3 py-1 rounded text-[10px] text-stone-500 border border-stone-200 z-10">
+                            <div className="absolute bottom-4 right-4 bg-white/90 px-3 py-1 rounded text-[10px] text-stone-500 border border-stone-200 z-10">
                                 OpenStreetMap Data via Leaflet
                             </div>
                         </div>

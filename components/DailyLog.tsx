@@ -30,15 +30,20 @@ const DailyLog: React.FC<DailyLogProps> = ({
 
   const dailyLogsMap = useMemo(() => {
       const map = new Map<string, Record<LogType, LogEntry | undefined>>();
-      animals.forEach(animal => {
-          if (animal.category !== activeCategory) return; 
+      // Optimization: use standard loop for better performance on large sets
+      for (const animal of animals) {
+          if (animal.category !== activeCategory || animal.archived) continue;
+          
           const logs: Record<string, LogEntry | undefined> = {};
           const animalLogs = animal.logs || [];
+          
           for (const log of animalLogs) {
-              if (log.date.startsWith(viewDate) && !logs[log.type]) logs[log.type] = log;
+              if (log.date.startsWith(viewDate)) {
+                  if (!logs[log.type]) logs[log.type] = log;
+              }
           }
           map.set(animal.id, logs as any);
-      });
+      }
       return map;
   }, [animals, viewDate, activeCategory]);
 

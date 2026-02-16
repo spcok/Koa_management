@@ -1,9 +1,8 @@
-
-import React, { useRef, useState, useEffect, useMemo } from 'react';
+import React, { useRef, useState, useEffect, useMemo, useTransition } from 'react';
 import html2canvas from 'html2canvas';
-import { Animal, OrganizationProfile, AnimalCategory } from '../types';
-import { X, Download, Info, Loader2, Globe, Edit2, Save, RefreshCw, Calendar, LayoutTemplate } from 'lucide-react';
-import { generateSignageContent } from '../services/geminiService';
+import { Animal, OrganizationProfile, AnimalCategory, HazardRating } from '../types';
+import { X, Download, Info, Loader2, Globe, Edit2, Save, RefreshCw, Calendar, LayoutTemplate, Sun, Moon, Sparkles, Droplets } from 'lucide-react';
+import { generateSignageContent, generateExoticSummary } from '../services/geminiService';
 import { IUCNBadge } from './IUCNBadge';
 
 interface SignGeneratorProps {
@@ -16,6 +15,8 @@ interface SignContent {
     diet: string[];
     habitat: string[];
     didYouKnow: string[];
+    speciesBrief?: string;
+    wildOrigin?: string;
     speciesStats: {
         lifespanWild: string;
         lifespanCaptivity: string;
@@ -46,20 +47,25 @@ const EditInput = ({ value, onChange, className = "" }: { value: string, onChang
 const SignGenerator: React.FC<SignGeneratorProps> = ({ animal, orgProfile, onClose }) => {
   const signRef = useRef<HTMLDivElement>(null);
   
-  // Default to 'bottom' layout as requested for horizontal maps
-  const [mapLayout, setMapLayout] = useState<'side' | 'bottom'>('bottom');
+  // Layout state now includes 'card'
+  const [mapLayout, setMapLayout] = useState<'side' | 'bottom' | 'card'>('bottom');
   
   const [content, setContent] = useState<SignContent>({
-      diet: [], habitat: [], didYouKnow: [], speciesStats: { lifespanWild: '', lifespanCaptivity: '', wingspan: '', weight: '' }
+      diet: [], habitat: [], didYouKnow: [], speciesBrief: '', wildOrigin: '', speciesStats: { lifespanWild: '', lifespanCaptivity: '', wingspan: '', weight: '' }
   });
-  const [isLoadingContent, setIsLoadingContent] = useState(false);
+  
+  // React 19 Transition
+  const [isPending, startTransition] = useTransition();
   const [isEditingText, setIsEditingText] = useState(false);
 
-  const fetchContent = async () => {
-      setIsLoadingContent(true);
-      const data = await generateSignageContent(animal.species);
-      setContent(data);
-      setIsLoadingContent(false);
+  const fetchContent = () => {
+      startTransition(async () => {
+          const [mainContent, brief] = await Promise.all([
+              generateSignageContent(animal.species),
+              generateExoticSummary(animal.species)
+          ]);
+          setContent({ ...mainContent, speciesBrief: brief });
+      });
   };
 
   useEffect(() => {
@@ -118,6 +124,36 @@ const SignGenerator: React.FC<SignGeneratorProps> = ({ animal, orgProfile, onClo
       return 'WINGSPAN';
   }, [animal.species, animal.category]);
 
+  // Determine Color Theme based on Risk
+  const theme = useMemo(() => {
+      if (animal.isVenomous || animal.hazardRating === HazardRating.HIGH) {
+          return {
+              bg: 'bg-rose-500',
+              text: 'text-rose-500',
+              textDark: 'text-rose-600',
+              containerBg: 'bg-rose-50',
+              border: 'border-rose-100'
+          };
+      }
+      if (animal.hazardRating === HazardRating.MEDIUM) {
+          return {
+              bg: 'bg-orange-500',
+              text: 'text-orange-500',
+              textDark: 'text-orange-600',
+              containerBg: 'bg-orange-50',
+              border: 'border-orange-100'
+          };
+      }
+      // Low / None
+      return {
+          bg: 'bg-emerald-500',
+          text: 'text-emerald-500',
+          textDark: 'text-emerald-600',
+          containerBg: 'bg-[#f0fdf4]',
+          border: 'border-emerald-100'
+      };
+  }, [animal.hazardRating, animal.isVenomous]);
+
   // Generate QR Code URL using a reliable public API to ensure cross-origin/CORS handling
   const adoptionUrl = orgProfile?.adoptionUrl || 'https://kentowlacademy.com';
   const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(adoptionUrl)}&color=ffffff&bgcolor=10b981`;
@@ -131,8 +167,44 @@ const SignGenerator: React.FC<SignGeneratorProps> = ({ animal, orgProfile, onClo
       setContent(prev => ({ ...prev, speciesStats: { ...prev.speciesStats, [key]: value } }));
   };
 
+  const handleBriefChange = (value: string) => {
+      setContent(prev => ({ ...prev, speciesBrief: value }));
+  };
+
+  const handleOriginChange = (value: string) => {
+      setContent(prev => ({ ...prev, wildOrigin: value }));
+  };
+
+  const cycleLayout = () => {
+      setMapLayout(prev => {
+          if (prev === 'side') return 'bottom';
+          if (prev === 'bottom') return 'card';
+          return 'side';
+      });
+  };
+
+  // Determine Container Dimensions based on Layout
+  const containerStyle = useMemo(() => {
+      if (mapLayout === 'card') {
+          return {
+              width: '800px',
+              height: '600px',
+              minWidth: '800px',
+              minHeight: '600px'
+          };
+      }
+      return {
+          width: '794px', // A4 Width at 96 DPI
+          height: '1123px', // A4 Height at 96 DPI
+          minWidth: '794px',
+          minHeight: '1123px'
+      };
+  }, [mapLayout]);
+
+  const isHighRisk = animal.hazardRating === HazardRating.HIGH || animal.isVenomous;
+
   return (
-    <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-md z-[100] flex items-center justify-center p-4 animate-in fade-in duration-200">
+    <div className="fixed inset-0 bg-slate-900/90 z-[100] flex items-center justify-center p-4 animate-in fade-in duration-200">
         <div className="flex flex-col gap-4 max-h-screen w-full max-w-6xl">
             {/* Control Bar */}
             <div className="flex flex-wrap justify-between items-center bg-white p-4 rounded-xl shadow-lg gap-4 shrink-0">
@@ -142,19 +214,19 @@ const SignGenerator: React.FC<SignGeneratorProps> = ({ animal, orgProfile, onClo
                     </h2>
                     <div className="h-6 w-px bg-slate-200"></div>
                     <button 
-                        onClick={() => setMapLayout(prev => prev === 'side' ? 'bottom' : 'side')}
+                        onClick={cycleLayout}
                         className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg font-bold hover:bg-slate-200 transition-colors text-xs uppercase tracking-widest border border-slate-200"
                     >
                         <LayoutTemplate size={16}/>
-                        Layout: {mapLayout === 'side' ? 'Side Map (Portrait)' : 'Bottom Map (Landscape)'}
+                        Layout: {mapLayout === 'side' ? 'Portrait (Map Side)' : mapLayout === 'bottom' ? 'Landscape (Map Bottom)' : 'Registry Card (Landscape)'}
                     </button>
                     <button 
                         onClick={fetchContent}
-                        disabled={isLoadingContent}
+                        disabled={isPending}
                         className="flex items-center gap-2 px-4 py-2 bg-purple-100 text-purple-700 rounded-lg font-bold hover:bg-purple-200 transition-colors text-xs uppercase tracking-widest"
                     >
-                        {isLoadingContent ? <Loader2 size={16} className="animate-spin"/> : <RefreshCw size={16}/>}
-                        {isLoadingContent ? "Generating..." : "Regenerate Content"}
+                        {isPending ? <Loader2 size={16} className="animate-spin"/> : <RefreshCw size={16}/>}
+                        {isPending ? "Generating..." : "Regenerate Content"}
                     </button>
                     <button 
                         onClick={() => setIsEditingText(!isEditingText)}
@@ -177,305 +249,430 @@ const SignGenerator: React.FC<SignGeneratorProps> = ({ animal, orgProfile, onClo
 
             {/* Canvas Container */}
             <div className="flex-1 overflow-auto flex justify-center bg-slate-800/50 rounded-xl p-8">
-                {/* A4 Aspect Ratio Div: 595px x 842px (Scaled for viewing) */}
+                
                 <div 
                     ref={signRef}
                     className="bg-white relative shadow-2xl flex flex-col overflow-hidden"
-                    style={{ 
-                        width: '794px', // A4 Width at 96 DPI
-                        height: '1123px', // A4 Height at 96 DPI
-                        minWidth: '794px',
-                        minHeight: '1123px'
-                    }}
+                    style={containerStyle}
                 >
-                    {/* 1. Header Bar */}
-                    <div className="h-28 bg-[#1e293b] flex items-center justify-between px-10 text-white shrink-0">
-                        <h1 className="text-3xl font-black uppercase tracking-[0.2em]">{orgProfile?.name || 'KENT OWL ACADEMY'}</h1>
-                        {orgProfile?.logoUrl ? (
-                            <img src={orgProfile.logoUrl} alt="Logo" className="h-20 w-auto object-contain bg-white rounded-xl p-2 shadow-lg" />
-                        ) : (
-                            <div className="h-16 w-16 bg-white rounded-xl flex items-center justify-center text-slate-900 font-bold text-2xl">KOA</div>
-                        )}
-                    </div>
+                    
+                    {mapLayout === 'card' ? (
+                        /* ======================== CARD LAYOUT ======================== */
+                        <div className="p-8 h-full flex flex-col relative bg-white">
+                            {/* Decorative Top Banner - Dynamic Color */}
+                            <div className={`absolute top-0 left-0 right-0 h-3 ${theme.bg}`}></div>
 
-                    {/* 2. Main Content Grid - Grows to take available space */}
-                    {/* Shifted left by reducing left padding (pl-5 = 20px, was 32px). Shifted right column wider (col-span-8 vs 4). */}
-                    <div className="flex-1 py-8 pl-5 pr-8 grid grid-cols-12 gap-6 overflow-hidden">
-                        
-                        {/* LEFT COLUMN */}
-                        <div className={`col-span-4 flex flex-col ${mapLayout === 'bottom' ? 'gap-2' : 'gap-4'}`}>
-                            {/* Portrait */}
-                            <div className="aspect-[3/4] w-full rounded-[1.5rem] overflow-hidden border-4 border-[#1e293b] shadow-xl relative shrink-0">
-                                <img src={animal.imageUrl} alt={animal.name} className="w-full h-full object-cover" crossOrigin="anonymous"/>
-                            </div>
-
-                            {/* Status Box */}
-                            <div className="bg-[#1e293b] rounded-2xl p-4 flex items-center justify-between shadow-lg text-white shrink-0">
-                                <span className="text-xs font-black uppercase tracking-[0.25em] pl-2">STATUS</span>
-                                <div className="scale-90 origin-right">
-                                    <IUCNBadge status={animal.redListStatus} size="lg" />
-                                </div>
-                            </div>
-
-                            {/* CONDITIONAL LEFT CONTENT */}
-                            {mapLayout === 'side' ? (
-                                /* LAYOUT SIDE: MAP IN LEFT COLUMN (Original Style) */
-                                <div className="bg-slate-50 rounded-2xl p-4 border-2 border-slate-200 shadow-sm flex flex-col items-center flex-1 min-h-0">
-                                    <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.25em] w-full text-left mb-2 pl-1">NATIVE RANGE</h3>
-                                    <div className="rounded-xl overflow-hidden border border-slate-200 w-full bg-white relative flex items-center justify-center flex-1">
-                                        {animal.distributionMapUrl ? (
-                                            <img src={animal.distributionMapUrl} alt="Range Map" className="w-full h-full object-cover" crossOrigin="anonymous"/>
-                                        ) : (
-                                            <div className="w-full h-full flex items-center justify-center text-slate-300">
-                                                <Globe size={48} />
-                                            </div>
+                            {/* Header */}
+                            <div className="mb-6 flex justify-between items-start pt-2">
+                                <div>
+                                    <h1 className="text-5xl font-black text-slate-900 uppercase tracking-tighter mb-1 flex items-center gap-4">
+                                        {animal.name}
+                                        {isHighRisk && (
+                                            <span className="bg-rose-500 text-white text-xs px-2 py-1 rounded tracking-widest align-middle font-bold transform -translate-y-1 shadow-sm">
+                                                HIGH RISK
+                                            </span>
                                         )}
-                                    </div>
+                                    </h1>
+                                    {/* Species Name - Dynamic Color */}
+                                    <h2 className={`text-2xl font-bold uppercase tracking-wide ${theme.text}`}>{animal.species}</h2>
+                                    <p className="text-lg font-serif italic text-slate-400 mt-1">{animal.latinName}</p>
                                 </div>
-                            ) : (
-                                /* LAYOUT BOTTOM: STATS IN LEFT COLUMN (New Style) */
-                                <>
-                                    {/* Animal Stats - Vertical Stack */}
-                                    <div className="flex flex-col gap-3 bg-slate-50 p-4 rounded-xl border border-slate-200 shadow-sm">
-                                        <div className="flex items-center gap-3 border-b border-slate-200 pb-2">
-                                            <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center text-slate-500 shadow-sm border border-slate-200 shrink-0">
-                                                <Info size={16}/>
-                                            </div>
-                                            <div>
-                                                <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">AGE</p>
-                                                <p className="font-bold text-slate-800 text-sm">{getAge(animal.dob)}</p>
-                                            </div>
-                                        </div>
-                                        <div className="flex items-center gap-3 border-b border-slate-200 pb-2">
-                                            <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center text-slate-500 shadow-sm border border-slate-200 shrink-0">
-                                                <Info size={16}/>
-                                            </div>
-                                            <div>
-                                                <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">SEX</p>
-                                                <p className="font-bold text-slate-800 text-sm">{animal.sex}</p>
-                                            </div>
-                                        </div>
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center text-slate-500 shadow-sm border border-slate-200 shrink-0">
-                                                <Calendar size={16}/>
-                                            </div>
-                                            <div>
-                                                <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">ARRIVED</p>
-                                                <p className="font-bold text-slate-800 text-sm">{getArrivalYear(animal.arrivalDate)}</p>
-                                            </div>
-                                        </div>
-                                    </div>
+                                <div className="flex items-start gap-6">
+                                     <div className="w-36 h-36 rounded-xl overflow-hidden border-4 border-white shadow-lg bg-slate-100 shrink-0">
+                                         <img src={animal.imageUrl} alt={animal.name} className="w-full h-full object-cover" crossOrigin="anonymous"/>
+                                     </div>
+                                     <div className="mt-2"><IUCNBadge status={animal.redListStatus} size="lg" /></div>
+                                </div>
+                            </div>
 
-                                    {/* Species Stats - Single Column Stack to Fill Space - Added mb-6 for lift */}
-                                    <div className="grid grid-cols-1 gap-2 bg-[#f0fdf4] p-3 rounded-xl border border-emerald-100 flex-1 min-h-0 content-start overflow-auto no-scrollbar mb-6">
-                                        <div className="bg-white/50 p-3 rounded-lg border border-emerald-100 flex flex-col justify-center">
-                                            <p className="text-[7px] font-black text-emerald-700 uppercase tracking-widest mb-0.5">WILD LIFESPAN</p>
-                                            {isEditingText ? (
-                                                <EditInput value={content.speciesStats.lifespanWild || ''} onChange={(v) => handleStatChange('lifespanWild', v)} />
-                                            ) : (
-                                                <p className="text-sm font-bold text-slate-800 leading-tight">{content.speciesStats.lifespanWild || '-'}</p>
-                                            )}
-                                        </div>
-                                        <div className="bg-white/50 p-3 rounded-lg border border-emerald-100 flex flex-col justify-center">
-                                            <p className="text-[7px] font-black text-emerald-700 uppercase tracking-widest mb-0.5">CAPTIVE LIFESPAN</p>
-                                            {isEditingText ? (
-                                                <EditInput value={content.speciesStats.lifespanCaptivity || ''} onChange={(v) => handleStatChange('lifespanCaptivity', v)} />
-                                            ) : (
-                                                <p className="text-sm font-bold text-slate-800 leading-tight">{content.speciesStats.lifespanCaptivity || '-'}</p>
-                                            )}
-                                        </div>
-                                        <div className="bg-white/50 p-3 rounded-lg border border-emerald-100 flex flex-col justify-center">
-                                            <p className="text-[7px] font-black text-emerald-700 uppercase tracking-widest mb-0.5">{dynamicDimensionLabel}</p>
-                                            {isEditingText ? (
-                                                <EditInput value={content.speciesStats.wingspan || ''} onChange={(v) => handleStatChange('wingspan', v)} />
-                                            ) : (
-                                                <p className="text-sm font-bold text-slate-800 leading-tight">{content.speciesStats.wingspan || '-'}</p>
-                                            )}
-                                        </div>
-                                        <div className="bg-white/50 p-3 rounded-lg border border-emerald-100 flex flex-col justify-center">
-                                            <p className="text-[7px] font-black text-emerald-700 uppercase tracking-widest mb-0.5">WEIGHT</p>
-                                            {isEditingText ? (
-                                                <EditInput value={content.speciesStats.weight || ''} onChange={(v) => handleStatChange('weight', v)} />
-                                            ) : (
-                                                <p className="text-sm font-bold text-slate-800 leading-tight">{content.speciesStats.weight || '-'}</p>
-                                            )}
-                                        </div>
-                                    </div>
-                                </>
-                            )}
+                            {/* Body Grid */}
+                            <div className="grid grid-cols-12 gap-8 flex-1">
+                                {/* Left Col */}
+                                <div className="col-span-7 flex flex-col gap-5">
+                                     <div>
+                                         <h3 className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-1.5 ml-0.5">SUBJECT PROFILE</h3>
+                                         <p className="text-sm font-bold text-slate-600 italic leading-snug">{animal.description || "No description recorded."}</p>
+                                     </div>
+                                     
+                                     {/* AI Brief Box - Dynamic Color Theme */}
+                                     <div className={`${theme.containerBg} border ${theme.border} p-4 rounded-xl relative group flex-1`}>
+                                         <h3 className={`text-[10px] font-black uppercase tracking-widest mb-2 flex items-center gap-1.5 ${theme.textDark}`}>
+                                             <Sparkles size={12}/> SPECIES BRIEF (AI)
+                                         </h3>
+                                         {isEditingText ? (
+                                             <EditTextArea value={content.speciesBrief || ''} onChange={handleBriefChange} className="h-full bg-white/50" />
+                                         ) : (
+                                             <p className={`text-xs font-bold leading-relaxed text-justify ${theme.textDark} opacity-90`}>
+                                                 {content.speciesBrief || "Generative content loading..."}
+                                             </p>
+                                         )}
+                                     </div>
+
+                                     {/* Stats Grid */}
+                                     <div className="grid grid-cols-2 gap-x-8 gap-y-4 mt-auto">
+                                         <div><h4 className="text-[9px] font-black text-slate-300 uppercase tracking-widest">ANIMAL AGE</h4><p className="font-black text-slate-800">{getAge(animal.dob)}</p></div>
+                                         <div><h4 className="text-[9px] font-black text-slate-300 uppercase tracking-widest">SEX</h4><p className="font-black text-slate-800 uppercase">{animal.sex}</p></div>
+                                         
+                                         {/* Native Origin Field */}
+                                         <div>
+                                             <h4 className="text-[9px] font-black text-slate-300 uppercase tracking-widest">NATIVE ORIGIN</h4>
+                                             {isEditingText ? (
+                                                 <EditInput value={content.wildOrigin || ''} onChange={handleOriginChange} />
+                                             ) : (
+                                                 <p className="font-black text-slate-800 text-sm truncate">{content.wildOrigin || 'Generating...'}</p>
+                                             )}
+                                         </div>
+                                         
+                                         {(animal.category === AnimalCategory.MAMMALS || animal.category === AnimalCategory.EXOTICS) ? (
+                                             <div>
+                                                 <h4 className="text-[9px] font-black text-slate-300 uppercase tracking-widest">HAZARD CLASS</h4>
+                                                 <div className="flex items-center gap-2">
+                                                     <p className={`font-black text-sm uppercase ${animal.hazardRating === HazardRating.HIGH ? 'text-rose-600' : animal.hazardRating === HazardRating.MEDIUM ? 'text-amber-600' : 'text-slate-800'}`}>
+                                                         {animal.hazardRating}
+                                                     </p>
+                                                     {animal.isVenomous && (
+                                                         <span className="bg-rose-600 text-white text-[8px] px-1.5 py-0.5 rounded font-black uppercase tracking-wider">VENOMOUS</span>
+                                                     )}
+                                                 </div>
+                                             </div>
+                                         ) : (
+                                             <div><h4 className="text-[9px] font-black text-slate-300 uppercase tracking-widest">CHIP/RING</h4><p className="font-black text-slate-800 font-mono text-sm">{animal.microchip || animal.ringNumber || 'N/A'}</p></div>
+                                         )}
+                                     </div>
+                                </div>
+
+                                {/* Right Col */}
+                                <div className="col-span-5 flex flex-col gap-5">
+                                     <div className="flex-1 flex flex-col">
+                                         <h3 className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-1.5 ml-0.5">NATIVE RANGE</h3>
+                                         <div className="flex-1 w-full bg-slate-50 rounded-xl border border-slate-100 overflow-hidden flex items-center justify-center relative min-h-[140px]">
+                                              {animal.distributionMapUrl ? (
+                                                  <img src={animal.distributionMapUrl} alt="Range Map" className="w-full h-full object-contain p-2" crossOrigin="anonymous"/>
+                                              ) : (
+                                                  <div className="flex flex-col items-center justify-center text-slate-300">
+                                                      <Globe size={32} className="mb-1"/>
+                                                      <span className="text-[8px] font-black uppercase">No Map Data</span>
+                                                  </div>
+                                              )}
+                                         </div>
+                                     </div>
+
+                                     {/* Temp & Humidity Targets */}
+                                     <div className="flex flex-col gap-3">
+                                         <div className="flex gap-3">
+                                             <div className="flex-1 bg-orange-500 text-white p-3 rounded-xl shadow-lg flex items-center gap-3">
+                                                 <Sun size={24} className="shrink-0" />
+                                                 <div className="min-w-0">
+                                                     <p className="text-[8px] font-black opacity-80 uppercase tracking-widest whitespace-nowrap">DAY TARGET</p>
+                                                     <p className="text-2xl font-black leading-none">{animal.targetDayTemp || 28}°C</p>
+                                                 </div>
+                                             </div>
+                                             <div className="flex-1 bg-emerald-600 text-white p-3 rounded-xl shadow-lg flex items-center gap-3">
+                                                 <Moon size={24} className="shrink-0" />
+                                                 <div className="min-w-0">
+                                                     <p className="text-[8px] font-black opacity-80 uppercase tracking-widest whitespace-nowrap">NIGHT TARGET</p>
+                                                     <p className="text-2xl font-black leading-none">{animal.targetNightTemp || 22}°C</p>
+                                                 </div>
+                                             </div>
+                                         </div>
+                                         
+                                         {/* Conditional Humidity Range Block */}
+                                         {(animal.targetHumidityMin || animal.targetHumidityMax) && (
+                                            <div className="bg-cyan-600 text-white p-3 rounded-xl shadow-lg flex items-center gap-3">
+                                                 <Droplets size={24} className="shrink-0" />
+                                                 <div className="min-w-0">
+                                                     <p className="text-[8px] font-black opacity-80 uppercase tracking-widest whitespace-nowrap">HUMIDITY RANGE</p>
+                                                     <p className="text-2xl font-black leading-none">{animal.targetHumidityMin || '?'}-{animal.targetHumidityMax || '?'}%</p>
+                                                 </div>
+                                            </div>
+                                         )}
+                                     </div>
+                                </div>
+                            </div>
+
+                            {/* Footer */}
+                            <div className="mt-6 pt-4 border-t border-slate-100 text-right">
+                                <p className="text-[10px] font-black text-slate-300 uppercase tracking-[0.25em]">KOA REGISTRY - {new Date().getFullYear()}</p>
+                            </div>
                         </div>
-
-                        {/* RIGHT COLUMN */}
-                        <div className={`col-span-8 flex flex-col h-full ${mapLayout === 'bottom' ? 'gap-3' : 'gap-6'}`}>
-                            
-                            {/* Header Info - Compacted */}
-                            <div className="shrink-0">
-                                <h2 className="text-[4rem] font-black text-[#1e293b] uppercase leading-[0.8] tracking-tight mb-2">{animal.name}</h2>
-                                <h3 className="text-2xl font-bold text-[#10b981] uppercase tracking-wider">{animal.species}</h3>
-                                <p className="text-lg text-slate-400 font-serif italic mt-1 mb-4">{animal.latinName}</p>
-                                <div className="h-1.5 w-32 bg-[#10b981] mb-2 rounded-full"></div>
-
-                                {/* CONDITIONAL HEADER CONTENT */}
-                                {mapLayout === 'side' && (
-                                    <>
-                                        {/* Animal Stats - Row Layout (Only in Side Layout) */}
-                                        <div className="flex gap-8 mb-6 mt-6 bg-slate-50 p-3 rounded-xl border border-slate-100">
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center text-slate-500 shadow-sm border border-slate-200">
-                                                    <Info size={20}/>
-                                                </div>
-                                                <div>
-                                                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">AGE</p>
-                                                    <p className="font-bold text-slate-800">{getAge(animal.dob)}</p>
-                                                </div>
-                                            </div>
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center text-slate-500 shadow-sm border border-slate-200">
-                                                    <Info size={20}/>
-                                                </div>
-                                                <div>
-                                                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">SEX</p>
-                                                    <p className="font-bold text-slate-800">{animal.sex}</p>
-                                                </div>
-                                            </div>
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center text-slate-500 shadow-sm border border-slate-200">
-                                                    <Calendar size={20}/>
-                                                </div>
-                                                <div>
-                                                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">ARRIVED</p>
-                                                    <p className="font-bold text-slate-800">{getArrivalYear(animal.arrivalDate)}</p>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        {/* Species Stats - Compact Grid Row (Only in Side Layout) */}
-                                        <div className="grid grid-cols-4 gap-2 bg-[#f0fdf4] p-3 rounded-xl border border-emerald-100">
-                                            <div className="text-center">
-                                                <p className="text-[8px] font-black text-emerald-700 uppercase tracking-widest mb-0.5">WILD LIFESPAN</p>
-                                                {isEditingText ? (
-                                                    <EditInput value={content.speciesStats.lifespanWild || ''} onChange={(v) => handleStatChange('lifespanWild', v)} />
-                                                ) : (
-                                                    <p className="text-sm font-bold text-slate-800 leading-tight">{content.speciesStats.lifespanWild || '-'}</p>
-                                                )}
-                                            </div>
-                                            <div className="text-center border-l border-emerald-200">
-                                                <p className="text-[8px] font-black text-emerald-700 uppercase tracking-widest mb-0.5">CAPTIVE LIFESPAN</p>
-                                                {isEditingText ? (
-                                                    <EditInput value={content.speciesStats.lifespanCaptivity || ''} onChange={(v) => handleStatChange('lifespanCaptivity', v)} />
-                                                ) : (
-                                                    <p className="text-sm font-bold text-slate-800 leading-tight">{content.speciesStats.lifespanCaptivity || '-'}</p>
-                                                )}
-                                            </div>
-                                            <div className="text-center border-l border-emerald-200">
-                                                <p className="text-[8px] font-black text-emerald-700 uppercase tracking-widest mb-0.5">{dynamicDimensionLabel}</p>
-                                                {isEditingText ? (
-                                                    <EditInput value={content.speciesStats.wingspan || ''} onChange={(v) => handleStatChange('wingspan', v)} />
-                                                ) : (
-                                                    <p className="text-sm font-bold text-slate-800 leading-tight">{content.speciesStats.wingspan || '-'}</p>
-                                                )}
-                                            </div>
-                                            <div className="text-center border-l border-emerald-200">
-                                                <p className="text-[8px] font-black text-emerald-700 uppercase tracking-widest mb-0.5">WEIGHT</p>
-                                                {isEditingText ? (
-                                                    <EditInput value={content.speciesStats.weight || ''} onChange={(v) => handleStatChange('weight', v)} />
-                                                ) : (
-                                                    <p className="text-sm font-bold text-slate-800 leading-tight">{content.speciesStats.weight || '-'}</p>
-                                                )}
-                                            </div>
-                                        </div>
-                                    </>
+                    ) : (
+                        /* ======================== A4 LAYOUT (PORTRAIT/LANDSCAPE) ======================== */
+                        <>
+                            {/* 1. Header Bar */}
+                            <div className="h-28 bg-[#1e293b] flex items-center justify-between px-10 text-white shrink-0">
+                                <h1 className="text-3xl font-black uppercase tracking-[0.2em]">{orgProfile?.name || 'KENT OWL ACADEMY'}</h1>
+                                {orgProfile?.logoUrl ? (
+                                    <img src={orgProfile.logoUrl} alt="Logo" className="h-20 w-auto object-contain bg-white rounded-xl p-2 shadow-lg" />
+                                ) : (
+                                    <div className="h-16 w-16 bg-white rounded-xl flex items-center justify-center text-slate-900 font-bold text-2xl">KOA</div>
                                 )}
                             </div>
 
-                            {/* Content Blocks - Auto Flex to Fill Remaining Space */}
-                            <div className="flex flex-col gap-4 flex-1 min-h-0 justify-between overflow-hidden">
-                                <div className="flex-1 min-h-0">
-                                    <h4 className="text-xs font-black text-[#1e293b] uppercase tracking-widest mb-2 border-b border-slate-200 pb-1">DIET</h4>
-                                    {isEditingText ? (
-                                        <EditTextArea value={content.diet.join('\n')} onChange={v => handleListChange('diet', v)} className="h-full"/>
+                            {/* 2. Main Content Grid */}
+                            <div className="flex-1 py-8 pl-5 pr-8 grid grid-cols-12 gap-6 overflow-hidden">
+                                
+                                {/* LEFT COLUMN */}
+                                <div className={`col-span-4 flex flex-col ${mapLayout === 'bottom' ? 'gap-2' : 'gap-4'}`}>
+                                    {/* Portrait */}
+                                    <div className="aspect-[3/4] w-full rounded-[1.5rem] overflow-hidden border-4 border-[#1e293b] shadow-xl relative shrink-0">
+                                        <img src={animal.imageUrl} alt={animal.name} className="w-full h-full object-cover" crossOrigin="anonymous"/>
+                                    </div>
+
+                                    {/* Status Box */}
+                                    <div className="bg-[#1e293b] rounded-2xl p-4 flex items-center justify-between shadow-lg text-white shrink-0">
+                                        <span className="text-xs font-black uppercase tracking-[0.25em] pl-2">STATUS</span>
+                                        <div className="scale-90 origin-right">
+                                            <IUCNBadge status={animal.redListStatus} size="lg" />
+                                        </div>
+                                    </div>
+
+                                    {/* CONDITIONAL LEFT CONTENT */}
+                                    {mapLayout === 'side' ? (
+                                        <div className="bg-slate-50 rounded-2xl p-4 border-2 border-slate-200 shadow-sm flex flex-col items-center flex-1 min-h-0">
+                                            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.25em] w-full text-left mb-2 pl-1">NATIVE RANGE</h3>
+                                            <div className="rounded-xl overflow-hidden border border-slate-200 w-full bg-white relative flex items-center justify-center flex-1">
+                                                {animal.distributionMapUrl ? (
+                                                    <img src={animal.distributionMapUrl} alt="Range Map" className="w-full h-full object-cover" crossOrigin="anonymous"/>
+                                                ) : (
+                                                    <div className="w-full h-full flex items-center justify-center text-slate-300">
+                                                        <Globe size={48} />
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
                                     ) : (
-                                        <ul className="list-disc list-outside pl-5 text-[15px] text-slate-700 space-y-1.5 font-medium leading-relaxed marker:text-[#10b981]">
-                                            {/* Limit items in Bottom layout to avoid push */}
-                                            {content.diet.length > 0 ? content.diet.slice(0, mapLayout === 'bottom' ? 2 : 3).map((item, i) => <li key={i}>{item}</li>) : <li>Generating diet info...</li>}
-                                        </ul>
+                                        <>
+                                            <div className="flex flex-col gap-3 bg-slate-50 p-4 rounded-xl border border-slate-200 shadow-sm">
+                                                <div className="flex items-center gap-3 border-b border-slate-200 pb-2">
+                                                    <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center text-slate-500 shadow-sm border border-slate-200 shrink-0">
+                                                        <Info size={16}/>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">AGE</p>
+                                                        <p className="font-bold text-slate-800 text-sm">{getAge(animal.dob)}</p>
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-3 border-b border-slate-200 pb-2">
+                                                    <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center text-slate-500 shadow-sm border border-slate-200 shrink-0">
+                                                        <Info size={16}/>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">SEX</p>
+                                                        <p className="font-bold text-slate-800 text-sm">{animal.sex}</p>
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center text-slate-500 shadow-sm border border-slate-200 shrink-0">
+                                                        <Calendar size={16}/>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">ARRIVED</p>
+                                                        <p className="font-bold text-slate-800 text-sm">{getArrivalYear(animal.arrivalDate)}</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div className="grid grid-cols-1 gap-2 bg-[#f0fdf4] p-3 rounded-xl border border-emerald-100 flex-1 min-h-0 content-start overflow-auto no-scrollbar mb-6">
+                                                <div className="bg-white/50 p-3 rounded-lg border border-emerald-100 flex flex-col justify-center">
+                                                    <p className="text-[7px] font-black text-emerald-700 uppercase tracking-widest mb-0.5">WILD LIFESPAN</p>
+                                                    {isEditingText ? (
+                                                        <EditInput value={content.speciesStats.lifespanWild || ''} onChange={(v) => handleStatChange('lifespanWild', v)} />
+                                                    ) : (
+                                                        <p className="text-sm font-bold text-slate-800 leading-tight">{content.speciesStats.lifespanWild || '-'}</p>
+                                                    )}
+                                                </div>
+                                                <div className="bg-white/50 p-3 rounded-lg border border-emerald-100 flex flex-col justify-center">
+                                                    <p className="text-[7px] font-black text-emerald-700 uppercase tracking-widest mb-0.5">CAPTIVE LIFESPAN</p>
+                                                    {isEditingText ? (
+                                                        <EditInput value={content.speciesStats.lifespanCaptivity || ''} onChange={(v) => handleStatChange('lifespanCaptivity', v)} />
+                                                    ) : (
+                                                        <p className="text-sm font-bold text-slate-800 leading-tight">{content.speciesStats.lifespanCaptivity || '-'}</p>
+                                                    )}
+                                                </div>
+                                                <div className="bg-white/50 p-3 rounded-lg border border-emerald-100 flex flex-col justify-center">
+                                                    <p className="text-[7px] font-black text-emerald-700 uppercase tracking-widest mb-0.5">{dynamicDimensionLabel}</p>
+                                                    {isEditingText ? (
+                                                        <EditInput value={content.speciesStats.wingspan || ''} onChange={(v) => handleStatChange('wingspan', v)} />
+                                                    ) : (
+                                                        <p className="text-sm font-bold text-slate-800 leading-tight">{content.speciesStats.wingspan || '-'}</p>
+                                                    )}
+                                                </div>
+                                                <div className="bg-white/50 p-3 rounded-lg border border-emerald-100 flex flex-col justify-center">
+                                                    <p className="text-[7px] font-black text-emerald-700 uppercase tracking-widest mb-0.5">WEIGHT</p>
+                                                    {isEditingText ? (
+                                                        <EditInput value={content.speciesStats.weight || ''} onChange={(v) => handleStatChange('weight', v)} />
+                                                    ) : (
+                                                        <p className="text-sm font-bold text-slate-800 leading-tight">{content.speciesStats.weight || '-'}</p>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </>
                                     )}
                                 </div>
 
-                                <div className="flex-1 min-h-0">
-                                    <h4 className="text-xs font-black text-[#1e293b] uppercase tracking-widest mb-2 border-b border-slate-200 pb-1">HABITAT</h4>
-                                    {isEditingText ? (
-                                        <EditTextArea value={content.habitat.join('\n')} onChange={v => handleListChange('habitat', v)} className="h-full"/>
-                                    ) : (
-                                        <ul className="list-disc list-outside pl-5 text-[15px] text-slate-700 space-y-1.5 font-medium leading-relaxed marker:text-[#10b981]">
-                                            {content.habitat.length > 0 ? content.habitat.slice(0, mapLayout === 'bottom' ? 2 : 3).map((item, i) => <li key={i}>{item}</li>) : <li>Generating habitat info...</li>}
-                                        </ul>
-                                    )}
-                                </div>
+                                {/* RIGHT COLUMN */}
+                                <div className={`col-span-8 flex flex-col h-full ${mapLayout === 'bottom' ? 'gap-3' : 'gap-6'}`}>
+                                    
+                                    <div className="shrink-0">
+                                        <h2 className="text-[4rem] font-black text-[#1e293b] uppercase leading-[0.8] tracking-tight mb-2">{animal.name}</h2>
+                                        <h3 className="text-2xl font-bold text-[#10b981] uppercase tracking-wider">{animal.species}</h3>
+                                        <p className="text-lg text-slate-400 font-serif italic mt-1 mb-4">{animal.latinName}</p>
+                                        <div className="h-1.5 w-32 bg-[#10b981] mb-2 rounded-full"></div>
 
-                                {/* In Bottom Layout, we might need to compress this or show fewer items */}
-                                {mapLayout === 'side' && (
-                                    <div className="flex-1 min-h-0">
-                                        <h4 className="text-xs font-black text-[#1e293b] uppercase tracking-widest mb-2 border-b border-slate-200 pb-1">DID YOU KNOW?</h4>
-                                        {isEditingText ? (
-                                            <EditTextArea value={content.didYouKnow.join('\n')} onChange={v => handleListChange('didYouKnow', v)} className="h-full"/>
-                                        ) : (
-                                            <ul className="list-disc list-outside pl-5 text-[15px] text-slate-700 space-y-1.5 font-medium leading-relaxed marker:text-[#10b981]">
-                                                {content.didYouKnow.length > 0 ? content.didYouKnow.slice(0, 2).map((item, i) => <li key={i}>{item}</li>) : <li>Gathering facts...</li>}
-                                            </ul>
+                                        {mapLayout === 'side' && (
+                                            <>
+                                                <div className="flex gap-8 mb-6 mt-6 bg-slate-50 p-3 rounded-xl border border-slate-100">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center text-slate-500 shadow-sm border border-slate-200">
+                                                            <Info size={20}/>
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">AGE</p>
+                                                            <p className="font-bold text-slate-800">{getAge(animal.dob)}</p>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center text-slate-500 shadow-sm border border-slate-200">
+                                                            <Info size={20}/>
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">SEX</p>
+                                                            <p className="font-bold text-slate-800">{animal.sex}</p>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center text-slate-500 shadow-sm border border-slate-200">
+                                                            <Calendar size={20}/>
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">ARRIVED</p>
+                                                            <p className="font-bold text-slate-800">{getArrivalYear(animal.arrivalDate)}</p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div className="grid grid-cols-4 gap-2 bg-[#f0fdf4] p-3 rounded-xl border border-emerald-100">
+                                                    <div className="text-center">
+                                                        <p className="text-[8px] font-black text-emerald-700 uppercase tracking-widest mb-0.5">WILD LIFESPAN</p>
+                                                        {isEditingText ? (
+                                                            <EditInput value={content.speciesStats.lifespanWild || ''} onChange={(v) => handleStatChange('lifespanWild', v)} />
+                                                        ) : (
+                                                            <p className="text-sm font-bold text-slate-800 leading-tight">{content.speciesStats.lifespanWild || '-'}</p>
+                                                        )}
+                                                    </div>
+                                                    <div className="text-center border-l border-emerald-200">
+                                                        <p className="text-[8px] font-black text-emerald-700 uppercase tracking-widest mb-0.5">CAPTIVE LIFESPAN</p>
+                                                        {isEditingText ? (
+                                                            <EditInput value={content.speciesStats.lifespanCaptivity || ''} onChange={(v) => handleStatChange('lifespanCaptivity', v)} />
+                                                        ) : (
+                                                            <p className="text-sm font-bold text-slate-800 leading-tight">{content.speciesStats.lifespanCaptivity || '-'}</p>
+                                                        )}
+                                                    </div>
+                                                    <div className="text-center border-l border-emerald-200">
+                                                        <p className="text-[8px] font-black text-emerald-700 uppercase tracking-widest mb-0.5">{dynamicDimensionLabel}</p>
+                                                        {isEditingText ? (
+                                                            <EditInput value={content.speciesStats.wingspan || ''} onChange={(v) => handleStatChange('wingspan', v)} />
+                                                        ) : (
+                                                            <p className="text-sm font-bold text-slate-800 leading-tight">{content.speciesStats.wingspan || '-'}</p>
+                                                        )}
+                                                    </div>
+                                                    <div className="text-center border-l border-emerald-200">
+                                                        <p className="text-[8px] font-black text-emerald-700 uppercase tracking-widest mb-0.5">WEIGHT</p>
+                                                        {isEditingText ? (
+                                                            <EditInput value={content.speciesStats.weight || ''} onChange={(v) => handleStatChange('weight', v)} />
+                                                        ) : (
+                                                            <p className="text-sm font-bold text-slate-800 leading-tight">{content.speciesStats.weight || '-'}</p>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </>
                                         )}
                                     </div>
-                                )}
-                                {mapLayout === 'bottom' && content.didYouKnow.length > 0 && (
-                                     <div className="flex-1 min-h-0">
-                                        <h4 className="text-xs font-black text-[#1e293b] uppercase tracking-widest mb-2 border-b border-slate-200 pb-1">DID YOU KNOW?</h4>
-                                        {isEditingText ? (
-                                            <EditTextArea value={content.didYouKnow.join('\n')} onChange={v => handleListChange('didYouKnow', v)} className="h-full"/>
-                                        ) : (
-                                            <ul className="list-disc list-outside pl-5 text-[15px] text-slate-700 space-y-1.5 font-medium leading-relaxed marker:text-[#10b981]">
-                                                {content.didYouKnow.slice(0, 1).map((item, i) => <li key={i}>{item}</li>)}
-                                            </ul>
-                                        )}
-                                    </div>
-                                )}
-                            </div>
 
-                            {/* BOTTOM LAYOUT MAP - Added mb-6 for lift */}
-                            {mapLayout === 'bottom' && (
-                                <div className="h-72 bg-slate-50 rounded-2xl p-4 border-2 border-slate-200 shadow-sm shrink-0 flex flex-col mb-6">
-                                    <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.25em] w-full text-left mb-2 pl-1">NATIVE RANGE</h3>
-                                    <div className="rounded-xl overflow-hidden border border-slate-200 w-full bg-white relative flex items-center justify-center flex-1">
-                                        {animal.distributionMapUrl ? (
-                                            <img src={animal.distributionMapUrl} alt="Range Map" className="w-full h-full object-contain" crossOrigin="anonymous"/>
-                                        ) : (
-                                            <div className="w-full h-full flex items-center justify-center text-slate-300">
-                                                <Globe size={48} />
+                                    <div className="flex flex-col gap-4 flex-1 min-h-0 justify-between overflow-hidden">
+                                        <div className="flex-1 min-h-0">
+                                            <h4 className="text-xs font-black text-[#1e293b] uppercase tracking-widest mb-2 border-b border-slate-200 pb-1">DIET</h4>
+                                            {isEditingText ? (
+                                                <EditTextArea value={content.diet.join('\n')} onChange={v => handleListChange('diet', v)} className="h-full"/>
+                                            ) : (
+                                                <ul className="list-disc list-outside pl-5 text-[15px] text-slate-700 space-y-1.5 font-medium leading-relaxed marker:text-[#10b981]">
+                                                    {content.diet.length > 0 ? content.diet.slice(0, mapLayout === 'bottom' ? 2 : 3).map((item, i) => <li key={i}>{item}</li>) : <li>Generating diet info...</li>}
+                                                </ul>
+                                            )}
+                                        </div>
+
+                                        <div className="flex-1 min-h-0">
+                                            <h4 className="text-xs font-black text-[#1e293b] uppercase tracking-widest mb-2 border-b border-slate-200 pb-1">HABITAT</h4>
+                                            {isEditingText ? (
+                                                <EditTextArea value={content.habitat.join('\n')} onChange={v => handleListChange('habitat', v)} className="h-full"/>
+                                            ) : (
+                                                <ul className="list-disc list-outside pl-5 text-[15px] text-slate-700 space-y-1.5 font-medium leading-relaxed marker:text-[#10b981]">
+                                                    {content.habitat.length > 0 ? content.habitat.slice(0, mapLayout === 'bottom' ? 2 : 3).map((item, i) => <li key={i}>{item}</li>) : <li>Generating habitat info...</li>}
+                                                </ul>
+                                            )}
+                                        </div>
+
+                                        {mapLayout === 'side' && (
+                                            <div className="flex-1 min-h-0">
+                                                <h4 className="text-xs font-black text-[#1e293b] uppercase tracking-widest mb-2 border-b border-slate-200 pb-1">DID YOU KNOW?</h4>
+                                                {isEditingText ? (
+                                                    <EditTextArea value={content.didYouKnow.join('\n')} onChange={v => handleListChange('didYouKnow', v)} className="h-full"/>
+                                                ) : (
+                                                    <ul className="list-disc list-outside pl-5 text-[15px] text-slate-700 space-y-1.5 font-medium leading-relaxed marker:text-[#10b981]">
+                                                        {content.didYouKnow.length > 0 ? content.didYouKnow.slice(0, 2).map((item, i) => <li key={i}>{item}</li>) : <li>Gathering facts...</li>}
+                                                    </ul>
+                                                )}
+                                            </div>
+                                        )}
+                                        {mapLayout === 'bottom' && content.didYouKnow.length > 0 && (
+                                             <div className="flex-1 min-h-0">
+                                                <h4 className="text-xs font-black text-[#1e293b] uppercase tracking-widest mb-2 border-b border-slate-200 pb-1">DID YOU KNOW?</h4>
+                                                {isEditingText ? (
+                                                    <EditTextArea value={content.didYouKnow.join('\n')} onChange={v => handleListChange('didYouKnow', v)} className="h-full"/>
+                                                ) : (
+                                                    <ul className="list-disc list-outside pl-5 text-[15px] text-slate-700 space-y-1.5 font-medium leading-relaxed marker:text-[#10b981]">
+                                                        {content.didYouKnow.slice(0, 1).map((item, i) => <li key={i}>{item}</li>)}
+                                                    </ul>
+                                                )}
                                             </div>
                                         )}
                                     </div>
+
+                                    {mapLayout === 'bottom' && (
+                                        <div className="h-72 bg-slate-50 rounded-2xl p-4 border-2 border-slate-200 shadow-sm shrink-0 flex flex-col mb-6">
+                                            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.25em] w-full text-left mb-2 pl-1">NATIVE RANGE</h3>
+                                            <div className="rounded-xl overflow-hidden border border-slate-200 w-full bg-white relative flex items-center justify-center flex-1">
+                                                {animal.distributionMapUrl ? (
+                                                    <img src={animal.distributionMapUrl} alt="Range Map" className="w-full h-full object-contain" crossOrigin="anonymous"/>
+                                                ) : (
+                                                    <div className="w-full h-full flex items-center justify-center text-slate-300">
+                                                        <Globe size={48} />
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+
                                 </div>
-                            )}
+                            </div>
 
-                        </div>
-                    </div>
+                            {/* 3. Footer / CTA */}
+                            <div className="h-32 bg-[#10b981] flex items-center justify-between px-10 text-white relative overflow-hidden shrink-0">
+                                <div className="absolute inset-0 opacity-10 pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle, #fff 2px, transparent 2.5px)', backgroundSize: '24px 24px' }}></div>
+                                
+                                <div className="relative z-10 max-w-[70%]">
+                                    <h2 className="text-3xl font-black uppercase italic tracking-wide mb-1 shadow-black drop-shadow-sm">ADOPT {animal.name} TODAY!</h2>
+                                    <p className="text-sm font-medium opacity-95 leading-snug">
+                                        Scan the code to adopt {animal.name}. Your support helps provide food, care, and enrichment for our collection.
+                                    </p>
+                                </div>
 
-                    {/* 3. Footer / CTA - Adjusted for fit */}
-                    <div className="h-32 bg-[#10b981] flex items-center justify-between px-10 text-white relative overflow-hidden shrink-0">
-                        {/* Background Pattern */}
-                        <div className="absolute inset-0 opacity-10 pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle, #fff 2px, transparent 2.5px)', backgroundSize: '24px 24px' }}></div>
-                        
-                        <div className="relative z-10 max-w-[70%]">
-                            <h2 className="text-3xl font-black uppercase italic tracking-wide mb-1 shadow-black drop-shadow-sm">ADOPT {animal.name} TODAY!</h2>
-                            <p className="text-sm font-medium opacity-95 leading-snug">
-                                Scan the code to adopt {animal.name}. Your support helps provide food, care, and enrichment for our collection.
-                            </p>
-                        </div>
-
-                        <div className="relative z-10 bg-white p-2 rounded-xl shadow-2xl shrink-0">
-                            <img src={qrCodeUrl} alt="Adoption QR" className="w-24 h-24" crossOrigin="anonymous"/>
-                        </div>
-                    </div>
-
+                                <div className="relative z-10 bg-white p-2 rounded-xl shadow-2xl shrink-0">
+                                    <img src={qrCodeUrl} alt="Adoption QR" className="w-24 h-24" crossOrigin="anonymous"/>
+                                </div>
+                            </div>
+                        </>
+                    )}
                 </div>
             </div>
         </div>

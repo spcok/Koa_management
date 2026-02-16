@@ -1,5 +1,4 @@
-
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useTransition } from 'react';
 import { Animal, LogType, LogEntry, HealthRecordType, HealthCondition, AnimalCategory, Task, User, UserRole, OrganizationProfile } from '../types';
 import { Heart, Activity, Calendar, Save, Upload, FileText, AlertCircle, Plus, X, Filter, RotateCcw, Clock, User as UserIcon, Edit2, Trash2, Skull, Printer, Biohazard, ShieldCheck, Thermometer, AlertTriangle, Pill, ClipboardList, ArrowRight, Sparkles, Loader2, Check, BarChart3 } from 'lucide-react';
 import { analyzeHealthHistory, analyzeCollectionHealth } from '../services/geminiService';
@@ -25,13 +24,12 @@ const Health: React.FC<HealthProps> = ({ animals, onSelectAnimal, onUpdateAnimal
   const [activeTab, setActiveTab] = useState<'medical' | 'quarantine' | 'mar'>('medical');
   const [isModalOpen, setIsModalOpen] = useState(false);
   
-  // AI Insights State
-  const [aiInsight, setAiInsight] = useState<{animalId: string, text: string} | null>(null);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  // React 19 Transitions for AI
+  const [isPendingAi, startTransitionAi] = useTransition();
+  const [isPendingBrief, startTransitionBrief] = useTransition();
   
-  // Collection Briefing State
+  const [aiInsight, setAiInsight] = useState<{animalId: string, text: string} | null>(null);
   const [collectionBrief, setCollectionBrief] = useState<string | null>(null);
-  const [isBriefing, setIsBriefing] = useState(false);
 
   // Filter State
   const [filterCategory, setFilterCategory] = useState<AnimalCategory | 'ALL'>('ALL');
@@ -41,18 +39,18 @@ const Health: React.FC<HealthProps> = ({ animals, onSelectAnimal, onUpdateAnimal
   const [editingLog, setEditingLog] = useState<LogEntry | undefined>(undefined);
   const [editingAnimal, setEditingAnimal] = useState<Animal | undefined>(undefined);
 
-  const handleGenerateAiInsight = async (animal: Animal) => {
-    setIsAnalyzing(true);
-    const text = await analyzeHealthHistory(animal);
-    setAiInsight({ animalId: animal.id, text });
-    setIsAnalyzing(false);
+  const handleGenerateAiInsight = (animal: Animal) => {
+    startTransitionAi(async () => {
+        const text = await analyzeHealthHistory(animal);
+        setAiInsight({ animalId: animal.id, text });
+    });
   };
 
-  const handleGenerateCollectionBrief = async () => {
-      setIsBriefing(true);
-      const brief = await analyzeCollectionHealth(animals);
-      setCollectionBrief(brief);
-      setIsBriefing(false);
+  const handleGenerateCollectionBrief = () => {
+      startTransitionBrief(async () => {
+          const brief = await analyzeCollectionHealth(animals);
+          setCollectionBrief(brief);
+      });
   };
 
   const handleEditLog = (log: LogEntry & { animal: Animal }) => {
@@ -80,14 +78,23 @@ const Health: React.FC<HealthProps> = ({ animals, onSelectAnimal, onUpdateAnimal
   };
 
   const recentHealthLogs = useMemo(() => {
-    return animals
-      .flatMap(animal => (animal.logs || []).filter(log => log.type === LogType.HEALTH).map(log => ({ ...log, animal })))
-      .filter(log => {
-        const categoryMatch = filterCategory === 'ALL' || log.animal.category === filterCategory;
-        const animalMatch = filterAnimalId === 'ALL' || log.animal.id === filterAnimalId;
-        return categoryMatch && animalMatch;
-      })
-      .sort((a, b) => b.timestamp - a.timestamp);
+    // Filter animals first to reduce search space
+    const relevantAnimals = animals.filter(a => 
+        (filterCategory === 'ALL' || a.category === filterCategory) &&
+        (filterAnimalId === 'ALL' || a.id === filterAnimalId)
+    );
+
+    const logs: (LogEntry & { animal: Animal })[] = [];
+    for (const animal of relevantAnimals) {
+        const alogs = animal.logs || [];
+        for (const log of alogs) {
+            if (log.type === LogType.HEALTH) {
+                logs.push({ ...log, animal });
+            }
+        }
+    }
+    
+    return logs.sort((a, b) => b.timestamp - a.timestamp);
   }, [animals, filterCategory, filterAnimalId]);
 
   const upcomingChecks = useMemo(() => {
@@ -111,10 +118,10 @@ const Health: React.FC<HealthProps> = ({ animals, onSelectAnimal, onUpdateAnimal
         <div className="flex gap-2 w-full md:w-auto">
             <button 
                 onClick={handleGenerateCollectionBrief} 
-                disabled={isBriefing}
+                disabled={isPendingBrief}
                 className="bg-slate-900 text-white px-4 py-2 rounded-xl transition-all shadow-lg flex items-center gap-2 font-black uppercase text-[10px] tracking-widest hover:bg-black"
             >
-                {isBriefing ? <Loader2 size={16} className="animate-spin"/> : <BarChart3 size={16}/>} Morning Briefing
+                {isPendingBrief ? <Loader2 size={16} className="animate-spin"/> : <BarChart3 size={16}/>} Morning Briefing
             </button>
             <button onClick={() => { setEditingLog(undefined); setEditingAnimal(undefined); setIsModalOpen(true); }} className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl transition-all shadow-lg shadow-emerald-900/20 flex items-center gap-2 font-black uppercase text-[10px] tracking-widest">
                 <Plus size={16} /> New Record
@@ -247,11 +254,11 @@ const Health: React.FC<HealthProps> = ({ animals, onSelectAnimal, onUpdateAnimal
                                                 <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                                     <button 
                                                       onClick={() => handleGenerateAiInsight(log.animal)}
-                                                      disabled={isAnalyzing}
+                                                      disabled={isPendingAi}
                                                       className="p-2 text-slate-400 hover:text-emerald-600 bg-white border border-slate-200 rounded-lg shadow-sm transition-all"
                                                       title="AI Clinical Diagnostic"
                                                     >
-                                                        {isAnalyzing ? <Loader2 size={14} className="animate-spin"/> : <Sparkles size={14}/>}
+                                                        {isPendingAi ? <Loader2 size={14} className="animate-spin"/> : <Sparkles size={14}/>}
                                                     </button>
                                                     <button onClick={() => handleEditLog(log)} className="p-2 text-slate-400 hover:text-emerald-600 bg-white border border-slate-200 rounded-lg shadow-sm transition-all" title="Edit Entry">
                                                         <Edit2 size={14}/>

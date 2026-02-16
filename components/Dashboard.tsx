@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { Animal, AnimalCategory, LogType, LogEntry, UserRole, SortOption, Task, HazardRating } from '../types';
 import { Search, Plus, Scale, Utensils, ChevronLeft, ChevronRight, GripVertical, ArrowRight, Heart, ChevronDown, ChevronUp, CheckCircle, AlertCircle, ClipboardCheck, Skull, AlertTriangle, Lock, Unlock } from 'lucide-react';
@@ -44,15 +43,14 @@ const Dashboard: React.FC<DashboardProps> = ({
   const [isTasksOpen, setIsTasksOpen] = useState(false);
   const [isHealthOpen, setIsHealthOpen] = useState(false);
 
-  const stats = useMemo(() => {
+  // Split Memoization: Animal Stats (Heavy)
+  // This depends only on animals, activeTab, and viewDate. It will NOT re-run when tasks change.
+  const animalStats = useMemo(() => {
       const catAnimals = animals.filter(a => a.category === activeTab && !a.archived);
       const total = catAnimals.length;
       let weighed = 0;
       let fed = 0;
       
-      const pendingTasks = tasks.filter(t => !t.completed && t.type !== LogType.HEALTH);
-      const pendingHealth = tasks.filter(t => !t.completed && t.type === LogType.HEALTH);
-
       const animalData = new Map<string, {
           todayWeight?: LogEntry,
           latestWeight?: LogEntry,
@@ -62,28 +60,42 @@ const Dashboard: React.FC<DashboardProps> = ({
 
       catAnimals.forEach(animal => {
           const logs = animal.logs || [];
-          let todayWeight: LogEntry | undefined;
-          let latestWeight: LogEntry | undefined;
-          let todayFeed: LogEntry | undefined;
-          let previousWeight: LogEntry | undefined;
+          const weights: LogEntry[] = [];
+          const feeds: LogEntry[] = [];
 
-          const weightLogs = [...logs].filter(l => l.type === LogType.WEIGHT).sort((a,b) => b.timestamp - a.timestamp);
-          const feedLogs = [...logs].filter(l => l.type === LogType.FEED).sort((a,b) => b.timestamp - a.timestamp);
+          // Optimization: Single pass filtering
+          for (let i = 0; i < logs.length; i++) {
+              const l = logs[i];
+              if (l.type === LogType.WEIGHT) weights.push(l);
+              else if (l.type === LogType.FEED) feeds.push(l);
+          }
 
-          todayWeight = weightLogs.find(l => l.date.startsWith(viewDate));
-          todayFeed = feedLogs.find(l => l.date.startsWith(viewDate));
+          weights.sort((a, b) => b.timestamp - a.timestamp);
+
+          const todayWeight = weights.find(l => l.date.startsWith(viewDate));
+          const latestWeight = weights[0];
+          // Previous is the first weight entry that does not match the viewDate
+          const previousWeight = weights.find(l => !l.date.startsWith(viewDate));
+          
+          const todayFeed = feeds.find(l => l.date.startsWith(viewDate));
           
           if (todayWeight) weighed++;
           if (todayFeed) fed++;
 
-          latestWeight = weightLogs[0];
-          previousWeight = weightLogs.find(l => !l.date.startsWith(viewDate));
-
           animalData.set(animal.id, { todayWeight, latestWeight, todayFeed, previousWeight });
       });
 
-      return { total, weighed, fed, animalData, pendingTasks, pendingHealth };
-  }, [animals, activeTab, viewDate, tasks]);
+      return { total, weighed, fed, animalData };
+  }, [animals, activeTab, viewDate]);
+
+  // Split Memoization: Task Stats (Light/Frequent)
+  // This depends ONLY on tasks. Interacting with tasks will not trigger the heavy animal calculation above.
+  const taskStats = useMemo(() => {
+      return {
+          pendingTasks: tasks.filter(t => !t.completed && t.type !== LogType.HEALTH),
+          pendingHealth: tasks.filter(t => !t.completed && t.type === LogType.HEALTH)
+      };
+  }, [tasks]);
 
   const filteredAnimals = useMemo(() => {
     let result = [...animals]
@@ -155,21 +167,21 @@ const Dashboard: React.FC<DashboardProps> = ({
     <div className="p-3 md:p-8 pb-24 space-y-4 md:space-y-6 animate-in fade-in duration-500 max-w-[1600px] mx-auto">
       <div className="space-y-1">
           <h1 className="text-xl md:text-2xl font-bold text-slate-800">Dashboard</h1>
-          <p className="text-slate-500 text-xs md:text-sm">Overview of {stats.total} active animals.</p>
+          <p className="text-slate-500 text-xs md:text-sm">Overview of {animalStats.total} active animals.</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-6">
           <div className="bg-emerald-600 rounded-xl overflow-hidden shadow-sm relative group text-white border-2 border-emerald-700">
               <div className="absolute inset-0 bg-gradient-to-r from-emerald-800/20 to-transparent"></div>
               <div className="absolute bottom-0 left-0 h-1 md:h-1.5 bg-emerald-800/30 w-full">
-                  <div className="h-full bg-white/40" style={{ width: `${(stats.weighed / (stats.total || 1)) * 100}%` }}></div>
+                  <div className="h-full bg-white/40" style={{ width: `${(animalStats.weighed / (animalStats.total || 1)) * 100}%` }}></div>
               </div>
               <div className="p-4 md:p-6 relative z-10 flex justify-between items-center">
                   <div>
                       <p className="text-[10px] md:text-xs font-bold uppercase tracking-wider opacity-80 mb-1">Weighed Today</p>
                       <div className="flex items-baseline gap-1">
-                          <span className="text-2xl md:text-4xl font-black">{stats.weighed}</span>
-                          <span className="text-sm md:text-lg opacity-60 font-medium">/{stats.total}</span>
+                          <span className="text-2xl md:text-4xl font-black">{animalStats.weighed}</span>
+                          <span className="text-sm md:text-lg opacity-60 font-medium">/{animalStats.total}</span>
                       </div>
                   </div>
                   <Scale className="text-white/20 w-12 h-12 md:w-16 md:h-16 absolute -right-2 -bottom-4 rotate-12" />
@@ -182,14 +194,14 @@ const Dashboard: React.FC<DashboardProps> = ({
           <div className="bg-orange-500 rounded-xl overflow-hidden shadow-sm relative group text-white border-2 border-orange-600">
               <div className="absolute inset-0 bg-gradient-to-r from-orange-800/20 to-transparent"></div>
               <div className="absolute bottom-0 left-0 h-1 md:h-1.5 bg-orange-800/30 w-full">
-                  <div className="h-full bg-white/40" style={{ width: `${(stats.fed / (stats.total || 1)) * 100}%` }}></div>
+                  <div className="h-full bg-white/40" style={{ width: `${(animalStats.fed / (animalStats.total || 1)) * 100}%` }}></div>
               </div>
               <div className="p-4 md:p-6 relative z-10 flex justify-between items-center">
                   <div>
                       <p className="text-[10px] md:text-xs font-bold uppercase tracking-wider opacity-80 mb-1">Fed Today</p>
                       <div className="flex items-baseline gap-1">
-                          <span className="text-2xl md:text-4xl font-black">{stats.fed}</span>
-                          <span className="text-sm md:text-lg opacity-60 font-medium">/{stats.total}</span>
+                          <span className="text-2xl md:text-4xl font-black">{animalStats.fed}</span>
+                          <span className="text-sm md:text-lg opacity-60 font-medium">/{animalStats.total}</span>
                       </div>
                   </div>
                   <Utensils className="text-white/20 w-12 h-12 md:w-16 md:h-16 absolute -right-2 -bottom-4 rotate-12" />
@@ -207,21 +219,21 @@ const Dashboard: React.FC<DashboardProps> = ({
                 className="w-full flex justify-between items-center p-3 md:p-4 bg-slate-50 hover:bg-slate-100 transition-colors"
               >
                   <div className="flex items-center gap-3">
-                      <div className={`p-1 rounded border ${stats.pendingTasks.length > 0 ? 'bg-white border-slate-300 text-emerald-600' : 'bg-transparent border-emerald-600 text-emerald-600'}`}>
+                      <div className={`p-1 rounded border ${taskStats.pendingTasks.length > 0 ? 'bg-white border-slate-300 text-emerald-600' : 'bg-transparent border-emerald-600 text-emerald-600'}`}>
                           <ClipboardCheck size={16} />
                       </div>
                       <span className="font-bold text-slate-800 text-xs md:text-sm">Tasks & To-Dos</span>
                   </div>
                   <div className="flex items-center gap-3">
-                      <span className="bg-slate-200 text-slate-600 text-[10px] md:text-xs font-bold px-2 py-0.5 rounded-full">{stats.pendingTasks.length}</span>
+                      <span className="bg-slate-200 text-slate-600 text-[10px] md:text-xs font-bold px-2 py-0.5 rounded-full">{taskStats.pendingTasks.length}</span>
                       {isTasksOpen ? <ChevronUp size={16} className="text-slate-400"/> : <ChevronDown size={16} className="text-slate-400"/>}
                   </div>
               </button>
               {isTasksOpen && (
                   <div className="p-3 md:p-4 bg-white border-t-2 border-slate-100 max-h-60 overflow-y-auto">
-                      {stats.pendingTasks.length > 0 ? (
+                      {taskStats.pendingTasks.length > 0 ? (
                           <div className="space-y-2">
-                              {stats.pendingTasks.map(t => (
+                              {taskStats.pendingTasks.map(t => (
                                   <div key={t.id} className="flex items-start gap-3 p-3 rounded-lg border border-slate-100 hover:border-slate-300 transition-colors">
                                       <div className="mt-0.5"><AlertCircle size={14} className="text-amber-500"/></div>
                                       <div>
@@ -253,15 +265,15 @@ const Dashboard: React.FC<DashboardProps> = ({
                       <span className="font-bold text-slate-800 text-xs md:text-sm">Health Checks</span>
                   </div>
                   <div className="flex items-center gap-3">
-                      <span className="bg-slate-200 text-slate-600 text-[10px] md:text-xs font-bold px-2 py-0.5 rounded-full">{stats.pendingHealth.length}</span>
+                      <span className="bg-slate-200 text-slate-600 text-[10px] md:text-xs font-bold px-2 py-0.5 rounded-full">{taskStats.pendingHealth.length}</span>
                       {isHealthOpen ? <ChevronUp size={16} className="text-slate-400"/> : <ChevronDown size={16} className="text-slate-400"/>}
                   </div>
               </button>
               {isHealthOpen && (
                   <div className="p-3 md:p-4 bg-white border-t-2 border-slate-100 max-h-60 overflow-y-auto">
-                      {stats.pendingHealth.length > 0 ? (
+                      {taskStats.pendingHealth.length > 0 ? (
                           <div className="space-y-2">
-                              {stats.pendingHealth.map(t => (
+                              {taskStats.pendingHealth.map(t => (
                                   <div key={t.id} className="flex items-start gap-3 p-3 rounded-lg border border-slate-100 hover:border-slate-300 transition-colors">
                                       <div className="mt-0.5"><Heart size={14} className="text-rose-500"/></div>
                                       <div>
@@ -354,7 +366,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                   </thead>
                   <tbody className="text-xs md:text-sm">
                       {filteredAnimals.map((animal, index) => {
-                          const d = stats.animalData.get(animal.id);
+                          const d = animalStats.animalData.get(animal.id);
                           const hasWeightToday = !!d?.todayWeight;
                           const isBeingDragged = draggedIndex === index;
                           const isHighHazard = animal.hazardRating === HazardRating.HIGH || animal.isVenomous;
@@ -371,14 +383,12 @@ const Dashboard: React.FC<DashboardProps> = ({
                               >
                                   {sortOption === 'custom' && !isOrderLocked && (
                                       <td className="px-2 text-slate-300 group-hover:text-slate-400 border-b border-slate-100 sticky left-0 z-10 bg-inherit">
-                                          {/* Fix: removed md:size from GripVertical */}
                                           <GripVertical size={16} />
                                       </td>
                                   )}
                                   <td className={`px-2 md:px-4 py-2 md:py-3 font-bold text-slate-900 border-b border-slate-100 sticky z-10 bg-inherit shadow-[2px_0_5px_rgba(0,0,0,0.03)] group-hover:bg-emerald-50/60 ${sortOption === 'custom' && !isOrderLocked ? 'left-8 md:left-10' : 'left-0'}`} onClick={() => onSelectAnimal(animal)}>
                                       <div className="flex items-center gap-1 md:gap-2">
                                         <span className="truncate max-w-[120px] md:max-w-none">{animal.name}</span>
-                                        {/* Fix: move title to wrapper span for accessibility */}
                                         {isHighHazard && (
                                             <span title={animal.isVenomous ? 'Venomous Subject' : 'High Hazard Subject'}>
                                                 <Skull size={12} className="text-rose-600 shrink-0" />

@@ -1,35 +1,31 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Animal, AnimalCategory, Task, User, UserRole, SiteLogEntry, Incident, FirstAidLogEntry, OrganizationProfile, Contact, SortOption, TimeLogEntry, UserPermissions, HolidayRequest } from './types';
-import { dataService } from './services/dataService';
-import { backupService } from './services/backupService';
-import Layout from './components/Layout';
-import Dashboard from './components/Dashboard';
-import DailyLog from './components/DailyLog';
-import Tasks from './components/Tasks';
-import FlightRecords from './components/FlightRecords';
-import Schedule from './components/Schedule';
-import WeatherView from './components/WeatherView';
-import Movements from './components/Movements';
-import SafetyDrills from './components/SafetyDrills';
-import Incidents from './components/Incidents';
-import FirstAid from './components/FirstAid';
-import Health from './components/Health';
-import SiteMaintenance from './components/SiteMaintenance';
-import MissingRecords from './components/MissingRecords';
-import Reports from './components/Reports';
-import Settings from './components/Settings';
-import LoginScreen from './components/LoginScreen';
-import AnimalProfile from './components/AnimalProfile';
-import TimeSheets from './components/TimeSheets';
-import HelpCenter from './components/HelpCenter';
-import HolidayRegistry from './components/HolidayRegistry';
-import { DEFAULT_FOOD_OPTIONS, DEFAULT_FEED_METHODS } from './constants';
-import { batchGetSpeciesData } from './services/geminiService';
-import { Loader2 } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Animal, AnimalCategory, Task, User, UserRole, SiteLogEntry, Incident, FirstAidLogEntry, OrganizationProfile, Contact, SortOption, TimeLogEntry, UserPermissions } from './types.ts';
+import { dataService } from './services/dataService.ts';
+import Layout from './components/Layout.tsx';
+import Dashboard from './components/Dashboard.tsx';
+import DailyLog from './components/DailyLog.tsx';
+import Tasks from './components/Tasks.tsx';
+import FlightRecords from './components/FlightRecords.tsx';
+import Schedule from './components/Schedule.tsx';
+import WeatherView from './components/WeatherView.tsx';
+import Movements from './components/Movements.tsx';
+import SafetyDrills from './components/SafetyDrills.tsx';
+import Incidents from './components/Incidents.tsx';
+import FirstAid from './components/FirstAid.tsx';
+import Health from './components/Health.tsx';
+import SiteMaintenance from './components/SiteMaintenance.tsx';
+import MissingRecords from './components/MissingRecords.tsx';
+import Settings from './components/Settings.tsx';
+import LoginScreen from './components/LoginScreen.tsx';
+import AnimalProfile from './components/AnimalProfile.tsx';
+import TimeSheets from './components/TimeSheets.tsx';
+import HelpCenter from './components/HelpCenter.tsx';
+import Reports from './components/Reports.tsx';
+import { DEFAULT_FOOD_OPTIONS, DEFAULT_FEED_METHODS } from './constants.ts';
+import { batchGetSpeciesData } from './services/geminiService.ts';
 
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [isInitializing, setIsInitializing] = useState(true);
   const [view, setView] = useState<string>('dashboard');
   const [selectedAnimal, setSelectedAnimal] = useState<Animal | null>(null);
   const [animals, setAnimals] = useState<Animal[]>([]);
@@ -39,7 +35,6 @@ const App: React.FC = () => {
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [firstAidLogs, setFirstAidLogs] = useState<FirstAidLogEntry[]>([]);
   const [timeLogs, setTimeLogs] = useState<TimeLogEntry[]>([]);
-  const [holidayRequests, setHolidayRequests] = useState<HolidayRequest[]>([]);
   const [foodOptions, setFoodOptions] = useState<Record<AnimalCategory, string[]>>(DEFAULT_FOOD_OPTIONS);
   const [feedMethods, setFeedMethods] = useState<Record<AnimalCategory, string[]>>(DEFAULT_FEED_METHODS);
   const [locations, setLocations] = useState<string[]>([]);
@@ -55,75 +50,48 @@ const App: React.FC = () => {
   const [fontScale, setFontScale] = useState(100);
   const [activeShift, setActiveShift] = useState<TimeLogEntry | null>(null);
 
-  // Recovery logic for Start Shift button
-  useEffect(() => {
-    if (currentUser && timeLogs.length > 0) {
-      const active = timeLogs.find(l => l.userId === currentUser.id && l.status === 'Active');
-      if (active) {
-        setActiveShift(active);
-      } else {
-        setActiveShift(null);
-      }
-    }
-  }, [currentUser, timeLogs]);
-
   const performAutoSync = useCallback(async (currentAnimals: Animal[]) => {
     if (currentAnimals.length === 0) return;
     const lastSyncStr = await dataService.fetchSettingsKey('last_iucn_sync', null);
     const lastSync = lastSyncStr ? new Date(lastSyncStr).getTime() : 0;
     const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
-    
     if (Date.now() - lastSync > thirtyDaysMs) {
-      // Create a map of updates to apply later
-      const updates: Record<string, Partial<Animal>> = {};
-      let hasUpdates = false;
+      const updated = [...currentAnimals];
       const CHUNK_SIZE = 10;
-
-      for (let i = 0; i < currentAnimals.length; i += CHUNK_SIZE) {
-        const chunk = currentAnimals.slice(i, i + CHUNK_SIZE);
+      for (let i = 0; i < updated.length; i += CHUNK_SIZE) {
+        const chunk = updated.slice(i, i + CHUNK_SIZE);
         const speciesList = chunk.map(a => a.species);
         try {
             const results = await batchGetSpeciesData(speciesList);
-            for (const animal of chunk) {
-                const data = results[animal.species];
+            for (let j = 0; j < chunk.length; j++) {
+                const idx = i + j;
+                const data = results[updated[idx].species];
                 if (data) { 
-                    if (animal.latinName !== data.latin || animal.redListStatus !== data.status) {
-                        updates[animal.id] = { 
-                            latinName: data.latin || animal.latinName, 
-                            redListStatus: data.status || animal.redListStatus 
-                        };
-                        hasUpdates = true;
-                    }
+                    updated[idx] = { 
+                        ...updated[idx], 
+                        latinName: data.latin || updated[idx].latinName, 
+                        redListStatus: data.status || updated[idx].redListStatus 
+                    }; 
                 }
             }
-        } catch (e) {
-            console.error("Auto-sync chunk error", e);
-        }
-        if (i + CHUNK_SIZE < currentAnimals.length) { await new Promise(r => setTimeout(r, 5000)); }
+        } catch (e) {}
+        if (i + CHUNK_SIZE < updated.length) { await new Promise(r => setTimeout(r, 5000)); }
       }
-
-      if (hasUpdates) {
-          setAnimals(prev => {
-              const next = prev.map(a => updates[a.id] ? { ...a, ...updates[a.id] } : a);
-              // Save to DB asynchronously to avoid blocking UI update
-              setTimeout(() => dataService.saveAnimalsBulk(next).catch(console.error), 0);
-              return next;
-          });
-      }
-      
+      await dataService.saveAnimalsBulk(updated);
       await dataService.saveSettingsKey('last_iucn_sync', new Date().toISOString());
+      setAnimals(updated);
     }
   }, []);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [fetchedAnimals, fetchedTasks, fetchedUsers, fetchedSiteLogs, fetchedIncidents, fetchedFirstAid, fetchedFood, fetchedMethods, fetchedLocs, fetchedContacts, fetchedProfile, fetchedTimeLogs, fetchedHolidays, savedSort, savedLocked] = await Promise.all([
-          dataService.fetchAnimals(), dataService.fetchTasks(), dataService.fetchUsers(), dataService.fetchSiteLogs(), dataService.fetchIncidents(), dataService.fetchFirstAidLogs(), dataService.fetchFoodOptions(), dataService.fetchFeedMethods(), dataService.fetchLocations(), dataService.fetchContacts(), dataService.fetchOrgProfile(), dataService.fetchTimeLogs(), dataService.fetchHolidayRequests(),
+        const [fetchedAnimals, fetchedTasks, fetchedUsers, fetchedSiteLogs, fetchedIncidents, fetchedFirstAid, fetchedFood, fetchedMethods, fetchedLocs, fetchedContacts, fetchedProfile, fetchedTimeLogs, savedSort, savedLocked] = await Promise.all([
+          dataService.fetchAnimals(), dataService.fetchTasks(), dataService.fetchUsers(), dataService.fetchSiteLogs(), dataService.fetchIncidents(), dataService.fetchFirstAidLogs(), dataService.fetchFoodOptions(), dataService.fetchFeedMethods(), dataService.fetchLocations(), dataService.fetchContacts(), dataService.fetchOrgProfile(), dataService.fetchTimeLogs(),
           dataService.fetchSettingsKey('dashboard_sort', 'alpha-asc'),
           dataService.fetchSettingsKey('dashboard_locked', true)
         ]);
-        setAnimals(fetchedAnimals); setTasks(fetchedTasks); setUsers(fetchedUsers); setSiteLogs(fetchedSiteLogs); setIncidents(fetchedIncidents); setFirstAidLogs(fetchedFirstAid); setTimeLogs(fetchedTimeLogs); setHolidayRequests(fetchedHolidays);
+        setAnimals(fetchedAnimals); setTasks(fetchedTasks); setUsers(fetchedUsers); setSiteLogs(fetchedSiteLogs); setIncidents(fetchedIncidents); setFirstAidLogs(fetchedFirstAid); setTimeLogs(fetchedTimeLogs);
         setSortOption(savedSort as SortOption);
         setIsOrderLocked(!!savedLocked);
         if (fetchedFood) setFoodOptions(fetchedFood);
@@ -132,11 +100,7 @@ const App: React.FC = () => {
         if (fetchedContacts) setContacts(fetchedContacts);
         if (fetchedProfile) setOrgProfile(fetchedProfile);
         performAutoSync(fetchedAnimals);
-      } catch (error) { 
-        setIsOffline(true); 
-      } finally {
-        setIsInitializing(false);
-      }
+      } catch (error) { setIsOffline(true); }
     };
     fetchData();
   }, [performAutoSync]);
@@ -176,80 +140,20 @@ const App: React.FC = () => {
   const handleUpdateLocations = async (locs: string[]) => { setLocations(locs); await dataService.saveLocations(locs); };
   const handleUpdateContacts = async (cons: Contact[]) => { setContacts(cons); await dataService.saveContacts(cons); };
   const handleUpdateOrgProfile = async (profile: OrganizationProfile) => { setOrgProfile(profile); await dataService.saveOrgProfile(profile); };
-  
-  const handleClockIn = useCallback(async () => { 
-    if (!currentUser || activeShift) return; 
-    const newShift: TimeLogEntry = { id: `shift_${Date.now()}`, userId: currentUser.id, userName: currentUser.name, startTime: Date.now(), date: new Date().toISOString().split('T')[0], status: 'Active' }; 
-    
-    // Optimistic Update
-    setActiveShift(newShift); 
-    setTimeLogs(prev => [newShift, ...prev]); 
-    
-    try {
-        await dataService.saveTimeLog(newShift); 
-    } catch (e) {
-        // Rollback state if network fails
-        console.error("Clock In Failed", e);
-        setActiveShift(null);
-        setTimeLogs(prev => prev.filter(l => l.id !== newShift.id));
-        alert("Network Error: Clock-in failed. Please check your connection and try again.");
-    }
-  }, [currentUser, activeShift]);
-
-  const handleClockOut = useCallback(async () => { 
-    if (!currentUser || !activeShift) return; 
-    const now = Date.now(); 
-    const diffMins = Math.floor((now - activeShift.startTime) / 60000); 
-    const completedShift: TimeLogEntry = { ...activeShift, endTime: now, durationMinutes: diffMins, status: 'Completed' }; 
-    
-    // Optimistic Update
-    setActiveShift(null); 
-    setTimeLogs(prev => prev.map(l => l.id === activeShift.id ? completedShift : l)); 
-    
-    try {
-        await dataService.saveTimeLog(completedShift); 
-    } catch (e) {
-        // Rollback
-        console.error("Clock Out Failed", e);
-        setActiveShift(activeShift);
-        setTimeLogs(prev => prev.map(l => l.id === activeShift.id ? activeShift : l));
-        alert("Network Error: Clock-out failed. Please check your connection and try again.");
-    }
-  }, [currentUser, activeShift]);
-
+  const handleClockIn = async () => { if (!currentUser || activeShift) return; const newShift: TimeLogEntry = { id: `shift_${Date.now()}`, userId: currentUser.id, userName: currentUser.name, startTime: Date.now(), date: new Date().toISOString().split('T')[0], status: 'Active' }; setActiveShift(newShift); setTimeLogs(prev => [newShift, ...prev]); await dataService.saveTimeLog(newShift); };
+  const handleClockOut = async () => { if (!currentUser || !activeShift) return; const now = Date.now(); const diffMins = Math.floor((now - activeShift.startTime) / 60000); const completedShift: TimeLogEntry = { ...activeShift, endTime: now, durationMinutes: diffMins, status: 'Completed' }; setActiveShift(null); setTimeLogs(prev => prev.map(l => l.id === activeShift.id ? completedShift : l)); await dataService.saveTimeLog(completedShift); };
   const handleDeleteTimeLog = async (id: string) => { setTimeLogs(prev => prev.filter(l => l.id !== id)); await dataService.deleteTimeLog(id); };
-
-  const handleAddHoliday = async (req: HolidayRequest) => { setHolidayRequests(prev => [req, ...prev]); await dataService.saveHolidayRequest(req); };
-  const handleUpdateHoliday = async (req: HolidayRequest) => { setHolidayRequests(prev => prev.map(r => r.id === req.id ? req : r)); await dataService.saveHolidayRequest(req); };
-  const handleDeleteHoliday = async (id: string) => { setHolidayRequests(prev => prev.filter(r => r.id !== id)); await dataService.deleteHolidayRequest(id); };
-
-  if (isInitializing) {
-    return (
-      <div className="h-screen w-screen flex flex-col items-center justify-center bg-slate-100 gap-4">
-          <Loader2 className="animate-spin text-emerald-600" size={48} />
-          <p className="font-black text-slate-400 uppercase tracking-[0.2em] text-xs">Initializing Secure Environment...</p>
-      </div>
-    );
-  }
 
   if (!currentUser) return <LoginScreen users={users} onLogin={handleLogin} orgProfile={orgProfile} />;
 
   const isAdmin = currentUser.role === UserRole.ADMIN;
-  // Memoize permissions to prevent potential re-renders in heavy subcomponents
-  const p: UserPermissions = { 
-    dashboard: true, dailyLog: true, tasks: true, medical: isAdmin, movements: isAdmin, 
-    safety: isAdmin, maintenance: true, settings: isAdmin, flightRecords: true, 
-    feedingSchedule: isAdmin, attendance: isAdmin, attendanceManager: isAdmin, 
-    holidayApprover: isAdmin, missingRecords: isAdmin, reports: isAdmin, 
-    ...(currentUser.permissions || {}) 
-  };
+  const p: UserPermissions = { dashboard: true, dailyLog: true, tasks: true, medical: isAdmin, movements: isAdmin, safety: isAdmin, maintenance: true, settings: isAdmin, flightRecords: true, feedingSchedule: isAdmin, attendance: isAdmin, attendanceManager: isAdmin, missingRecords: isAdmin, reports: isAdmin, ...(currentUser.permissions || {}) };
 
   return (
     <div style={{ fontSize: `${fontScale}%` }}>
       <Layout activeView={view} onNavigate={setView} currentUser={currentUser} onLogout={handleLogout} isOffline={isOffline} fontScale={fontScale} setFontScale={setFontScale} activeShift={activeShift} onClockIn={handleClockIn} onClockOut={handleClockOut} orgProfile={orgProfile}>
         {view === 'dashboard' && p.dashboard && <Dashboard animals={animals} userRole={currentUser.role} onSelectAnimal={selectAnimalAndNavigate} onAddAnimal={handleAddAnimal} onUpdateAnimal={handleUpdateAnimal} onReorderAnimals={handleReorderAnimals} foodOptions={foodOptions} feedMethods={feedMethods} locations={locations} sortOption={sortOption} setSortOption={handleUpdateSortOption} isOrderLocked={isOrderLocked} onToggleLock={handleToggleLock} tasks={tasks} onUpdateTask={handleUpdateTask} activeTab={activeCategory} setActiveTab={setActiveCategory} viewDate={viewDate} setViewDate={setViewDate} />}
         {view === 'timesheets' && p.attendance && <TimeSheets timeLogs={timeLogs} currentUser={currentUser} users={users} onDeleteLog={handleDeleteTimeLog} />}
-        {view === 'holidays' && <HolidayRegistry requests={holidayRequests} currentUser={currentUser} onAddRequest={handleAddHoliday} onUpdateRequest={handleUpdateHoliday} onDeleteRequest={handleDeleteHoliday} />}
         {view === 'animal_profile' && selectedAnimal && <AnimalProfile animal={selectedAnimal} onBack={() => setView('dashboard')} onUpdateAnimal={handleUpdateAnimal} onDeleteAnimal={handleDeleteAnimal} foodOptions={foodOptions} feedMethods={feedMethods} orgProfile={orgProfile} locations={locations} isAdmin={p.settings} />}
         {view === 'daily' && p.dailyLog && <DailyLog animals={animals} onUpdateAnimal={handleUpdateAnimal} foodOptions={foodOptions} feedMethods={feedMethods} sortOption={sortOption} setSortOption={handleUpdateSortOption} currentUser={currentUser} activeCategory={activeCategory} setActiveCategory={setActiveCategory} viewDate={viewDate} setViewDate={setViewDate} />}
         {view === 'tasks' && p.tasks && <Tasks tasks={tasks} animals={animals} onAddTask={handleAddTask} onUpdateTask={handleUpdateTask} onDeleteTask={handleDeleteTask} users={users} currentUser={currentUser} onAddSiteLog={handleAddSiteLog} onUpdateAnimal={handleUpdateAnimal} />}

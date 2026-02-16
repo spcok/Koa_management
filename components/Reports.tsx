@@ -1,9 +1,9 @@
-
-import React, { useState, useMemo } from 'react';
-import { REPORT_SCHEMAS, ReportSchema } from './reports/reportConfig';
-import { Animal, LogType, LogEntry, Incident, SiteLogEntry, TimeLogEntry, OrganizationProfile, User } from '../types';
-import { FileText, Download, Printer, Filter, Calendar, Search, LayoutList, ChevronDown, Table2 } from 'lucide-react';
+import React, { useState, useMemo, useTransition } from 'react';
+import { REPORT_SCHEMAS } from './reports/reportConfig';
+import { Animal, LogType, Incident, SiteLogEntry, TimeLogEntry, OrganizationProfile, User, AnimalCategory } from '../types';
+import { Download, LayoutList, ChevronRight, FileBarChart, Layers, Bird, Table2, Loader2 } from 'lucide-react';
 import { DocumentService } from '../services/DocumentService';
+import { formatWeightDisplay } from '../services/weightUtils';
 
 interface ReportsProps {
   animals: Animal[];
@@ -21,46 +21,105 @@ const Reports: React.FC<ReportsProps> = ({
   const [selectedSchemaId, setSelectedSchemaId] = useState<string>('DAILY_LOG');
   const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
   const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
-  const [searchTerm, setSearchTerm] = useState('');
+  
+  // React 19 Transition for Export Action
+  const [isPending, startTransition] = useTransition();
+  
+  // New Filters
+  const [selectedCategory, setSelectedCategory] = useState<AnimalCategory | 'ALL'>('ALL');
+  const [selectedAnimalId, setSelectedAnimalId] = useState<string>('ALL');
 
   const currentSchema = REPORT_SCHEMAS[selectedSchemaId];
+
+  // Helper to format date range for the doc header (e.g., "13 FEB - 19 FEB")
+  const getFormattedDateRange = () => {
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      const fmt = (d: Date) => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }).toUpperCase();
+      
+      if (startDate === endDate) return fmt(start);
+      return `${fmt(start)} - ${fmt(end)}`;
+  };
 
   // Data Processing Logic
   const tableData = useMemo(() => {
       let rows: any[] = [];
 
-      // Filter Helper
+      // Filter Helpers
       const inDateRange = (date: string) => {
           if (!date) return false;
           const d = date.split('T')[0];
           return d >= startDate && d <= endDate;
       };
 
+      const matchesFilters = (animal: Animal) => {
+          if (selectedCategory !== 'ALL' && animal.category !== selectedCategory) return false;
+          if (selectedAnimalId !== 'ALL' && animal.id !== selectedAnimalId) return false;
+          return true;
+      };
+
+      // Filter animals list first
+      const filteredAnimals = animals.filter(matchesFilters);
+
       if (selectedSchemaId === 'DAILY_LOG') {
-          rows = animals.flatMap(animal => 
-              (animal.logs || []).filter(l => inDateRange(l.date)).map(l => ({
-                  time: new Date(l.date).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}),
-                  subject: animal.name,
-                  type: l.type,
-                  value: l.type === LogType.WEIGHT && l.weightGrams ? `${l.weightGrams}g` : l.value,
-                  initials: l.userInitials
-              }))
+          rows = filteredAnimals.flatMap(animal => 
+              (animal.logs || []).filter(l => inDateRange(l.date)).map(l => {
+                  const isWeight = l.type === LogType.WEIGHT;
+                  const isFeed = l.type === LogType.FEED;
+                  
+                  // Format specific columns
+                  let weightVal = '-';
+                  if (isWeight) {
+                      weightVal = l.weightGrams 
+                        ? formatWeightDisplay(l.weightGrams, animal.weightUnit) 
+                        : l.value;
+                  }
+
+                  let feedVal = '-';
+                  if (isFeed) {
+                      feedVal = l.value;
+                  }
+
+                  // Handle "Notes/Activity" column
+                  let details = '-';
+                  if (isWeight) {
+                      details = l.notes || '-';
+                  } else if (isFeed) {
+                      details = l.notes || '-';
+                  } else {
+                      // For other logs (Health, Training, etc), show Type + Value
+                      details = `${l.type}: ${l.value} ${l.notes ? `(${l.notes})` : ''}`;
+                  }
+
+                  return {
+                      subject: animal.name,
+                      time: new Date(l.date).toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'}),
+                      weight: weightVal,
+                      feed: feedVal,
+                      value: details,
+                      initials: l.userInitials
+                  };
+              })
           );
       } 
       else if (selectedSchemaId === 'STOCK_LIST') {
-          rows = animals.filter(a => !a.archived).map(a => ({
+          rows = filteredAnimals.filter(a => !a.archived).map(a => ({
               id: a.ringNumber || a.microchip || '-',
               name: a.name,
               latin: a.latinName || '-',
               sex: a.sex || '?',
               age: a.dob ? `${new Date().getFullYear() - new Date(a.dob).getFullYear()}y` : '-',
               origin: a.origin || 'Unknown',
-              arrival: a.arrivalDate ? new Date(a.arrivalDate).toLocaleDateString() : '-'
+              arrival: a.arrivalDate ? new Date(a.arrivalDate).toLocaleDateString('en-GB') : '-'
           }));
       }
       else if (selectedSchemaId === 'INCIDENTS') {
-          rows = incidents.filter(i => inDateRange(i.date)).map(i => ({
-              date: new Date(i.date).toLocaleDateString(),
+          let filteredIncidents = incidents.filter(i => inDateRange(i.date));
+          if (selectedAnimalId !== 'ALL') {
+              filteredIncidents = filteredIncidents.filter(i => i.animalId === selectedAnimalId);
+          }
+          rows = filteredIncidents.map(i => ({
+              date: new Date(i.date).toLocaleDateString('en-GB'),
               location: i.location,
               category: i.type,
               description: i.description,
@@ -68,10 +127,9 @@ const Reports: React.FC<ReportsProps> = ({
               initials: i.reportedBy
           }));
       }
-      // ... (Rest of existing data logic remains the same)
       else if (selectedSchemaId === 'MAINTENANCE') {
           rows = siteLogs.filter(l => inDateRange(l.date)).map(l => ({
-              date: new Date(l.date).toLocaleDateString(),
+              date: new Date(l.date).toLocaleDateString('en-GB'),
               asset: l.location,
               task: l.title,
               materials: l.description,
@@ -80,8 +138,8 @@ const Reports: React.FC<ReportsProps> = ({
           }));
       }
       else if (selectedSchemaId === 'MOVEMENTS') {
-          rows = animals.flatMap(a => (a.logs || []).filter(l => l.type === LogType.MOVEMENT && inDateRange(l.date)).map(l => ({
-              date: new Date(l.date).toLocaleDateString(),
+          rows = filteredAnimals.flatMap(a => (a.logs || []).filter(l => l.type === LogType.MOVEMENT && inDateRange(l.date)).map(l => ({
+              date: new Date(l.date).toLocaleDateString('en-GB'),
               subject: a.name,
               type: l.movementType,
               vector: `${l.movementSource || '?'} -> ${l.movementDestination || '?'}`,
@@ -89,7 +147,7 @@ const Reports: React.FC<ReportsProps> = ({
           })));
       }
       else if (selectedSchemaId === 'WEIGHTS') {
-          rows = animals.flatMap(a => {
+          rows = filteredAnimals.flatMap(a => {
               const weightLogs = (a.logs || []).filter(l => l.type === LogType.WEIGHT).sort((x,y) => x.timestamp - y.timestamp);
               return weightLogs.filter(l => inDateRange(l.date)).map((l, idx) => {
                   const prev = weightLogs[idx-1];
@@ -97,7 +155,7 @@ const Reports: React.FC<ReportsProps> = ({
                   const prevWeight = prev ? (prev.weightGrams || parseFloat(prev.value) || 0) : 0;
                   const diff = prev ? (currWeight - prevWeight) : 0;
                   return {
-                      date: new Date(l.date).toLocaleDateString(),
+                      date: new Date(l.date).toLocaleDateString('en-GB'),
                       subject: a.name,
                       prev: prev ? `${prevWeight}g` : '-',
                       curr: `${currWeight}g`,
@@ -108,8 +166,8 @@ const Reports: React.FC<ReportsProps> = ({
           });
       }
       else if (selectedSchemaId === 'CLINICAL') {
-          rows = animals.flatMap(a => (a.logs || []).filter(l => l.type === LogType.HEALTH && inDateRange(l.date)).map(l => ({
-              date: new Date(l.date).toLocaleDateString(),
+          rows = filteredAnimals.flatMap(a => (a.logs || []).filter(l => l.type === LogType.HEALTH && inDateRange(l.date)).map(l => ({
+              date: new Date(l.date).toLocaleDateString('en-GB'),
               subject: a.name,
               symptom: l.value,
               treatment: l.notes || '-',
@@ -118,153 +176,184 @@ const Reports: React.FC<ReportsProps> = ({
           })));
       }
 
-      if (searchTerm) {
-          const lower = searchTerm.toLowerCase();
-          rows = rows.filter(row => Object.values(row).some(val => String(val).toLowerCase().includes(lower)));
-      }
-
       return rows;
-  }, [selectedSchemaId, animals, incidents, siteLogs, startDate, endDate, searchTerm]);
+  }, [selectedSchemaId, animals, incidents, siteLogs, startDate, endDate, selectedCategory, selectedAnimalId]);
 
-  const handleExportDocx = async () => {
-      switch (selectedSchemaId) {
-          case 'STOCK_LIST':
-              await DocumentService.generateStockList(animals.filter(a => !a.archived), orgProfile || null);
-              break;
-          case 'DAILY_LOG':
-              await DocumentService.generateDailyLog(tableData, orgProfile || null, `${startDate} to ${endDate}`);
-              break;
-          case 'INCIDENTS':
-              await DocumentService.generateIncidentReport(incidents.filter(i => i.date >= startDate && i.date <= endDate), orgProfile || null);
-              break;
-          default:
-              alert("Export for this report type is under construction.");
-      }
+  const handleExportDocx = () => {
+      const dateRangeText = getFormattedDateRange();
+      const reportTitle = currentSchema.title.toUpperCase();
+
+      startTransition(async () => {
+          try {
+              switch (selectedSchemaId) {
+                  case 'STOCK_LIST':
+                      await DocumentService.generateStockList(
+                          animals.filter(a => !a.archived && (selectedCategory === 'ALL' || a.category === selectedCategory)), 
+                          orgProfile || null, 
+                          currentUser
+                      );
+                      break;
+                  case 'DAILY_LOG':
+                      await DocumentService.generateDailyLog(tableData, orgProfile || null, dateRangeText, currentUser, reportTitle);
+                      break;
+                  case 'INCIDENTS':
+                      await DocumentService.generateIncidentReport(
+                          incidents.filter(i => i.date >= startDate && i.date <= endDate), 
+                          orgProfile || null, 
+                          dateRangeText,
+                          currentUser,
+                          reportTitle
+                      );
+                      break;
+                  default:
+                      alert("Export for this report type is under construction.");
+              }
+          } catch (e) {
+              console.error("Export failed", e);
+              alert("Failed to generate document.");
+          }
+      });
   };
 
-  const handlePrint = () => {
-      window.print();
-  };
+  const inputClass = "px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-700 focus:outline-none focus:border-emerald-500 transition-all uppercase tracking-wide";
 
   return (
-    <div className="p-4 md:p-8 max-w-[1600px] mx-auto space-y-6 animate-in fade-in duration-500">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 pb-6 border-b-2 border-slate-200 print:hidden">
-            <div>
-                <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-3 uppercase tracking-tight">
-                    <FileText className="text-slate-600" size={28} /> Statutory Reporting
-                </h1>
-                <p className="text-slate-500 text-sm font-medium mt-1">Generate official ledgers and operational summaries.</p>
+    <div className="flex h-full max-h-[calc(100vh-4rem)] overflow-hidden bg-white animate-in fade-in duration-500">
+        
+        {/* LEFT SIDEBAR: Report Types */}
+        <div className="w-64 bg-slate-50 border-r border-slate-200 flex flex-col shrink-0">
+            <div className="p-6 border-b border-slate-200">
+                <h2 className="text-lg font-black text-slate-800 uppercase tracking-tight flex items-center gap-2">
+                    <FileBarChart size={20} className="text-emerald-600" /> Reports
+                </h2>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Select Report Type</p>
             </div>
-            
-            <div className="flex flex-wrap gap-3 w-full md:w-auto">
-                <div className="relative group min-w-[200px]">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <LayoutList size={16} className="text-slate-400"/>
-                    </div>
-                    <select 
-                        value={selectedSchemaId} 
-                        onChange={(e) => setSelectedSchemaId(e.target.value)}
-                        className="w-full pl-10 pr-10 py-2.5 bg-white border-2 border-slate-200 rounded-xl text-sm font-bold text-slate-700 appearance-none focus:outline-none focus:border-emerald-500 transition-all shadow-sm uppercase tracking-tight"
+            <div className="flex-1 overflow-y-auto p-4 space-y-2">
+                {Object.values(REPORT_SCHEMAS).map(schema => (
+                    <button
+                        key={schema.id}
+                        onClick={() => setSelectedSchemaId(schema.id)}
+                        className={`w-full text-left px-4 py-3 rounded-xl flex items-center justify-between group transition-all ${
+                            selectedSchemaId === schema.id 
+                            ? 'bg-slate-900 text-white shadow-lg' 
+                            : 'bg-white text-slate-500 hover:bg-slate-100 border border-transparent hover:border-slate-200'
+                        }`}
                     >
-                        {Object.values(REPORT_SCHEMAS).map(schema => (
-                            <option key={schema.id} value={schema.id}>{schema.title}</option>
-                        ))}
-                    </select>
-                    <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-                        <ChevronDown size={16} className="text-slate-400"/>
-                    </div>
-                </div>
-
-                {selectedSchemaId !== 'STOCK_LIST' && (
-                    <div className="flex items-center gap-2 bg-white border-2 border-slate-200 rounded-xl px-3 py-1.5 shadow-sm">
-                        <Calendar size={16} className="text-slate-400"/>
-                        <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="text-xs font-bold text-slate-700 bg-transparent border-none focus:ring-0 w-24"/>
-                        <span className="text-slate-300 font-bold">-</span>
-                        <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="text-xs font-bold text-slate-700 bg-transparent border-none focus:ring-0 w-24"/>
-                    </div>
-                )}
-
-                <button onClick={handleExportDocx} className="bg-emerald-600 text-white px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2 hover:bg-emerald-700 transition-all shadow-lg active:scale-95">
-                    <Download size={16}/> Export Word
-                </button>
-
-                <button onClick={handlePrint} className="bg-slate-900 text-white px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2 hover:bg-black transition-all shadow-lg active:scale-95">
-                    <Printer size={16}/> Print
-                </button>
+                        <span className="text-xs font-bold uppercase tracking-wide">{schema.title}</span>
+                        {selectedSchemaId === schema.id && <ChevronRight size={14} className="text-emerald-400"/>}
+                    </button>
+                ))}
             </div>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden min-h-[600px] print:shadow-none print:border-none">
-            <div className="p-8 border-b-2 border-slate-100 flex justify-between items-start bg-slate-50/30 print:bg-white print:border-b-4 print:border-black">
-                <div className="flex gap-4 items-center">
-                    {orgProfile?.logoUrl && <img src={orgProfile.logoUrl} className="h-12 w-auto object-contain mix-blend-multiply" alt="Logo"/>}
-                    <div>
-                        <h2 className="text-xl font-black text-slate-900 uppercase tracking-tighter">{orgProfile?.name || 'Institutional Report'}</h2>
-                        <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mt-1">{currentSchema.title}</p>
+        {/* MAIN CONTENT */}
+        <div className="flex-1 flex flex-col min-w-0 bg-slate-100/50">
+            
+            {/* TOP BAR: Filters & Actions */}
+            <div className="bg-white border-b border-slate-200 p-4 flex flex-col lg:flex-row items-center justify-between gap-4 shadow-sm z-10">
+                
+                <div className="flex items-center gap-2 w-full lg:w-auto overflow-x-auto scrollbar-hide pb-2 lg:pb-0">
+                    {/* Date Range */}
+                    <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg p-1 mr-2">
+                        <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="bg-transparent border-none text-xs font-bold text-slate-700 focus:ring-0 w-24 uppercase"/>
+                        <span className="text-slate-300 font-bold">-</span>
+                        <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="bg-transparent border-none text-xs font-bold text-slate-700 focus:ring-0 w-24 uppercase"/>
+                    </div>
+
+                    {/* Section Filter */}
+                    <div className="relative">
+                        <Layers size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"/>
+                        <select 
+                            value={selectedCategory} 
+                            onChange={(e) => { setSelectedCategory(e.target.value as any); setSelectedAnimalId('ALL'); }}
+                            className={`${inputClass} pl-9 pr-8`}
+                        >
+                            <option value="ALL">All Sections</option>
+                            {Object.values(AnimalCategory).map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                        </select>
+                    </div>
+
+                    {/* Animal Filter */}
+                    <div className="relative">
+                        <Bird size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"/>
+                        <select 
+                            value={selectedAnimalId} 
+                            onChange={(e) => setSelectedAnimalId(e.target.value)}
+                            className={`${inputClass} pl-9 pr-8 max-w-[200px] truncate`}
+                        >
+                            <option value="ALL">All Animals</option>
+                            {animals
+                                .filter(a => selectedCategory === 'ALL' || a.category === selectedCategory)
+                                .map(a => <option key={a.id} value={a.id}>{a.name}</option>)
+                            }
+                        </select>
                     </div>
                 </div>
-                <div className="text-right">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Report Date</p>
-                    <p className="text-sm font-bold text-slate-800">{new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
-                    {selectedSchemaId !== 'STOCK_LIST' && (
-                        <p className="text-[10px] text-slate-500 font-medium mt-1">Period: {startDate} to {endDate}</p>
-                    )}
+
+                <button 
+                    onClick={handleExportDocx} 
+                    disabled={isPending}
+                    className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white px-6 py-2.5 rounded-lg text-xs font-black uppercase tracking-widest flex items-center gap-2 shadow-lg shadow-emerald-900/10 active:scale-95 transition-all whitespace-nowrap"
+                >
+                    {isPending ? <Loader2 size={16} className="animate-spin" /> : <Download size={16}/>}
+                    {isPending ? 'Generating...' : 'Export Word'}
+                </button>
+            </div>
+
+            {/* REPORT PREVIEW TABLE */}
+            <div className="flex-1 overflow-auto p-6">
+                <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden min-h-[500px]">
+                    <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                        <div>
+                            <h3 className="text-lg font-black text-slate-800 uppercase tracking-tight">{currentSchema.title}</h3>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">
+                                {orgProfile?.name || 'Kent Owl Academy'} • {getFormattedDateRange()}
+                            </p>
+                        </div>
+                        <div className="text-right">
+                            <span className="px-3 py-1 bg-white border border-slate-200 rounded-lg text-[10px] font-black text-slate-500 uppercase tracking-widest shadow-sm">
+                                {tableData.length} Records Found
+                            </span>
+                        </div>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse">
+                            <thead className="bg-slate-50 border-b border-slate-200">
+                                <tr>
+                                    {currentSchema.columns.map((col, idx) => (
+                                        <th 
+                                            key={idx} 
+                                            style={{ width: col.width }}
+                                            className="px-6 py-4 text-[9px] font-black text-slate-500 uppercase tracking-widest"
+                                        >
+                                            {col.label}
+                                        </th>
+                                    ))}
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                                {tableData.length > 0 ? tableData.map((row, rIdx) => (
+                                    <tr key={rIdx} className="hover:bg-slate-50 transition-colors">
+                                        {currentSchema.columns.map((col, cIdx) => (
+                                            <td key={cIdx} className="px-6 py-3 text-xs font-medium text-slate-700 align-top">
+                                                {row[col.accessor]}
+                                            </td>
+                                        ))}
+                                    </tr>
+                                )) : (
+                                    <tr>
+                                        <td colSpan={currentSchema.columns.length} className="px-6 py-24 text-center text-slate-400 flex flex-col items-center justify-center">
+                                            <Table2 size={48} className="opacity-20 mb-4"/>
+                                            <p className="text-xs font-black uppercase tracking-widest">No Records Found</p>
+                                            <p className="text-[10px] mt-1">Try adjusting the date range or filters.</p>
+                                        </td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
-            </div>
-
-            <div className="p-4 border-b border-slate-100 print:hidden bg-white">
-                <div className="relative max-w-md">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16}/>
-                    <input 
-                        type="text" 
-                        placeholder="Filter report data..." 
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-medium focus:outline-none focus:border-slate-400 transition-all"
-                    />
-                </div>
-            </div>
-
-            <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
-                    <thead className="bg-slate-50 border-b-2 border-slate-200 print:bg-white print:border-black">
-                        <tr>
-                            {currentSchema.columns.map((col, idx) => (
-                                <th 
-                                    key={idx} 
-                                    style={{ width: col.width }}
-                                    className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest print:text-black print:text-[8px]"
-                                >
-                                    {col.label}
-                                </th>
-                            ))}
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 print:divide-slate-200">
-                        {tableData.length > 0 ? tableData.map((row, rIdx) => (
-                            <tr key={rIdx} className="hover:bg-slate-50 transition-colors print:hover:bg-white break-inside-avoid">
-                                {currentSchema.columns.map((col, cIdx) => (
-                                    <td key={cIdx} className="px-6 py-3 text-xs font-medium text-slate-700 print:text-black print:text-[10px] align-top">
-                                        {row[col.accessor]}
-                                    </td>
-                                ))}
-                            </tr>
-                        )) : (
-                            <tr>
-                                <td colSpan={currentSchema.columns.length} className="px-6 py-24 text-center text-slate-400 flex flex-col items-center justify-center">
-                                    <Table2 size={48} className="opacity-20 mb-4"/>
-                                    <p className="text-xs font-black uppercase tracking-widest">No Records Found</p>
-                                    <p className="text-[10px] mt-1">Try adjusting the date range or filters.</p>
-                                </td>
-                            </tr>
-                        )}
-                    </tbody>
-                </table>
-            </div>
-
-            <div className="p-4 bg-slate-50 border-t border-slate-200 text-right print:bg-white print:border-t-2 print:border-black">
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total Entries: <span className="text-slate-900">{tableData.length}</span></p>
-                <p className="text-[9px] text-slate-300 mt-1 uppercase tracking-widest print:hidden">Generated by KOA Manager</p>
             </div>
         </div>
     </div>

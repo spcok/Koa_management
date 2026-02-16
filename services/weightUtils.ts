@@ -2,10 +2,15 @@
 /**
  * Utility for formatting weights according to animal preference.
  * Specifically handles Grams, Ounces, and Lbs/Oz with eighths.
+ * Hardened against null/undefined/NaN inputs.
  */
-export const formatWeightDisplay = (grams: number | undefined, unit: 'g' | 'oz' | 'lbs_oz' = 'g') => {
-    if (grams === undefined || grams === null || isNaN(grams)) return '';
+export const formatWeightDisplay = (grams: number | undefined | null, unit: 'g' | 'oz' | 'lbs_oz' = 'g') => {
+    // 1. Hardened Input Check
+    if (grams === undefined || grams === null || typeof grams !== 'number' || isNaN(grams) || !isFinite(grams)) {
+        return '';
+    }
     
+    // 2. Safe Rounding
     if (unit === 'g') {
         return `${Math.round(grams)}g`;
     }
@@ -39,5 +44,6 @@ export const formatWeightDisplay = (grams: number | undefined, unit: 'g' | 'oz' 
         return `${lbs}lb ${remOz}${displayEighths}oz`;
     }
 
+    // Fallback
     return `${Math.round(grams)}g`;
 };

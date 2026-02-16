@@ -95,6 +95,7 @@ const AnimalProfile: React.FC<AnimalProfileProps> = ({
   const latestWeightLog = useMemo(() => sortedLogs.find(l => l.type === LogType.WEIGHT), [sortedLogs]);
 
   const isHazardous = animal.hazardRating === HazardRating.HIGH || animal.hazardRating === HazardRating.MEDIUM || animal.isVenomous;
+  const isBird = animal.category === AnimalCategory.OWLS || animal.category === AnimalCategory.RAPTORS;
 
   const getRedListColor = (status?: ConservationStatus) => {
       switch(status) {
@@ -311,7 +312,7 @@ const AnimalProfile: React.FC<AnimalProfileProps> = ({
                                 
                                 <div className="p-6 pt-0 space-y-6">
                                     {/* Environment Targets */}
-                                    {(animal.targetDayTemp || animal.targetNightTemp || animal.targetBaskingTemp || animal.targetCoolTemp) && (
+                                    {(animal.targetDayTemp || animal.targetNightTemp || animal.targetBaskingTemp || animal.targetCoolTemp || animal.targetHumidityMin || animal.targetHumidityMax) && (
                                         <div className="pt-6 border-t border-slate-100">
                                             <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Environmental Control Targets</h4>
                                             <div className="flex flex-wrap gap-4">
@@ -351,12 +352,14 @@ const AnimalProfile: React.FC<AnimalProfileProps> = ({
                                                         </div>
                                                     </div>
                                                 )}
-                                                {animal.targetHumidity && (
+                                                {(animal.targetHumidityMin || animal.targetHumidityMax) && (
                                                     <div className="bg-cyan-600 border-2 border-cyan-700 px-5 py-4 rounded-2xl flex items-center gap-4 text-white shadow-lg">
                                                         <Droplets size={28} className="text-white" />
                                                         <div>
                                                             <p className="text-[10px] font-black text-white/80 uppercase tracking-widest leading-none mb-1">Humidity</p>
-                                                            <p className="text-2xl font-black leading-none">{animal.targetHumidity}%</p>
+                                                            <p className="text-2xl font-black leading-none">
+                                                                {animal.targetHumidityMin || '?'}-{animal.targetHumidityMax || '?'}%
+                                                            </p>
                                                         </div>
                                                     </div>
                                                 )}
@@ -370,7 +373,7 @@ const AnimalProfile: React.FC<AnimalProfileProps> = ({
                                         <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
                                             <DetailItem label="Scientific Name" value={animal.latinName} italic />
                                             <DetailItem label="Microchip" value={animal.microchip} mono />
-                                            <DetailItem label="Ring Number" value={animal.ringNumber} mono />
+                                            {isBird && <DetailItem label="Ring Number" value={animal.ringNumber} mono />}
                                             <DetailItem label="Conservation" value={animal.redListStatus} color={getRedListColor(animal.redListStatus).split(' ')[1]} />
                                             <DetailItem label="Arrival Date" value={animal.arrivalDate ? new Date(animal.arrivalDate).toLocaleDateString() : '-'} />
                                             <DetailItem label="Subject Origin" value={animal.origin} />

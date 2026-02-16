@@ -88,7 +88,7 @@ const Incidents: React.FC<IncidentsProps> = ({ incidents, animals, currentUser, 
                         {filteredIncidents.map(incident => {
                             const isCritical = incident.severity === IncidentSeverity.CRITICAL || incident.severity === IncidentSeverity.HIGH;
                             return (
-                                <tr key={incident.id} className="bg-white hover:bg-slate-50 transition-all group border-l-4 border-l-transparent hover:border-l-rose-500 hover:shadow-md relative z-0 hover:z-10 cursor-default">
+                                <tr key={incident.id} className="bg-white hover:bg-slate-50 transition-all group border-l-4 border-l-transparent hover:border-l-emerald-500 hover:shadow-md relative z-0 hover:z-10 cursor-default">
                                     <td className="px-6 py-4 whitespace-nowrap">
                                         <div className="font-bold text-slate-800 text-sm">{new Date(incident.date).toLocaleDateString('en-GB')}</div>
                                         <div className="text-[10px] font-black text-slate-400 mt-1 uppercase tracking-widest flex items-center gap-1"><Clock size={10}/> {incident.time}</div>
@@ -125,7 +125,7 @@ const Incidents: React.FC<IncidentsProps> = ({ incidents, animals, currentUser, 
         </div>
 
         {isModalOpen && (
-            <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md flex items-center justify-center z-50 p-4">
+            <div className="fixed inset-0 bg-slate-900/80 flex items-center justify-center z-[100] p-4">
                 <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-0 animate-in zoom-in-95 border-2 border-slate-300 overflow-hidden">
                     <div className="p-6 border-b-2 border-slate-100 flex justify-between items-center bg-slate-50/50 shadow-sm">
                         <div><h2 className="text-xl font-bold text-slate-900 uppercase tracking-tight leading-none">New Occurrence</h2><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Compliance Registry</p></div>

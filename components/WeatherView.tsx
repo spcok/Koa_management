@@ -1,298 +1,303 @@
 
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useTransition } from 'react';
 import { getFullWeather, FullWeatherData } from '../services/weatherService';
-import { CloudSun, Wind, Droplets, Calendar, MapPin, Clock, CloudRain, Sun, Cloud, CloudLightning, Snowflake, Sunrise, Sunset, Gauge, Navigation, Thermometer, Info, Map as MapIcon, Layers, Play } from 'lucide-react';
-
-declare global {
-  interface Window {
-    L: any;
-  }
-}
+import { analyzeFlightWeather } from '../services/geminiService';
+import { 
+    CloudSun, Wind, CloudRain, Sun, 
+    Cloud, CloudLightning, Snowflake, Navigation, 
+    Sparkles, Loader2, ShieldAlert, CheckCircle2, CloudFog, RefreshCw, Play,
+    Thermometer
+} from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
 
 const WeatherView: React.FC = () => {
   const [data, setData] = useState<FullWeatherData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState<string>('');
   
-  // Radar State
-  const mapRef = useRef<HTMLDivElement>(null);
-  const leafletMap = useRef<any>(null);
-  const radarLayer = useRef<any>(null);
-  const [radarTimestamps, setRadarTimestamps] = useState<number[]>([]);
-  const [isPlayingRadar, setIsPlayingRadar] = useState(false);
-  const [radarIndex, setRadarIndex] = useState(0);
+  // AI Advisor State
+  const [isPendingAi, startTransitionAi] = useTransition();
+  const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
 
+  // 1. Fetch Data with Cleanup
   useEffect(() => {
+    let isMounted = true;
+    
     const loadData = async () => {
       setIsLoading(true);
-      
-      // 1. Fetch Weather
       const weather = await getFullWeather();
-      setData(weather);
-      if (weather && weather.daily.length > 0) {
-          setSelectedDate(weather.daily[0].date);
-      }
-
-      // 2. Fetch Radar Info from RainViewer
-      try {
-          const rvResp = await fetch('https://api.rainviewer.com/public/weather-maps.json');
-          const rvData = await rvResp.json();
-          // rvData.radar.past contains past timestamps, .nowcast contains future
-          if (rvData.radar && rvData.radar.past) {
-              setRadarTimestamps(rvData.radar.past.map((frame: any) => frame.path));
+      if (isMounted) {
+          setData(weather);
+          if (weather && weather.daily.length > 0) {
+              setSelectedDate(weather.daily[0].date);
           }
-      } catch (e) {
-          console.warn("Radar data fetch failed", e);
+          setIsLoading(false);
       }
-
-      setIsLoading(false);
     };
     loadData();
+
+    return () => { isMounted = false; };
   }, []);
 
-  // Initialize Map
-  useEffect(() => {
-      if (!isLoading && mapRef.current && window.L && !leafletMap.current) {
-          // Default to Kent, UK
-          const lat = 51.2787;
-          const lon = 0.5217;
+  const handleGenerateAiAnalysis = () => {
+      if (!data) return;
+      startTransitionAi(async () => {
+          const filteredHourly = data.hourly.filter(h => h.time.startsWith(selectedDate));
+          const analysis = await analyzeFlightWeather(filteredHourly);
+          setAiAnalysis(analysis);
+      });
+  };
 
-          const map = window.L.map(mapRef.current, {
-              center: [lat, lon],
-              zoom: 8,
-              zoomControl: false,
-              attributionControl: false
-          });
-
-          // Dark Matter Base Layer (CartoDB)
-          window.L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-              attribution: '&copy; OpenStreetMap &copy; CartoDB',
-              subdomains: 'abcd',
-              maxZoom: 19
-          }).addTo(map);
-
-          // Add Marker for Centre
-          const icon = window.L.divIcon({
-              className: 'custom-div-icon',
-              html: `<div style="background-color:#10b981; width:12px; height:12px; border-radius:50%; border:2px solid white; box-shadow: 0 0 10px #10b981;"></div>`,
-              iconSize: [12, 12],
-              iconAnchor: [6, 6]
-          });
-          window.L.marker([lat, lon], { icon }).addTo(map);
-
-          leafletMap.current = map;
-      }
-  }, [isLoading]);
-
-  // Update Radar Layer
-  useEffect(() => {
-      if (leafletMap.current && radarTimestamps.length > 0) {
-          const latestPath = radarTimestamps[radarTimestamps.length - 1];
-          const layerUrl = `https://tile.rainviewer.com${latestPath}/256/{z}/{x}/{y}/2/1_1.png`;
-
-          if (radarLayer.current) {
-              radarLayer.current.remove();
-          }
-
-          radarLayer.current = window.L.tileLayer(layerUrl, {
-              opacity: 0.8,
-              zIndex: 100
-          }).addTo(leafletMap.current);
-      }
-  }, [radarTimestamps]);
+  useEffect(() => { setAiAnalysis(null); }, [selectedDate]);
 
   if (isLoading) {
     return (
-        <div className="flex flex-col items-center justify-center h-96 text-stone-400 gap-3">
-            <CloudSun size={48} className="animate-bounce opacity-50" />
-            <p className="font-medium animate-pulse">Calibrating instruments...</p>
+        <div className="flex flex-col items-center justify-center h-96 text-slate-400 gap-3">
+            <Loader2 size={48} className="animate-spin text-emerald-600" />
+            <p className="font-black uppercase tracking-[0.2em] text-xs">Initializing Telemetry...</p>
         </div>
     );
   }
 
-  if (!data) return <div className="p-12 text-center">Unable to load weather data.</div>;
+  if (!data) return <div className="p-12 text-center text-slate-400 font-bold">STATION OFFLINE</div>;
 
   const { current, daily, hourly } = data;
-  const selectedDaily = daily.find(d => d.date === selectedDate) || daily[0];
   const selectedHourly = hourly.filter(h => h.time.startsWith(selectedDate));
 
   const WeatherIcon = ({ code, size = 24, className = "" }: { code: number, size?: number, className?: string }) => {
-     if (code === 0) return <Sun size={size} className={`text-yellow-400 ${className}`} fill="currentColor" />;
-     if (code <= 3) return <CloudSun size={size} className={`text-stone-400 ${className}`} />;
-     if (code <= 48) return <Cloud size={size} className={`text-stone-400 ${className}`} fill="currentColor" />;
-     if (code <= 67) return <CloudRain size={size} className={`text-blue-300 ${className}`} />;
-     if (code <= 77) return <Snowflake size={size} className={`text-cyan-200 ${className}`} />;
-     if (code <= 82) return <CloudRain size={size} className={`text-blue-400 ${className}`} fill="currentColor" />;
-     if (code <= 99) return <CloudLightning size={size} className={`text-purple-400 ${className}`} />;
-     return <Cloud size={size} className={`text-stone-400 ${className}`} />;
+     if (code === 0) return <Sun size={size} className={`text-yellow-400 ${className}`} />;
+     if (code <= 3) return <CloudSun size={size} className={`text-slate-400 ${className}`} />;
+     if (code <= 48) return <CloudFog size={size} className={`text-slate-400 ${className}`} />;
+     if (code <= 67) return <CloudRain size={size} className={`text-blue-400 ${className}`} />;
+     if (code <= 77) return <Snowflake size={size} className={`text-cyan-400 ${className}`} />;
+     if (code <= 82) return <CloudRain size={size} className={`text-blue-500 ${className}`} />;
+     if (code <= 99) return <CloudLightning size={size} className={`text-purple-500 ${className}`} />;
+     return <Cloud size={size} className={`text-slate-400 ${className}`} />;
   };
 
-  const getWindDirection = (degrees: number) => {
-    const directions = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
-    const index = Math.round(degrees / 45) % 8;
-    return directions[index];
-  };
+  const isFrostRisk = current.temperature < 4;
+  const isWindRisk = current.windGust > 18 || current.windSpeed > 15;
 
   return (
-    <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-6 animate-in fade-in duration-500">
+    <div className="p-4 md:p-8 max-w-[1600px] mx-auto space-y-6 animate-in fade-in duration-500 pb-32">
       
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-2 border-b border-stone-200 pb-4">
+      {/* TOP HEADER */}
+      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
         <div>
-           <h1 className="text-2xl md:text-3xl font-bold text-stone-800 flex items-center gap-3">
-             <CloudSun className="text-emerald-600" /> Weather & Telemetry
+           <h1 className="text-3xl font-black text-slate-900 uppercase tracking-tight flex items-center gap-3">
+             <CloudSun className="text-emerald-600" size={32} /> Meteorological Station
            </h1>
-           <p className="text-stone-500 text-sm mt-1 border-l-2 border-emerald-500 pl-3">Microclimate monitoring & flight planning.</p>
+           <p className="text-slate-500 text-sm font-bold uppercase tracking-widest mt-1">Kent Owl Academy • Flight Safety Briefing</p>
         </div>
-        <div className="text-right">
-            <p className="text-[10px] font-black text-stone-400 uppercase tracking-widest">Station ID: KOA-01</p>
-            <p className="text-stone-700 font-mono text-sm">{new Date().toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}</p>
+
+        <div className="flex flex-wrap gap-3">
+            {isFrostRisk && (
+                <div className="flex items-center gap-2 bg-blue-50 text-blue-700 px-4 py-2 rounded-xl border-2 border-blue-200">
+                    <Snowflake size={18} />
+                    <span className="text-[10px] font-black uppercase tracking-widest">FROST RISK</span>
+                </div>
+            )}
+            {isWindRisk && (
+                <div className="flex items-center gap-2 bg-rose-50 text-rose-700 px-4 py-2 rounded-xl border-2 border-rose-200">
+                    <Wind size={18} />
+                    <span className="text-[10px] font-black uppercase tracking-widest">WIND WARNING</span>
+                </div>
+            )}
+            <div className="flex items-center gap-2 bg-emerald-50 text-emerald-700 px-4 py-2 rounded-xl border-2 border-emerald-200">
+                <CheckCircle2 size={18} />
+                <span className="text-[10px] font-black uppercase tracking-widest">STATION ACTIVE</span>
+            </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-8">
           
-          {/* 1. CURRENT CONDITIONS (Compact) */}
-          <div className="lg:col-span-1 bg-slate-900 rounded-[2rem] p-6 text-white shadow-xl relative overflow-hidden flex flex-col justify-between">
-              <div className="absolute top-0 right-0 w-48 h-48 bg-emerald-500/10 blur-[80px] -mr-12 -mt-12 rounded-full"></div>
-              
-              <div>
-                  <div className="flex items-center gap-2 mb-4 opacity-70">
-                      <MapPin size={12} className="text-emerald-400"/> 
-                      <span className="text-[10px] font-black uppercase tracking-[0.2em]">Live Conditions</span>
+          {/* SIDEBAR: LIVE & AI */}
+          <div className="xl:col-span-4 space-y-6">
+              {/* CURRENT WEATHER CARD */}
+              <div className="bg-slate-900 rounded-[2rem] p-8 text-white shadow-2xl relative overflow-hidden flex flex-col justify-between">
+                  <div className="absolute top-0 right-0 w-48 h-48 bg-emerald-500/10 blur-[80px] -mr-10 -mt-10 rounded-full"></div>
+                  <div className="relative z-10">
+                      <div className="flex justify-between items-start mb-6">
+                          <div>
+                              <p className="text-[9px] font-black uppercase tracking-[0.2em] text-emerald-400 mb-1">Local Telemetry</p>
+                              <h1 className="text-7xl font-black tracking-tighter tabular-nums">{Math.round(current.temperature)}<span className="text-3xl text-slate-500">°C</span></h1>
+                          </div>
+                          <WeatherIcon code={current.weatherCode} size={64} className="filter drop-shadow-lg" />
+                      </div>
+                      <p className="text-xl font-black uppercase tracking-tight mb-6">{current.description}</p>
+                      
+                      <div className="grid grid-cols-2 gap-3">
+                          <div className="bg-white/5 rounded-xl p-3 border border-white/10">
+                              <p className="text-[8px] font-black uppercase text-slate-500 mb-1">WIND SPEED</p>
+                              <p className="text-xl font-black">{current.windSpeed}<span className="text-[10px] opacity-40 ml-1">MPH</span></p>
+                              <div className="flex items-center gap-1 mt-1 opacity-60">
+                                  <Navigation size={10} style={{transform: `rotate(${current.windDirection}deg)`}}/>
+                                  <span className="text-[8px] font-bold uppercase">{current.windDirection}°</span>
+                              </div>
+                          </div>
+                          <div className="bg-white/5 rounded-xl p-3 border border-white/10">
+                              <p className="text-[8px] font-black uppercase text-slate-500 mb-1">GUSTS</p>
+                              <p className="text-xl font-black text-rose-400">{current.windGust}<span className="text-[10px] opacity-40 ml-1">MPH</span></p>
+                              <p className="text-[8px] font-bold text-slate-500 uppercase">PEAK</p>
+                          </div>
+                      </div>
                   </div>
-                  
-                  <div className="flex items-start justify-between">
+              </div>
+
+              {/* AI ADVISOR CARD */}
+              <div className="bg-white rounded-[2rem] border-2 border-slate-300 shadow-xl overflow-hidden flex flex-col">
+                  <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
                       <div>
-                          <h1 className="text-7xl font-black tracking-tighter tabular-nums">{Math.round(current.temperature)}°</h1>
-                          <p className="text-lg font-bold text-emerald-400 uppercase tracking-tight">{current.description}</p>
+                          <h2 className="text-sm font-black text-slate-900 uppercase tracking-widest flex items-center gap-2">
+                              <Sparkles className="text-emerald-500" size={16}/> Flight AI Advisor
+                          </h2>
                       </div>
-                      <WeatherIcon code={current.weatherCode} size={64} className="filter drop-shadow-lg" />
+                      <button 
+                        onClick={handleGenerateAiAnalysis}
+                        disabled={isPendingAi}
+                        className="bg-slate-900 hover:bg-black text-white px-3 py-1.5 rounded-lg font-black uppercase text-[8px] tracking-widest transition-all flex items-center gap-2 disabled:opacity-50"
+                      >
+                        {isPendingAi ? <Loader2 size={10} className="animate-spin"/> : aiAnalysis ? <RefreshCw size={10}/> : <Play size={10}/>}
+                        {aiAnalysis ? 'Update Audit' : 'Run Audit'}
+                      </button>
                   </div>
-              </div>
 
-              <div className="grid grid-cols-2 gap-3 mt-8">
-                  <div className="bg-white/10 rounded-xl p-3 backdrop-blur-sm">
-                      <div className="flex items-center gap-2 text-slate-400 text-[9px] font-black uppercase tracking-widest mb-1">
-                          <Wind size={12} className="text-blue-400"/> Wind
-                      </div>
-                      <p className="text-2xl font-black">{current.windSpeed} <span className="text-[10px] font-bold opacity-50">mph</span></p>
-                      <p className="text-[10px] font-bold text-slate-300">{getWindDirection(current.windDirection)}</p>
-                  </div>
-                  <div className="bg-white/10 rounded-xl p-3 backdrop-blur-sm">
-                      <div className="flex items-center gap-2 text-slate-400 text-[9px] font-black uppercase tracking-widest mb-1">
-                          <Droplets size={12} className="text-cyan-400"/> Humidity
-                      </div>
-                      <p className="text-2xl font-black">{current.humidity}<span className="text-[10px] font-bold opacity-50">%</span></p>
-                      <p className="text-[10px] font-bold text-slate-300">Dew Pt: {Math.round(current.temperature - ((100 - current.humidity)/5))}°</p>
+                  <div className="p-5 overflow-y-auto max-h-64 scrollbar-thin">
+                      {!aiAnalysis && !isPendingAi ? (
+                          <div className="flex flex-col items-center justify-center py-10 text-slate-300 text-center">
+                              <ShieldAlert size={32} className="mb-2 opacity-20" />
+                              <p className="text-[9px] font-black uppercase tracking-[0.2em]">Safety Analysis Pending</p>
+                              <p className="text-[8px] font-medium mt-1">Cross-reference forecast with flight protocols.</p>
+                          </div>
+                      ) : isPendingAi ? (
+                          <div className="flex flex-col items-center justify-center py-10 space-y-2">
+                              <Loader2 size={32} className="animate-spin text-emerald-500" />
+                              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Analyzing Atmos...</p>
+                          </div>
+                      ) : (
+                          <div className="prose prose-slate prose-sm max-w-none animate-in fade-in duration-300">
+                               <ReactMarkdown 
+                                components={{
+                                    h3: ({node, ...props}) => <h3 className="text-[10px] font-black uppercase tracking-widest text-emerald-800 mb-2 border-b border-emerald-100 pb-1" {...props} />,
+                                    ul: ({node, ...props}) => <ul className="list-disc pl-4 text-slate-700 font-bold text-[11px] space-y-1" {...props} />,
+                                    p: ({node, ...props}) => <p className="text-[11px] font-medium text-slate-600 leading-relaxed mb-3" {...props} />,
+                                    strong: ({node, ...props}) => <strong className="text-slate-900 font-black" {...props} />
+                                }}
+                              >
+                                  {aiAnalysis}
+                              </ReactMarkdown>
+                          </div>
+                      )}
                   </div>
               </div>
           </div>
 
-          {/* 2. RADAR MAP */}
-          <div className="lg:col-span-2 bg-slate-900 rounded-[2rem] overflow-hidden relative shadow-xl border border-slate-800 min-h-[300px]">
-              <div ref={mapRef} className="w-full h-full absolute inset-0 bg-slate-800" />
-              <div className="absolute top-4 left-4 z-[400] bg-slate-900/80 backdrop-blur-md px-3 py-1.5 rounded-full border border-slate-700 flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></div>
-                  <span className="text-[10px] font-black text-white uppercase tracking-widest">Precipitation Radar</span>
-              </div>
-              <div className="absolute bottom-4 right-4 z-[400] text-[8px] font-black text-slate-500 uppercase bg-black/20 px-2 py-1 rounded backdrop-blur">
-                  Data: RainViewer | Map: OSM
-              </div>
-          </div>
-      </div>
-
-      {/* 3. HOURLY FORECAST - WIND & FLIGHT FOCUS */}
-      <div className="bg-white rounded-[2rem] border-2 border-slate-100 shadow-sm overflow-hidden p-6">
-          <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2">
-                  <Wind size={16} className="text-emerald-600"/> Hourly Flight Forecast
-              </h2>
+          {/* MAIN: FORECAST TABLE */}
+          <div className="xl:col-span-8 space-y-6">
               
-              {/* Day Selector */}
-              <div className="flex gap-2 overflow-x-auto scrollbar-hide">
-                  {daily.slice(0, 5).map(day => (
+              {/* DATE TABS */}
+              <div className="bg-white p-2 rounded-2xl border-2 border-slate-300 shadow-sm flex gap-1 overflow-x-auto scrollbar-hide">
+                  {daily.slice(0, 7).map(day => (
                       <button 
                         key={day.date}
                         onClick={() => setSelectedDate(day.date)}
-                        className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest border transition-all ${
-                            day.date === selectedDate 
-                            ? 'bg-slate-900 text-white border-slate-900' 
-                            : 'bg-white text-slate-400 border-slate-200 hover:border-emerald-400'
+                        className={`flex-1 min-w-[100px] px-4 py-3 rounded-xl flex flex-col items-center transition-all ${
+                            day.date === selectedDate ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-50'
                         }`}
                       >
-                          {new Date(day.date).toLocaleDateString('en-GB', {weekday: 'short'})}
+                          <span className="text-[8px] font-black uppercase tracking-widest opacity-60 mb-0.5">{new Date(day.date).toLocaleDateString('en-GB', {weekday: 'short'})}</span>
+                          <span className="text-sm font-black tabular-nums">{new Date(day.date).getDate()} {new Date(day.date).toLocaleDateString('en-GB', {month: 'short'}).toUpperCase()}</span>
+                          <div className="mt-2 flex items-center gap-1">
+                              <WeatherIcon code={day.weatherCode} size={14} />
+                              <span className="text-[10px] font-bold">{Math.round(day.maxTemp)}°</span>
+                          </div>
                       </button>
                   ))}
               </div>
-          </div>
 
-          <div className="overflow-x-auto pb-4 scrollbar-thin">
-              <div className="min-w-max">
-                  {/* Grid Header */}
-                  <div className="grid grid-cols-[80px_repeat(24,minmax(60px,1fr))] gap-2 mb-2">
-                      <div className="sticky left-0 bg-white z-10 flex flex-col justify-end pb-2 pr-4 border-r border-slate-100">
-                          <span className="text-[9px] font-black text-slate-400 uppercase text-right block mb-3">Time</span>
-                          <span className="text-[9px] font-black text-slate-400 uppercase text-right block mb-3">Cond</span>
-                          <span className="text-[9px] font-black text-slate-400 uppercase text-right block mb-3">Temp</span>
-                          <span className="text-[9px] font-black text-blue-500 uppercase text-right block mb-3">Wind</span>
-                          <span className="text-[9px] font-black text-slate-400 uppercase text-right block">Gusts</span>
-                      </div>
-                      
-                      {/* Hourly Columns */}
-                      {selectedHourly.map((hour, idx) => (
-                          <div key={hour.time} className="flex flex-col items-center gap-3 p-2 rounded-xl hover:bg-slate-50 transition-colors group">
-                              {/* Time */}
-                              <span className="text-[10px] font-black text-slate-600">
-                                  {new Date(hour.time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                              </span>
-                              
-                              {/* Icon */}
-                              <WeatherIcon code={hour.weatherCode} size={20} />
-                              
-                              {/* Temp */}
-                              <span className="text-xs font-bold text-slate-800">{Math.round(hour.temp)}°</span>
-                              
-                              {/* Wind (Speed + Direction) */}
-                              <div className="flex flex-col items-center gap-1">
-                                  <div 
-                                    className="bg-blue-50 w-8 h-8 rounded-full flex items-center justify-center border border-blue-100 group-hover:border-blue-300 group-hover:bg-white transition-all"
-                                    title={`${getWindDirection(hour.windDirection)}`}
-                                  >
-                                      <Navigation 
-                                        size={14} 
-                                        style={{transform: `rotate(${hour.windDirection}deg)`}} 
-                                        className="text-blue-500"
-                                      />
-                                  </div>
-                                  <span className="text-[10px] font-black text-blue-600">{Math.round(hour.windSpeed)}</span>
-                              </div>
-
-                              {/* Gusts (Estimated) */}
-                              <span className="text-[9px] font-bold text-slate-400">
-                                  {Math.round(hour.windSpeed * 1.3)}
-                              </span>
-                          </div>
-                      ))}
-                  </div>
+              {/* HOURLY TABLE */}
+              <div className="bg-white rounded-[2rem] border-2 border-slate-300 shadow-xl overflow-hidden">
+                    <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                        <div>
+                            <h2 className="text-xl font-black text-slate-900 uppercase tracking-tight">Hourly Operational Matrix</h2>
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">High-Resolution Micro-Telemetry Forecast</p>
+                        </div>
+                        <div className="text-right">
+                             <span className="px-3 py-1 bg-white border border-slate-200 rounded-lg text-[10px] font-black text-emerald-600 uppercase tracking-widest shadow-sm">
+                                {new Date(selectedDate).toLocaleDateString('en-GB', { dateStyle: 'long' })}
+                             </span>
+                        </div>
+                    </div>
+                    
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse">
+                            <thead>
+                                <tr className="bg-slate-50 border-b-2 border-slate-200">
+                                    <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Time</th>
+                                    <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Status</th>
+                                    <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Temp (°C)</th>
+                                    <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Wind / Gust (MPH)</th>
+                                    <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Precip %</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                                {selectedHourly.map((hour, idx) => {
+                                    const dateObj = new Date(hour.time);
+                                    const timeStr = dateObj.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+                                    const isDaytime = dateObj.getHours() >= 7 && dateObj.getHours() <= 20;
+                                    
+                                    return (
+                                        <tr key={idx} className={`hover:bg-slate-50/80 transition-colors ${!isDaytime ? 'bg-slate-50/30' : 'bg-white'}`}>
+                                            <td className="px-6 py-4 whitespace-nowrap">
+                                                <span className="font-black text-slate-900 text-sm tabular-nums">{timeStr}</span>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <div className="flex items-center gap-3">
+                                                    <WeatherIcon code={hour.weatherCode} size={20} />
+                                                    <span className="text-[11px] font-bold text-slate-600 uppercase tracking-wide truncate max-w-[120px]">{hour.description}</span>
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap">
+                                                <span className="text-base font-black text-slate-800 tabular-nums">{Math.round(hour.temp)}°</span>
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap">
+                                                <div className="flex items-center gap-4">
+                                                    <div className="flex items-center gap-2">
+                                                        <Navigation 
+                                                            size={14} 
+                                                            style={{transform: `rotate(${hour.windDirection}deg)`}} 
+                                                            className="text-blue-500"
+                                                        />
+                                                        <span className="text-base font-black text-slate-900 tabular-nums">{Math.round(hour.windSpeed)}</span>
+                                                    </div>
+                                                    <div className="flex flex-col">
+                                                        <span className="text-[8px] font-black text-rose-500 uppercase leading-none">GUSTS</span>
+                                                        <span className={`text-[11px] font-black tabular-nums ${hour.windGust > 18 ? 'text-rose-600' : 'text-slate-800'}`}>
+                                                            {Math.round(hour.windGust)}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <div className="flex items-center gap-2">
+                                                    <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden w-12 hidden sm:block">
+                                                        <div 
+                                                            className={`h-full transition-all duration-1000 ${hour.precipProb > 50 ? 'bg-blue-500' : hour.precipProb > 20 ? 'bg-blue-300' : 'bg-slate-300'}`}
+                                                            style={{ width: `${hour.precipProb}%` }}
+                                                        />
+                                                    </div>
+                                                    <span className={`text-[10px] font-black tabular-nums ${hour.precipProb > 50 ? 'text-blue-600' : 'text-slate-400'}`}>{hour.precipProb}%</span>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
               </div>
           </div>
-      </div>
-
-      {/* 4. 7-DAY OUTLOOK SUMMARY */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
-          {daily.map((day, idx) => (
-              <div key={day.date} className="bg-white border border-slate-200 rounded-xl p-3 flex flex-col items-center gap-2 hover:border-emerald-400 transition-all group">
-                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest group-hover:text-emerald-600">
-                      {new Date(day.date).toLocaleDateString('en-GB', {weekday: 'short'})}
-                  </span>
-                  <WeatherIcon code={day.weatherCode} size={24} />
-                  <div className="flex gap-2 text-xs font-bold text-slate-700">
-                      <span>{Math.round(day.maxTemp)}°</span>
-                      <span className="opacity-40">{Math.round(day.minTemp)}°</span>
-                  </div>
-              </div>
-          ))}
       </div>
     </div>
   );

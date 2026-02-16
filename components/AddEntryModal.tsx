@@ -1,7 +1,6 @@
-
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useTransition } from 'react';
 import { Animal, LogType, LogEntry, AnimalCategory, HealthCondition, HealthRecordType } from '../types';
-import { X, Check, Utensils, Scale, Heart, Plane, Trophy, Star, Thermometer, Camera, MapPin, CloudSun, Wind, Droplets, ArrowLeftRight, Sparkles, Clock, Sun, Moon, FileText, Pill, Trash2, Plus, ListFilter } from 'lucide-react';
+import { X, Check, Utensils, Scale, Heart, Plane, Trophy, Star, Thermometer, Camera, MapPin, CloudSun, Wind, Droplets, ArrowLeftRight, Sparkles, Clock, Sun, Moon, FileText, Pill, Trash2, Plus, ListFilter, Loader2 } from 'lucide-react';
 import { getCurrentWeather } from '../services/weatherService';
 import { DEFAULT_ENRICHMENT_TYPES } from '../constants';
 
@@ -55,6 +54,8 @@ const resizeImage = (file: File): Promise<string> => {
 const AddEntryModal: React.FC<AddEntryModalProps> = ({ 
   isOpen, onClose, onSave, onDelete, animal, initialType = LogType.FEED, existingLog, foodOptions, feedMethods, defaultNotes, initialDate 
 }) => {
+  const [isPending, startTransition] = useTransition();
+
   const [logFormType, setLogFormType] = useState<LogType>(initialType);
   const [logDate, setLogDate] = useState(initialDate || new Date().toISOString().split('T')[0]);
   const [logTime, setLogTime] = useState(new Date().toTimeString().slice(0, 5));
@@ -267,89 +268,93 @@ const AddEntryModal: React.FC<AddEntryModalProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    let value = '';
-    let weightGrams: number | undefined = undefined;
-
-    if (logFormType === LogType.FEED) {
-        if (animal.category === AnimalCategory.MAMMALS) {
-            const validItems = mammalDiet.filter(d => d.item && d.quantity);
-            value = validItems.length > 0 ? validItems.map(d => `${d.quantity} ${d.item}`).join(', ') : 'Fed';
-        } else { value = `${feedQuantity} ${feedType}`.trim(); }
-    } else if (logFormType === LogType.WEIGHT) {
-        if (animal.weightUnit === 'lbs_oz' || animal.weightUnit === 'oz') {
-            const lb = animal.weightUnit === 'lbs_oz' ? (parseFloat(weightPounds) || 0) : 0;
-            const oz = parseFloat(weightOunces) || 0;
-            const eighthsNum = parseInt(weightEighths) || 0;
-            const totalOz = (lb * 16) + oz + (eighthsNum / 8);
-            weightGrams = parseFloat((totalOz * 28.3495).toFixed(1));
-            value = animal.weightUnit === 'lbs_oz' ? `${lb}lb ${oz}${eighthsNum > 0 ? ` ${eighthsNum}/8` : ''}oz` : `${oz}${eighthsNum > 0 ? ` ${eighthsNum}/8` : ''}oz`;
-        } else {
-            value = weightValue;
-            weightGrams = parseFloat(weightValue);
-        }
-    } else if (logFormType === LogType.HEALTH) {
-        value = healthType === HealthRecordType.MEDICATION ? `${medName} (${medDosage})` : (genericValue || healthType);
-    } else if (logFormType === LogType.FLIGHT) value = `${flightDuration} mins - ${flightQuality}`;
-    else if (logFormType === LogType.MOVEMENT) value = `${movementType}: ${movementSource || 'On Site'} -> ${movementDest || 'On Site'}`;
-    else if (logFormType === LogType.WEATHERING) value = `${weatheringStart} - ${weatheringEnd}`;
-    else if (logFormType === LogType.TEMPERATURE) value = isExotic ? `B: ${tempBasking}°C C: ${tempCool}°C` : `${tempAmbient}°C`;
-    else if (logFormType === LogType.MISTING) value = 'Completed - Misting';
-    else if (logFormType === LogType.WATER) value = 'Completed - Waters';
-    else value = genericValue;
-
-    const dateTime = `${logDate}T${logTime}:00`;
-    const timestamp = new Date(dateTime).getTime();
     
-    if (isNaN(timestamp)) {
-        alert("Invalid Date or Time value.");
-        return;
-    }
+    startTransition(() => {
+        let value = '';
+        let weightGrams: number | undefined = undefined;
 
-    const newEntry: LogEntry = {
-      id: existingLog ? existingLog.id : Date.now().toString(),
-      date: dateTime,
-      type: logFormType,
-      value: value,
-      notes: logNotes,
-      userInitials: logInitials,
-      timestamp: timestamp,
-      attachmentUrl: attachment || undefined,
-      weightGrams,
-      feedMethod: logFormType === LogType.FEED ? feedMethod : undefined,
-      healthType: logFormType === LogType.HEALTH ? healthType : undefined,
-      condition: logFormType === LogType.HEALTH ? healthCondition : undefined,
-      bcs: logFormType === LogType.HEALTH && healthBcs ? parseFloat(healthBcs) : undefined,
-      featherCondition: logFormType === LogType.HEALTH ? healthFeather : undefined,
-      temperature: tempAmbient ? parseFloat(tempAmbient) : undefined,
-      baskingTemp: tempBasking ? parseFloat(tempBasking) : undefined,
-      coolTemp: tempCool ? parseFloat(tempCool) : undefined,
-      weatherDesc: weatherDesc || undefined,
-      windSpeed: windSpeed ? parseFloat(windSpeed) : undefined,
-      flightDuration: flightDuration ? parseFloat(flightDuration) : undefined,
-      flightQuality: flightQuality || undefined,
-      gpsUrl: gpsData || undefined,
-      movementType: logFormType === LogType.MOVEMENT ? movementType : undefined,
-      movementSource: logFormType === LogType.MOVEMENT ? movementSource : undefined,
-      movementDestination: logFormType === LogType.MOVEMENT ? movementDest : undefined,
-      weatheringStart: logFormType === LogType.WEATHERING ? weatheringStart : undefined,
-      weatheringEnd: logFormType === LogType.WEATHERING ? weatheringEnd : undefined,
-      medicationName: logFormType === LogType.HEALTH && healthType === HealthRecordType.MEDICATION ? medName : undefined,
-      medicationBatch: logFormType === LogType.HEALTH && healthType === HealthRecordType.MEDICATION ? medBatch : undefined,
-      medicationDosage: logFormType === LogType.HEALTH && healthType === HealthRecordType.MEDICATION ? medDosage : undefined,
-      medicationRoute: logFormType === LogType.HEALTH && healthType === HealthRecordType.MEDICATION ? medRoute : undefined,
-      medicationFrequency: logFormType === LogType.HEALTH && healthType === HealthRecordType.MEDICATION ? medFrequency : undefined,
-      medicationEndDate: logFormType === LogType.HEALTH && healthType === HealthRecordType.MEDICATION ? medEndDate : undefined,
-      prescribedBy: logFormType === LogType.HEALTH && healthType === HealthRecordType.MEDICATION ? prescribedBy : undefined,
-      hasCast: logFormType === LogType.FEED && hasCast ? (hasCast === 'yes') : undefined,
-    };
-    onSave(newEntry);
-    onClose();
+        if (logFormType === LogType.FEED) {
+            if (animal.category === AnimalCategory.MAMMALS) {
+                const validItems = mammalDiet.filter(d => d.item && d.quantity);
+                value = validItems.length > 0 ? validItems.map(d => `${d.quantity} ${d.item}`).join(', ') : 'Fed';
+            } else { value = `${feedQuantity} ${feedType}`.trim(); }
+        } else if (logFormType === LogType.WEIGHT) {
+            if (animal.weightUnit === 'lbs_oz' || animal.weightUnit === 'oz') {
+                const lb = animal.weightUnit === 'lbs_oz' ? (parseFloat(weightPounds) || 0) : 0;
+                const oz = parseFloat(weightOunces) || 0;
+                const eighthsNum = parseInt(weightEighths) || 0;
+                const totalOz = (lb * 16) + oz + (eighthsNum / 8);
+                weightGrams = parseFloat((totalOz * 28.3495).toFixed(1));
+                value = animal.weightUnit === 'lbs_oz' ? `${lb}lb ${oz}${eighthsNum > 0 ? ` ${eighthsNum}/8` : ''}oz` : `${oz}${eighthsNum > 0 ? ` ${eighthsNum}/8` : ''}oz`;
+            } else {
+                value = weightValue;
+                weightGrams = parseFloat(weightValue);
+            }
+        } else if (logFormType === LogType.HEALTH) {
+            value = healthType === HealthRecordType.MEDICATION ? `${medName} (${medDosage})` : (genericValue || healthType);
+        } else if (logFormType === LogType.FLIGHT) value = `${flightDuration} mins - ${flightQuality}`;
+        else if (logFormType === LogType.MOVEMENT) value = `${movementType}: ${movementSource || 'On Site'} -> ${movementDest || 'On Site'}`;
+        else if (logFormType === LogType.WEATHERING) value = `${weatheringStart} - ${weatheringEnd}`;
+        else if (logFormType === LogType.TEMPERATURE) value = isExotic ? `B: ${tempBasking}°C C: ${tempCool}°C` : `${tempAmbient}°C`;
+        else if (logFormType === LogType.MISTING) value = 'Completed - Misting';
+        else if (logFormType === LogType.WATER) value = 'Completed - Waters';
+        else value = genericValue;
+
+        const dateTime = `${logDate}T${logTime}:00`;
+        const timestamp = new Date(dateTime).getTime();
+        
+        if (isNaN(timestamp)) {
+            alert("Invalid Date or Time value.");
+            return;
+        }
+
+        const newEntry: LogEntry = {
+          id: existingLog ? existingLog.id : Date.now().toString(),
+          date: dateTime,
+          type: logFormType,
+          value: value,
+          notes: logNotes,
+          userInitials: logInitials,
+          timestamp: timestamp,
+          attachmentUrl: attachment || undefined,
+          weightGrams,
+          feedMethod: logFormType === LogType.FEED ? feedMethod : undefined,
+          healthType: logFormType === LogType.HEALTH ? healthType : undefined,
+          condition: logFormType === LogType.HEALTH ? healthCondition : undefined,
+          bcs: logFormType === LogType.HEALTH && healthBcs ? parseFloat(healthBcs) : undefined,
+          featherCondition: logFormType === LogType.HEALTH ? healthFeather : undefined,
+          temperature: tempAmbient ? parseFloat(tempAmbient) : undefined,
+          baskingTemp: tempBasking ? parseFloat(tempBasking) : undefined,
+          coolTemp: tempCool ? parseFloat(tempCool) : undefined,
+          weatherDesc: weatherDesc || undefined,
+          windSpeed: windSpeed ? parseFloat(windSpeed) : undefined,
+          flightDuration: flightDuration ? parseFloat(flightDuration) : undefined,
+          flightQuality: flightQuality || undefined,
+          gpsUrl: gpsData || undefined,
+          movementType: logFormType === LogType.MOVEMENT ? movementType : undefined,
+          movementSource: logFormType === LogType.MOVEMENT ? movementSource : undefined,
+          movementDestination: logFormType === LogType.MOVEMENT ? movementDest : undefined,
+          weatheringStart: logFormType === LogType.WEATHERING ? weatheringStart : undefined,
+          weatheringEnd: logFormType === LogType.WEATHERING ? weatheringEnd : undefined,
+          medicationName: logFormType === LogType.HEALTH && healthType === HealthRecordType.MEDICATION ? medName : undefined,
+          medicationBatch: logFormType === LogType.HEALTH && healthType === HealthRecordType.MEDICATION ? medBatch : undefined,
+          medicationDosage: logFormType === LogType.HEALTH && healthType === HealthRecordType.MEDICATION ? medDosage : undefined,
+          medicationRoute: logFormType === LogType.HEALTH && healthType === HealthRecordType.MEDICATION ? medRoute : undefined,
+          medicationFrequency: logFormType === LogType.HEALTH && healthType === HealthRecordType.MEDICATION ? medFrequency : undefined,
+          medicationEndDate: logFormType === LogType.HEALTH && healthType === HealthRecordType.MEDICATION ? medEndDate : undefined,
+          prescribedBy: logFormType === LogType.HEALTH && healthType === HealthRecordType.MEDICATION ? prescribedBy : undefined,
+          hasCast: logFormType === LogType.FEED && hasCast ? (hasCast === 'yes') : undefined,
+        };
+        
+        onSave(newEntry);
+        onClose();
+    });
   };
 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4 animate-in fade-in duration-200">
         <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col animate-in zoom-in-95 duration-200">
             <div className="p-6 border-b border-slate-200 flex justify-between items-center shrink-0">
                 <div className="flex items-center gap-3">
@@ -386,14 +391,14 @@ const AddEntryModal: React.FC<AddEntryModalProps> = ({
                             {animal.category === AnimalCategory.MAMMALS ? (
                                 <div className="space-y-3">
                                     <label className="block text-sm font-medium text-slate-700 mb-1">Diet Composition</label>
-                                    <div className="space-y-2">{mammalDiet.map((dietRow) => (<div key={dietRow.id} className="flex gap-2 items-center"><div className="flex-1"><input type="text" placeholder="Qty" value={dietRow.quantity} onChange={(e) => updateMammalDietRow(dietRow.id, 'quantity', e.target.value)} className={inputClass}/></div><div className="flex-[2]"><select value={dietRow.item} onChange={(e) => updateMammalDietRow(dietRow.id, 'item', e.target.value)} className={inputClass}><option value="">Select Item...</option>{foodOptions[animal.category]?.map(opt => <option key={opt} value={opt}>{opt}</option>)}</select></div>{mammalDiet.length > 1 && (<button type="button" onClick={() => removeMammalDietRow(dietRow.id)} className="text-slate-400 hover:text-rose-500 p-1"><Trash2 size={18} /></button>)}</div>))}</div>
+                                    <div className="space-y-2">{mammalDiet.map((dietRow) => (<div key={dietRow.id} className="flex gap-2 items-center"><div className="flex-1"><input type="text" placeholder="Qty" value={dietRow.quantity} onChange={(e) => updateMammalDietRow(dietRow.id, 'quantity', e.target.value)} className={inputClass}/></div><div className="flex-[2]"><select value={dietRow.item} onChange={(e) => updateMammalDietRow(dietRow.id, 'item', e.target.value)} className={inputClass}><option value="">Select Item...</option>{(foodOptions[animal.category] || []).map(opt => <option key={opt} value={opt}>{opt}</option>)}</select></div>{mammalDiet.length > 1 && (<button type="button" onClick={() => removeMammalDietRow(dietRow.id)} className="text-slate-400 hover:text-rose-500 p-1"><Trash2 size={18} /></button>)}</div>))}</div>
                                     <button type="button" onClick={() => setMammalDiet([...mammalDiet, {id: Date.now(), quantity: '', item: ''}])} className="text-xs font-bold text-amber-700 flex items-center gap-1 hover:text-amber-800 mt-2"><Plus size={14} /> Add Food Item</button>
                                 </div>
                             ) : (
                                 <div className="space-y-4">
                                     <div className="grid grid-cols-2 gap-4">
                                         <div><label className="block text-sm font-medium text-slate-700 mb-1">Quantity</label><input type="number" step="0.1" required value={feedQuantity} onChange={e => setFeedQuantity(e.target.value)} className={inputClass} placeholder="1"/></div>
-                                        <div><label className="block text-sm font-medium text-slate-700 mb-1">Food Item</label><select required value={feedType} onChange={e => setFeedType(e.target.value)} className={inputClass}><option value="">Select...</option>{foodOptions[animal.category]?.map(opt => <option key={opt} value={opt}>{opt}</option>)}</select></div>
+                                        <div><label className="block text-sm font-medium text-slate-700 mb-1">Food Item</label><select required value={feedType} onChange={e => setFeedType(e.target.value)} className={inputClass}><option value="">Select...</option>{(foodOptions[animal.category] || []).map(opt => <option key={opt} value={opt}>{opt}</option>)}</select></div>
                                     </div>
                                     {animal.category === AnimalCategory.RAPTORS && (
                                         <div>
@@ -463,6 +468,7 @@ const AddEntryModal: React.FC<AddEntryModalProps> = ({
                         <div><label className="block text-sm font-medium text-slate-700 mb-1">Logged By (Initials)</label><input type="text" required maxLength={3} value={logInitials} onChange={e => setLogInitials(e.target.value.toUpperCase())} className={`${inputClass} uppercase`} placeholder="ABC"/></div>
                         <div><label className="block text-sm font-medium text-slate-700 mb-1">Attachment</label><div className="flex items-center gap-2"><label className="cursor-pointer bg-slate-100 hover:bg-slate-200 text-slate-600 px-3 py-2 rounded-lg text-sm flex-1 flex items-center justify-center gap-2 transition-colors border border-slate-200"><Camera size={16}/> {attachment ? 'Change' : 'Upload'}<input type="file" accept="image/*" onChange={handleFileUpload} className="hidden" /></label>{attachment && (<button type="button" onClick={() => setAttachment(null)} className="p-2 text-slate-400 hover:text-rose-500 transition-colors"><X size={20}/></button>)}</div></div>
                     </div>
+                    
                     <div className="flex justify-between items-center pt-4 border-t border-slate-200 shrink-0">
                         {existingLog && onDelete ? (
                             <button type="button" onClick={handleDelete} className="flex items-center gap-2 px-4 py-2 text-rose-600 hover:bg-rose-50 rounded-lg font-semibold transition-colors">
@@ -471,7 +477,10 @@ const AddEntryModal: React.FC<AddEntryModalProps> = ({
                         ) : <div></div>}
                         <div className="flex gap-3">
                             <button type="button" onClick={onClose} className="px-4 py-2 text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg font-semibold transition-colors">Cancel</button>
-                            <button type="submit" className="flex items-center gap-2 px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition-colors shadow-sm"><Check size={18} /> Save Entry</button>
+                            <button type="submit" disabled={isPending} className="flex items-center gap-2 px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">
+                                {isPending ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />}
+                                {isPending ? 'Saving...' : 'Save Entry'}
+                            </button>
                         </div>
                     </div>
             </form>

@@ -2,15 +2,18 @@
 import { GoogleGenAI, GenerateContentResponse, Type } from "@google/genai";
 import { Animal, LogType, AnimalCategory, ConservationStatus } from "../types";
 
-/**
- * Valid 1x1 Transparent PNG for fallback/context
- */
-const MAP_TEMPLATE_B64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
+// Singleton instance for AI client
+let aiInstance: GoogleGenAI | null = null;
 
 /**
- * Initializes the Gemini API client
+ * Initializes or retrieves the Gemini API client
  */
-const getAi = () => new GoogleGenAI({ apiKey: process.env.API_KEY });
+const getAi = () => {
+  if (!aiInstance) {
+    aiInstance = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  }
+  return aiInstance;
+};
 
 /**
  * Helper to normalize string input to a ConservationStatus enum value
@@ -30,7 +33,6 @@ const normalizeIUCNStatus = (input: string): ConservationStatus => {
 
 /**
  * Helper for exponential backoff retries
- * Now handles both 429 (Rate Limit) and 503 (Service Unavailable/High Demand)
  */
 async function withRetry<T>(fn: () => Promise<T>, retries = 3, delay = 2000): Promise<T> {
   try {
@@ -95,7 +97,7 @@ export const getConservationStatus = async (species: string): Promise<Conservati
 };
 
 /**
- * Batch version of species intelligence fetching to prevent 429 rate limits
+ * Batch version of species intelligence fetching
  */
 export const batchGetSpeciesData = async (speciesList: string[]): Promise<Record<string, { latin?: string, status?: ConservationStatus }>> => {
   if (speciesList.length === 0) return {};
@@ -109,10 +111,10 @@ export const batchGetSpeciesData = async (speciesList: string[]): Promise<Record
       
       Return the data as a JSON object where keys are the original species names from the list.
       Values must be objects with:
-      - "latin": string (the scientific name)
-      - "status": string (The IUCN label or code)
+      - "latin": string
+      - "status": string
 
-      Return ONLY the JSON object, no markdown formatting or extra text.`,
+      Return ONLY the JSON object.`,
       config: {
         responseMimeType: "application/json",
         temperature: 0.1,
@@ -132,22 +134,21 @@ export const batchGetSpeciesData = async (speciesList: string[]): Promise<Record
         
         return normalized;
     } catch (e) {
-        console.error("Failed to parse batch JSON response", response.text);
         return {};
     }
   } catch (error) {
-    console.error("Gemini Error (batchGetSpeciesData):", error);
     return {};
   }
 };
 
 /**
- * Generates specific content for the Aviary Sign
+ * Generates specific content for the Enclosure Sign
  */
 export const generateSignageContent = async (species: string): Promise<{ 
     diet: string[], 
     habitat: string[], 
     didYouKnow: string[],
+    wildOrigin: string,
     speciesStats: { lifespanWild: string, lifespanCaptivity: string, wingspan: string, weight: string } 
 }> => {
   const ai = getAi();
@@ -157,40 +158,57 @@ export const generateSignageContent = async (species: string): Promise<{
       contents: `For the animal species "${species}", provide content for a zoo enclosure sign.
       
       I need:
-      1. DIET: Exactly 2 engaging bullet points about their natural diet. Sentences can be moderately detailed (approx 15-20 words).
-      2. HABITAT: Exactly 3 engaging bullet points about their native environment. Sentences can be moderately detailed.
-      3. DID YOU KNOW: Exactly 2 fun facts. Sentences can be moderately detailed to fill available space.
-      4. STATS: 
-         - Wild Lifespan (e.g. "10-12 years")
-         - Captivity Lifespan (e.g. "Up to 20 years")
-         - Wingspan (or Length if not bird)
-         - Weight range
+      1. DIET: Exactly 2 points.
+      2. HABITAT: Exactly 3 points.
+      3. DID YOU KNOW: Exactly 2 facts.
+      4. WILD ORIGIN: Max 5 words.
+      5. STATS: Wild Lifespan, Captivity Lifespan, Wingspan/Length, Weight.
 
-      Return purely valid JSON with keys: 
-      "diet" (string[]), 
-      "habitat" (string[]), 
-      "didYouKnow" (string[]),
-      "speciesStats" (object with keys "lifespanWild", "lifespanCaptivity", "wingspan", "weight").`,
+      Return purely valid JSON.`,
       config: {
         responseMimeType: "application/json",
         temperature: 0.4,
       }
     }));
 
-    return JSON.parse(response.text || '{"diet":[], "habitat":[], "didYouKnow":[], "speciesStats":{}}');
+    return JSON.parse(response.text || '{"diet":[], "habitat":[], "didYouKnow":[], "wildOrigin": "", "speciesStats":{}}');
   } catch (error) {
-    console.error("Gemini Error (generateSignageContent):", error);
     return { 
         diet: [], 
         habitat: [], 
-        didYouKnow: [], 
+        didYouKnow: [],
+        wildOrigin: "",
         speciesStats: { lifespanWild: '-', lifespanCaptivity: '-', wingspan: '-', weight: '-' } 
     };
   }
 };
 
 /**
- * Generates an operational summary for a collection section
+ * AI Weather Analysis for Flight Displays
+ */
+export const analyzeFlightWeather = async (hourlyData: any[]): Promise<string> => {
+  const ai = getAi();
+  try {
+    const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
+      model: 'gemini-3-flash-preview',
+      contents: `You are a professional Falconer and Safety Officer. Review this 24h weather data: ${JSON.stringify(hourlyData.slice(0, 24))}.
+      Provide a "Flight Safety Briefing" for today.
+      Identify:
+      1. A SAFETY INDEX (1-10) where 10 is perfect conditions.
+      2. OPERATIONAL WINDOWS (best times to fly).
+      3. HAZARDS (gusts, heavy rain, extreme heat/cold for specific birds like Barn Owls or Eagles).
+      4. VERDICT (Go/No-Go/Caution).
+      Format with clear bold headers and bullet points. Maximum 150 words.`,
+    }));
+    return response.text || "Flight analysis engine unavailable.";
+  } catch (error) {
+    console.error("Gemini Error (analyzeFlightWeather):", error);
+    return "Weather analysis engine is currently offline.";
+  }
+};
+
+/**
+ * Operational summaries and clinical analysis
  */
 export const generateSectionSummary = async (category: AnimalCategory, animals: Animal[]): Promise<string> => {
   const ai = getAi();
@@ -198,163 +216,67 @@ export const generateSectionSummary = async (category: AnimalCategory, animals: 
     name: a.name,
     species: a.species,
     lastWeight: a.logs?.find(l => l.type === LogType.WEIGHT)?.value,
-    lastFeed: a.logs?.find(l => l.type === LogType.FEED)?.value,
   }));
-
   try {
     const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `You are a senior zookeeper at Kent Owl Academy. Provide a professional, concise operational status report for the ${category} section based on this data: ${JSON.stringify(context)}. Identify any animals needing attention or positive weight trends.`,
+      contents: `Provide a professional operational status report for the ${category} section: ${JSON.stringify(context)}.`,
     }));
-    return response.text || "Operational summary currently unavailable.";
-  } catch (error) {
-    console.error("Gemini Error (generateSectionSummary):", error);
-    return "Operational summary currently unavailable.";
-  }
+    return response.text || "Summary unavailable.";
+  } catch (error) { return "Summary unavailable."; }
 };
 
-/**
- * Performs a clinical analysis of an animal's health history
- */
 export const analyzeHealthHistory = async (animal: Animal): Promise<string> => {
   const ai = getAi();
-  const healthLogs = (animal.logs || [])
-    .filter(l => l.type === LogType.HEALTH || l.type === LogType.WEIGHT)
-    .slice(0, 15);
-
-  const context = {
-    name: animal.name,
-    species: animal.species,
-    targetWeight: animal.flyingWeight || animal.winterWeight,
-    history: healthLogs.map(l => ({
-      date: l.date,
-      type: l.type,
-      value: l.value,
-      bcs: l.bcs,
-      notes: l.notes
-    }))
-  };
-
+  const healthLogs = (animal.logs || []).filter(l => l.type === LogType.HEALTH || l.type === LogType.WEIGHT).slice(0, 15);
   try {
     const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `You are a specialized avian veterinarian. Analyze the following medical and weight history for "${animal.name}" (${animal.species}): ${JSON.stringify(context)}. 
-      Provide a concise clinical summary (max 150 words). 
-      Format: 
-      - STATUS: (Stable/Improving/Concerns)
-      - KEY OBSERVATIONS: (Bullet points)
-      - RECOMMENDED MONITORING: (What staff should look for)`,
+      contents: `Analyze history for "${animal.name}" (${animal.species}): ${JSON.stringify(healthLogs)}.`,
     }));
-    return response.text || "Clinical analysis unavailable.";
-  } catch (error) {
-    console.error("Gemini Error (analyzeHealthHistory):", error);
-    return "Error connecting to clinical diagnostic engine.";
-  }
+    return response.text || "Analysis unavailable.";
+  } catch (error) { return "Analysis unavailable."; }
 };
 
-/**
- * Performs a top-level audit of the entire collection's health
- */
 export const analyzeCollectionHealth = async (animals: Animal[]): Promise<string> => {
   const ai = getAi();
-  const healthContext = animals
-    .filter(a => !a.archived)
-    .map(a => {
-        const latestHealth = a.logs?.find(l => l.type === LogType.HEALTH);
-        const latestWeight = a.logs?.find(l => l.type === LogType.WEIGHT);
-        return {
-            name: a.name,
-            species: a.species,
-            condition: latestHealth?.condition,
-            bcs: latestHealth?.bcs,
-            weight: latestWeight?.value
-        };
-    });
-
+  const context = animals.filter(a => !a.archived).map(a => ({ name: a.name, species: a.species }));
   try {
     const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `You are the Chief Curator. Review this collection health data: ${JSON.stringify(healthContext)}. 
-      Provide a "Morning Briefing" summary. 
-      Identify the top 3 animals requiring immediate veterinary attention or monitoring today. 
-      Tone: Professional, urgent but calm.`,
+      contents: `Review collection health: ${JSON.stringify(context)}. Provide a Morning Briefing.`,
     }));
-    return response.text || "Collection audit failed.";
-  } catch (error) {
-    console.error("Gemini Error (analyzeCollectionHealth):", error);
-    return "Unable to perform collection-wide health audit.";
-  }
+    return response.text || "Audit failed.";
+  } catch (error) { return "Audit failed."; }
 };
 
-/**
- * Generates an educational dossier and distribution map for a species
- */
 export const generateSpeciesCard = async (species: string): Promise<{ text: string, mapImage?: string }> => {
   const ai = getAi();
   try {
     const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
       model: 'gemini-2.5-flash-image',
-      contents: {
-        parts: [
-          {
-            text: `Generate a professional educational dossier for "${species}" in Markdown format. Include sections: HABITAT, DIETARY ADAPTATIONS, and CONSERVATION STATUS. 
-            
-            ALSO: Generate a clear, high-contrast world map highlighting the native geographic range of this species in red.`
-          }
-        ]
-      },
-      config: {
-        imageConfig: {
-          aspectRatio: "16:9"
-        }
-      }
+      contents: { parts: [{ text: `Dossier and high-contrast range map (red on black/white) for "${species}".` }] },
+      config: { imageConfig: { aspectRatio: "16:9" } }
     }));
-
-    let text = "";
-    let mapImage: string | undefined = undefined;
-
+    let text = ""; let mapImage = undefined;
     if (response.candidates?.[0]?.content?.parts) {
       for (const part of response.candidates[0].content.parts) {
-        if (part.text) {
-          text += part.text;
-        } else if (part.inlineData) {
-          mapImage = `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
-        }
+        if (part.text) text += part.text;
+        else if (part.inlineData) mapImage = `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
       }
     }
-
-    return {
-      text: text || "Dossier synthesis failed.",
-      mapImage
-    };
-  } catch (error) {
-    console.error("Gemini Error (generateSpeciesCard):", error);
-    try {
-        const textResponse = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
-            model: 'gemini-3-flash-preview',
-            contents: `Generate a professional educational dossier for "${species}" in Markdown format. Include sections: HABITAT, DIETARY ADAPTATIONS, and CONSERVATION STATUS.`
-        }));
-        return { text: textResponse.text || "Error connecting to AI diagnostic engine." };
-    } catch (e) {
-        return { text: "Error connecting to AI diagnostic engine." };
-    }
-  }
+    return { text: text || "Synthesis failed.", mapImage };
+  } catch (error) { return { text: "Diagnostic engine error." }; }
 };
 
-/**
- * Generates a concise summary for a postcard (Description + Location)
- */
 export const generateExoticSummary = async (species: string): Promise<string> => {
   const ai = getAi();
   try {
     const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `Provide two very concise sentences for "${species}". Sentence 1: A brief physical description. Sentence 2: Where they are natively found in the world. No headers, just the sentences.`,
+      contents: `3-sentence zoo registry summary for "${species}".`,
       config: { temperature: 0.7 }
     }));
     return response.text?.trim() || "";
-  } catch (error) {
-    console.error("Gemini Error (generateExoticSummary):", error);
-    return "";
-  }
+  } catch (error) { return ""; }
 };

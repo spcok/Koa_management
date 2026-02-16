@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { SiteLogEntry, User, TimeLogEntry } from '../types';
 import { ShieldAlert, Plus, Clock, Users, Timer, X, Trash2, CheckCircle2, UserCheck, Check, Calendar } from 'lucide-react';
@@ -157,7 +156,7 @@ const SafetyDrills: React.FC<SafetyDrillsProps> = ({ logs = [], timeLogs = [], u
         </div>
 
         {isModalOpen && (
-            <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md flex items-center justify-center z-50 p-4">
+            <div className="fixed inset-0 bg-slate-900/80 flex items-center justify-center z-[100] p-4">
                 <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl p-0 animate-in zoom-in-95 border-2 border-slate-300 overflow-hidden flex flex-col max-h-[90vh]">
                     <div className="p-6 border-b-2 border-slate-100 flex justify-between items-center bg-slate-50/50 shadow-sm">
                         <div>

@@ -1,11 +1,10 @@
-
 import React, { useState, useEffect } from 'react';
 import { 
   LayoutDashboard, ClipboardList, ListTodo, Map, CalendarClock, CloudSun, 
   ArrowLeftRight, ShieldAlert, AlertTriangle, Stethoscope, Heart, Wrench, 
   AlertOctagon, Clock, Settings, LogOut, Menu, Power, 
   ChevronLeft, ChevronRight, Maximize, Minimize,
-  HelpCircle, FileText
+  HelpCircle, FileText, Calendar
 } from 'lucide-react';
 import { UserRole, User, TimeLogEntry, UserPermissions, OrganizationProfile } from '../types';
 
@@ -35,7 +34,6 @@ const Layout: React.FC<LayoutProps> = ({
   const isAdmin = currentUser.role === UserRole.ADMIN;
   
   useEffect(() => {
-    // Fullscreen listener
     const handleFullscreenChange = () => {
         setIsFullscreen(!!document.fullscreenElement);
     };
@@ -57,11 +55,12 @@ const Layout: React.FC<LayoutProps> = ({
       }
   };
   
-  // Permission mapping
   const p: UserPermissions = {
     dashboard: true, dailyLog: true, tasks: true, medical: isAdmin, 
     movements: isAdmin, safety: isAdmin, maintenance: true, settings: isAdmin,
-    flightRecords: true, feedingSchedule: isAdmin, attendance: isAdmin, attendanceManager: isAdmin, missingRecords: isAdmin,
+    flightRecords: true, feedingSchedule: isAdmin, attendance: true, 
+    holidayApprover: isAdmin,
+    attendanceManager: isAdmin, missingRecords: isAdmin,
     reports: isAdmin,
     ...(currentUser.permissions || {})
   };
@@ -97,16 +96,14 @@ const Layout: React.FC<LayoutProps> = ({
   const SectionHeader = ({ title }: { title: string }) => {
     if (isSidebarCollapsed) return <div className="h-4"></div>;
     return (
-        <div className="px-6 pt-6 pb-2">
+        <div className="px-6 pt-6 pb-2 text-left">
             <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest truncate">{title}</p>
         </div>
     );
   };
 
   const sidebarContent = (
-    <div className={`flex flex-col h-full bg-[#1c1c1e] text-slate-300 transition-all duration-300 ${isSidebarCollapsed ? 'w-20' : 'w-64'} no-print`}>
-      
-      {/* Sidebar Header/Logo Area */}
+    <div className={`flex flex-col h-full bg-[#1c1c1e] text-slate-300 transition-all duration-300 ${isSidebarCollapsed ? 'w-20' : 'w-64'} no-print shadow-xl md:shadow-none`}>
       <div className={`h-14 flex items-center ${isSidebarCollapsed ? 'justify-center' : 'justify-between px-4'} border-b border-slate-800`}>
           {!isSidebarCollapsed && <span className="font-bold text-white tracking-tight">KOA Manager</span>}
           {orgProfile?.logoUrl ? (
@@ -137,11 +134,11 @@ const Layout: React.FC<LayoutProps> = ({
 
         <SectionHeader title="HR & Systems" />
         <NavItem view="timesheets" icon={Clock} label="Time Sheets" permission={p.attendance} />
+        <NavItem view="holidays" icon={Calendar} label="Holiday Registry" permission={true} />
         {isAdmin && <NavItem view="settings" icon={Settings} label="Settings" permission={p.settings} />}
         <NavItem view="help" icon={HelpCircle} label="Help & Support" permission={true} />
 
         <div className={`mt-6 mb-2 px-4`}>
-            {/* Full Screen Toggle (Always Available) */}
             {!isSidebarCollapsed && (
                 <button
                     onClick={toggleFullscreen}
@@ -154,7 +151,6 @@ const Layout: React.FC<LayoutProps> = ({
         </div>
       </div>
 
-      {/* User Footer */}
       <div className="p-4 border-t border-slate-800/50 bg-[#18181a]">
         {!isSidebarCollapsed ? (
             <>
@@ -163,8 +159,8 @@ const Layout: React.FC<LayoutProps> = ({
                         {currentUser.initials}
                     </div>
                     <div className="flex-1 min-w-0">
-                        <p className="text-xs font-bold text-white truncate">{currentUser.name}</p>
-                        <p className="text-[9px] font-black text-emerald-500 truncate uppercase tracking-widest">{currentUser.jobPosition || currentUser.role}</p>
+                        <p className="text-xs font-bold text-white truncate text-left">{currentUser.name}</p>
+                        <p className="text-[9px] font-black text-emerald-500 truncate uppercase tracking-widest text-left">{currentUser.jobPosition || currentUser.role}</p>
                     </div>
                     <button onClick={onLogout} className="text-slate-500 hover:text-red-400 transition-colors"><LogOut size={16}/></button>
                 </div>
@@ -174,7 +170,7 @@ const Layout: React.FC<LayoutProps> = ({
                         <Power size={14}/> CLOCK OUT
                     </button>
                 ) : (
-                    <button onClick={onClockIn} className="w-full bg-emerald-600 text-white rounded-lg py-2 text-xs font-bold flex items-center justify-center gap-2 hover:bg-emerald-500 transition-all shadow-lg shadow-emerald-900/20">
+                    <button onClick={onClockIn} className="w-full bg-emerald-600 text-white rounded-lg py-2 text-xs font-bold flex items-center justify-center gap-2 hover:bg-emerald-50 transition-all shadow-lg shadow-emerald-900/20">
                         <Clock size={14}/> START SHIFT
                     </button>
                 )}
@@ -189,7 +185,7 @@ const Layout: React.FC<LayoutProps> = ({
                         <Power size={16}/>
                     </button>
                  ) : (
-                    <button onClick={onClockIn} className="w-9 h-9 rounded-lg bg-emerald-600 text-white flex items-center justify-center hover:bg-emerald-500 transition-colors" title="Clock In">
+                    <button onClick={onClockIn} className="w-9 h-9 rounded-lg bg-emerald-600 text-white flex items-center justify-center hover:bg-emerald-50 transition-colors" title="Clock In">
                         <Clock size={16}/>
                     </button>
                  )}
@@ -197,7 +193,6 @@ const Layout: React.FC<LayoutProps> = ({
         )}
       </div>
       
-      {/* Collapse Toggle */}
       <button 
         onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
         className="w-full h-8 bg-[#151516] flex items-center justify-center text-slate-500 hover:text-slate-200 hover:bg-slate-800 transition-colors border-t border-slate-800"
@@ -210,23 +205,23 @@ const Layout: React.FC<LayoutProps> = ({
   return (
     <div className="flex h-screen bg-[#f3f4f6] overflow-hidden font-sans selection:bg-emerald-500/30 selection:text-emerald-900">
       
-      {/* Mobile Menu Overlay */}
+      {/* Mobile Menu Overlay - Higher z-index to block main interaction but below sidebar */}
       {isMobileMenuOpen && (
-        <div className="fixed inset-0 bg-black/60 z-[60] md:hidden backdrop-blur-sm no-print" onClick={() => setIsMobileMenuOpen(false)} />
+        <div className="fixed inset-0 bg-black/60 z-[70] md:hidden no-print" onClick={() => setIsMobileMenuOpen(false)} />
       )}
 
-      {/* Sidebar */}
-      <aside className={`fixed inset-y-0 left-0 z-[70] transform transition-all duration-300 ease-in-out md:static ${isMobileMenuOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full md:translate-x-0'} no-print`}>
+      {/* Sidebar - Highest layout z-index to slide over */}
+      <aside className={`fixed inset-y-0 left-0 z-[80] transform transition-all duration-300 ease-in-out md:static ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'} no-print`}>
         {sidebarContent}
       </aside>
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col min-w-0 relative overflow-hidden print:overflow-visible">
         
-        {/* Mobile Header */}
-        <header className="md:hidden h-14 bg-[#1c1c1e] border-b border-slate-800 flex items-center justify-between px-4 z-50 no-print">
+        {/* Mobile Header - Lower z-index so sidebar slides over it */}
+        <header className="md:hidden h-14 bg-[#1c1c1e] border-b border-slate-800 flex items-center justify-between px-4 z-50 no-print shadow-md">
           <div className="flex items-center gap-3">
-              <button onClick={() => setIsMobileMenuOpen(true)} className="text-slate-300">
+              <button onClick={() => setIsMobileMenuOpen(true)} className="text-slate-300 p-2 -ml-2 hover:bg-slate-800 rounded-lg transition-colors">
                 <Menu size={24} />
               </button>
               
@@ -242,7 +237,7 @@ const Layout: React.FC<LayoutProps> = ({
               {orgProfile?.logoUrl && <img src={orgProfile.logoUrl} alt="Logo" className="w-6 h-6 object-contain" />}
               <span className="text-sm font-bold text-white">KOA Manager</span>
           </div>
-          <div className="w-7 h-7 bg-slate-700 rounded-full flex items-center justify-center font-bold text-[10px] text-white border border-slate-600">{currentUser.initials}</div>
+          <div className="w-7 h-7 bg-slate-700 rounded-full flex items-center justify-center font-black text-[10px] text-white border border-slate-600">{currentUser.initials}</div>
         </header>
 
         <div className="flex-1 overflow-y-auto bg-slate-200 print:bg-white print:overflow-visible safe-area-pb">

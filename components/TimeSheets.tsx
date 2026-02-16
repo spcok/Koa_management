@@ -101,10 +101,10 @@ const TimeSheets: React.FC<TimeSheetsProps> = ({ timeLogs, currentUser, users, o
                                         </td>
                                         <td className="px-6 py-4">
                                             <div className="flex items-center gap-3 font-mono text-[10px] font-black text-slate-500">
-                                                <span className="bg-slate-50 px-2 py-1 rounded border border-slate-200">{new Date(log.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                                <span className="bg-slate-50 px-2 py-1 rounded border border-slate-200">{new Date(log.startTime).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}</span>
                                                 <ArrowRight size={12} className="text-slate-300" />
                                                 <span className={isActive ? 'text-slate-300 italic' : 'bg-slate-50 px-2 py-1 rounded border border-slate-200'}>
-                                                    {log.endTime ? new Date(log.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--'}
+                                                    {log.endTime ? new Date(log.endTime).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '--:--'}
                                                 </span>
                                             </div>
                                         </td>
@@ -209,7 +209,7 @@ const EditTimeLogModal: React.FC<EditTimeLogModalProps> = ({ log, onClose, onSav
     const inputClass = "w-full px-4 py-3 bg-slate-50 border-2 border-slate-200 rounded-xl text-sm font-bold focus:border-emerald-500 focus:outline-none transition-all placeholder-slate-400";
 
     return (
-        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md flex items-center justify-center z-[100] p-4">
+        <div className="fixed inset-0 bg-slate-900/80 flex items-center justify-center z-[100] p-4">
             <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-0 animate-in zoom-in-95 border-2 border-slate-300 overflow-hidden">
                 <div className="p-6 border-b-2 border-slate-100 flex justify-between items-center bg-slate-50/50">
                     <div>

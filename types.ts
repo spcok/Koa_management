@@ -102,8 +102,21 @@ export interface UserPermissions {
   feedingSchedule: boolean;
   attendance: boolean;
   attendanceManager: boolean;
+  holidayApprover: boolean;
   missingRecords: boolean;
   reports: boolean;
+}
+
+export interface HolidayRequest {
+  id: string;
+  userId: string;
+  userName: string;
+  startDate: string;
+  endDate: string;
+  status: 'Pending' | 'Approved' | 'Rejected';
+  notes: string;
+  approvedBy?: string;
+  timestamp: number;
 }
 
 export enum DocumentType {
@@ -166,6 +179,15 @@ export interface UserPreferences {
   darkMode?: boolean;
 }
 
+export interface SystemPreferences {
+  unitSystem: 'Metric' | 'Imperial';
+  tempUnit: 'C' | 'F';
+  dashboardDensity: 'Standard' | 'Compact';
+  brandColor: string;
+  sessionTimeoutMinutes: number;
+  autoPurgeDays: number;
+}
+
 export interface User {
   id: string;
   name: string;
@@ -199,6 +221,8 @@ export interface OrganizationProfile {
   contactEmail: string;
   contactPhone: string;
   adoptionUrl?: string;
+  websiteUrl?: string;
+  preferences?: SystemPreferences;
 }
 
 export interface Task {
@@ -343,7 +367,8 @@ export interface Animal {
   targetNightTemp?: number;
   targetBaskingTemp?: number;
   targetCoolTemp?: number;
-  targetHumidity?: number;
+  targetHumidityMin?: number;
+  targetHumidityMax?: number;
   mistingFrequency?: string;
   waterType?: string;
   archived?: boolean;

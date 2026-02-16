@@ -1,7 +1,6 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { User, OrganizationProfile } from '../types';
-import { ArrowRight, User as UserIcon, ShieldCheck, AlertCircle } from 'lucide-react';
+import { ArrowRight, User as UserIcon, ShieldCheck, AlertCircle, Loader2 } from 'lucide-react';
 
 interface LoginScreenProps {
   users: User[];
@@ -21,6 +20,12 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ users, onLogin, orgProfile })
 
   const handleInitialsSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (users.length === 0) {
+        setError('Registry loading...');
+        return;
+    }
+
     const cleanInitials = initialsInput.trim().toUpperCase();
     const user = users.find(u => u.initials.toUpperCase() === cleanInitials);
     
@@ -96,7 +101,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ users, onLogin, orgProfile })
     <div className="fixed inset-0 bg-slate-100 flex items-center justify-center p-6">
          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-blue-500/5 blur-[150px] rounded-full pointer-events-none"></div>
          
-         <div className="bg-white/70 backdrop-blur-xl border border-slate-200 p-8 md:p-12 rounded-3xl shadow-2xl w-full max-w-sm relative z-10 text-center animate-in zoom-in-95 duration-500">
+         <div className="bg-white border border-slate-200 p-8 md:p-12 rounded-3xl shadow-2xl w-full max-w-sm relative z-10 text-center animate-in zoom-in-95 duration-500">
              
              <div className="w-20 h-20 bg-white rounded-2xl flex items-center justify-center mx-auto mb-8 shadow-xl">
                 <img src={logoSrc} alt="Logo" className="w-auto h-12" />
@@ -114,15 +119,19 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ users, onLogin, orgProfile })
                             type="text" value={initialsInput} onChange={(e) => setInitialsInput(e.target.value)}
                             className="w-full bg-white border-2 border-slate-200 text-slate-800 text-center text-xl font-bold py-4 rounded-xl focus:outline-none focus:border-emerald-500 transition-all uppercase pl-10 tracking-[0.2em]"
                             placeholder="XX" maxLength={3} autoFocus
+                            disabled={users.length === 0}
                         />
                     </div>
-                    <button type="submit" className="w-full bg-slate-900 text-white font-black uppercase text-xs tracking-widest py-4 rounded-xl hover:bg-black transition-all shadow-lg shadow-slate-900/20 flex items-center justify-center gap-2 active:scale-95">
-                        Validate Credentials <ArrowRight size={18} />
+                    <button type="submit" disabled={users.length === 0} className="w-full bg-slate-900 text-white font-black uppercase text-xs tracking-widest py-4 rounded-xl hover:bg-black transition-all shadow-lg shadow-slate-900/20 flex items-center justify-center gap-2 active:scale-95 disabled:bg-slate-400 disabled:shadow-none">
+                        {users.length === 0 ? <Loader2 className="animate-spin" size={18} /> : 'Validate Credentials'} {users.length > 0 && <ArrowRight size={18} />}
                     </button>
                     {error && (
                         <div className="flex items-center justify-center gap-2 text-rose-500 text-xs font-bold animate-in fade-in slide-in-from-top-1 mt-2">
                             <AlertCircle size={14}/> {error}
                         </div>
+                    )}
+                    {users.length === 0 && !error && (
+                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest animate-pulse mt-2">Connecting to Staff Registry...</p>
                     )}
                  </form>
              ) : (

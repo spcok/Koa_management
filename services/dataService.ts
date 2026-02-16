@@ -1,31 +1,30 @@
+
 import { supabase } from './supabaseClient';
-import { Animal, AnimalCategory, Task, User, UserRole, SiteLogEntry, Contact, OrganizationProfile, Incident, FirstAidLogEntry, TimeLogEntry, GlobalDocument, AuditLogEntry, LocalBackupConfig, LocalBackupEntry } from '../types';
+import { Animal, AnimalCategory, Task, User, UserRole, SiteLogEntry, Contact, OrganizationProfile, Incident, FirstAidLogEntry, TimeLogEntry, GlobalDocument, AuditLogEntry, LocalBackupConfig, LocalBackupEntry, HolidayRequest } from '../types';
 import { DEFAULT_FOOD_OPTIONS, DEFAULT_FEED_METHODS, MOCK_ANIMALS } from '../constants';
 import { RealtimeChannel } from '@supabase/supabase-js';
 
 const DEFAULT_USERS: User[] = [
     { 
         id: 'u1', name: 'Duty Manager', initials: 'DM', role: UserRole.ADMIN, pin: '8888',
-        // Fix: Added missing required properties 'jobPosition' and 'active'
         jobPosition: 'Duty Manager',
         active: true,
         permissions: { 
             dashboard: true, dailyLog: true, tasks: true, medical: true, movements: true, 
             safety: true, maintenance: true, settings: true,
-            flightRecords: true, feedingSchedule: true, attendance: true, attendanceManager: true, missingRecords: true,
-            reports: true
+            flightRecords: true, feedingSchedule: true, attendance: true, attendanceManager: true, 
+            holidayApprover: true, missingRecords: true, reports: true
         }
     },
     { 
         id: 'u2', name: 'Bird Team', initials: 'BT', role: UserRole.VOLUNTEER, pin: '1234',
-        // Fix: Added missing required properties 'jobPosition' and 'active'
         jobPosition: 'Keeper',
         active: true,
         permissions: { 
             dashboard: true, dailyLog: true, tasks: true, medical: false, movements: false, 
             safety: false, maintenance: true, settings: false,
-            flightRecords: true, feedingSchedule: false, attendance: false, attendanceManager: false, missingRecords: false,
-            reports: false
+            flightRecords: true, feedingSchedule: false, attendance: true, attendanceManager: false, 
+            holidayApprover: false, missingRecords: false, reports: false
         }
     }
 ];
@@ -191,6 +190,23 @@ export const dataService = {
 
     deleteTimeLog: async (id: string): Promise<void> => {
         const { error } = await supabase.from('time_logs').delete().eq('id', id);
+        if (error) throw error;
+    },
+
+    // --- HOLIDAY REQUEST METHODS ---
+    fetchHolidayRequests: async (): Promise<HolidayRequest[]> => {
+        const { data, error } = await supabase.from('holiday_requests').select('json');
+        if (error) { handleSupabaseError(error, 'fetchHolidayRequests'); return []; }
+        return (data || []).map((row: any) => row.json).sort((a, b) => b.timestamp - a.timestamp);
+    },
+
+    saveHolidayRequest: async (req: HolidayRequest): Promise<void> => {
+        const { error } = await supabase.from('holiday_requests').upsert({ id: req.id, json: req });
+        if (error) throw error;
+    },
+
+    deleteHolidayRequest: async (id: string): Promise<void> => {
+        const { error } = await supabase.from('holiday_requests').delete().eq('id', id);
         if (error) throw error;
     },
 

@@ -1,7 +1,6 @@
-
 import React, { useState } from 'react';
 import { Task, Animal, LogType, User, SiteLogEntry } from '../types';
-import { CheckCircle2, Circle, Plus, Calendar, User as UserIcon, AlertCircle, ListTodo } from 'lucide-react';
+import { CheckCircle2, Circle, Plus, Calendar, User as UserIcon, AlertCircle, ListTodo, X, Check, ClipboardList, UserCheck } from 'lucide-react';
 import AddEntryModal from './AddEntryModal';
 
 interface TasksProps {
@@ -17,13 +16,20 @@ interface TasksProps {
 }
 
 const Tasks: React.FC<TasksProps> = ({ 
-    tasks, animals, onAddTask, onUpdateTask, onDeleteTask, users, currentUser, onAddSiteLog, onUpdateAnimal 
+    tasks, animals, onAddTask, onUpdateTask, onDeleteTask, users = [], currentUser, onAddSiteLog, onUpdateAnimal 
 }) => {
   const [filter, setFilter] = useState<'assigned' | 'pending' | 'completed'>('assigned');
-  const [showModal, setShowModal] = useState(false);
+  const [showAddModal, setShowAddModal] = useState(false);
   const [selectedAnimalForEntry, setSelectedAnimalForEntry] = useState<Animal | null>(null);
   const [showEntryModal, setShowEntryModal] = useState(false);
   const [completingTask, setCompletingTask] = useState<Task | null>(null);
+
+  // Form State for new task
+  const [newTitle, setNewTitle] = useState('');
+  const [newType, setNewType] = useState<LogType>(LogType.GENERAL);
+  const [newAnimalId, setNewAnimalId] = useState('');
+  const [newDueDate, setNewDueDate] = useState(new Date().toISOString().split('T')[0]);
+  const [newAssignedTo, setNewAssignedTo] = useState(currentUser?.id || '');
 
   const filteredTasks = tasks.filter(t => {
       if (filter === 'assigned') return !t.completed && (t.assignedTo === currentUser?.id);
@@ -51,6 +57,26 @@ const Tasks: React.FC<TasksProps> = ({
       }
   };
 
+  const handleCreateTask = (e: React.FormEvent) => {
+      e.preventDefault();
+      const task: Task = {
+          id: `task_${Date.now()}`,
+          title: newTitle,
+          type: newType,
+          animalId: newAnimalId || undefined,
+          dueDate: newDueDate,
+          completed: false,
+          recurring: false,
+          assignedTo: newAssignedTo || undefined
+      };
+      onAddTask(task);
+      setShowAddModal(false);
+      setNewTitle('');
+      setNewAnimalId('');
+  };
+
+  const inputClass = "w-full px-4 py-3 bg-slate-50 border-2 border-slate-200 rounded-xl text-sm font-bold focus:outline-none focus:border-emerald-500 transition-all placeholder-slate-400";
+
   return (
     <div className="p-4 md:p-8 space-y-6 animate-in fade-in duration-500 max-w-[1600px] mx-auto">
         <div className="flex justify-between items-center">
@@ -58,9 +84,14 @@ const Tasks: React.FC<TasksProps> = ({
                 <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-3 uppercase tracking-tight">
                     <ListTodo className="text-slate-600" size={28} /> Duty Rota
                 </h1>
-                <p className="text-slate-500 text-sm font-medium">Section Care Tasks & Assignments</p>
+                <p className="text-slate-50 text-sm font-medium">Section Care Tasks & Assignments</p>
              </div>
-             <button onClick={() => setShowModal(true)} className="bg-slate-900 text-white p-3 rounded-xl shadow-lg active:scale-95 transition-all hover:bg-black"><Plus size={20} /></button>
+             <button 
+                onClick={() => setShowAddModal(true)} 
+                className="bg-slate-900 text-white px-6 py-3 rounded-xl shadow-lg active:scale-95 transition-all hover:bg-black font-black uppercase text-xs tracking-widest flex items-center gap-2"
+             >
+                <Plus size={18} /> Add Duty
+             </button>
         </div>
 
         <div className="flex bg-white p-1 rounded-xl border-2 border-slate-300 shadow-sm overflow-hidden w-full md:w-auto self-start inline-flex">
@@ -111,12 +142,81 @@ const Tasks: React.FC<TasksProps> = ({
             )}
         </div>
 
+        {/* CREATE TASK MODAL - z-[100] to be above sidebar */}
+        {showAddModal && (
+            <div className="fixed inset-0 bg-slate-900/80 flex items-center justify-center z-[100] p-4">
+                <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-0 animate-in zoom-in-95 border-2 border-slate-300 overflow-hidden">
+                    <div className="p-6 border-b-2 border-slate-100 flex justify-between items-center bg-slate-50/50">
+                        <div>
+                            <h2 className="text-xl font-bold text-slate-900 uppercase tracking-tight">Add Duty</h2>
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Rota Assignment Registry</p>
+                        </div>
+                        <button onClick={() => setShowAddModal(false)} className="text-slate-300 hover:text-slate-900 p-1"><X size={24}/></button>
+                    </div>
+                    <form onSubmit={handleCreateTask} className="p-6 space-y-6">
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Duty Description</label>
+                                <input 
+                                    type="text" required value={newTitle} 
+                                    onChange={e => setNewTitle(e.target.value)} 
+                                    className={inputClass} 
+                                    placeholder="e.g. Annual Health Check"
+                                />
+                            </div>
+                            
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Duty Type</label>
+                                    <select value={newType} onChange={e => setNewType(e.target.value as any)} className={inputClass}>
+                                        {Object.values(LogType).map(t => <option key={t} value={t}>{t}</option>)}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Target Subject</label>
+                                    <select value={newAnimalId} onChange={e => setNewAnimalId(e.target.value)} className={inputClass}>
+                                        <option value="">No specific animal</option>
+                                        {animals.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Due Date</label>
+                                    <input type="date" required value={newDueDate} onChange={e => setNewDueDate(e.target.value)} className={inputClass} />
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Assigned To</label>
+                                    <select value={newAssignedTo} onChange={e => setNewAssignedTo(e.target.value)} className={inputClass}>
+                                        <option value="">Unassigned</option>
+                                        {users.map(u => <option key={u.id} value={u.id}>{u.name} ({u.initials})</option>)}
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="bg-emerald-50 border-2 border-emerald-100 rounded-xl p-4 flex gap-3">
+                            <UserCheck className="text-emerald-600 shrink-0" size={18} />
+                            <p className="text-[10px] font-bold text-emerald-800 leading-relaxed uppercase">
+                                Once committed, this duty will appear in the staff member's personal dashboard and statutory rota.
+                            </p>
+                        </div>
+
+                        <button type="submit" className="w-full py-4 bg-slate-900 text-white rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-black transition-all shadow-xl active:scale-[0.98] flex items-center justify-center gap-2">
+                            <Check size={18}/> Commit to Rota
+                        </button>
+                    </form>
+                </div>
+            </div>
+        )}
+
         {showEntryModal && selectedAnimalForEntry && (
             <AddEntryModal isOpen={showEntryModal} onClose={() => setShowEntryModal(false)} onSave={(entry) => {
                 onUpdateAnimal?.({ ...selectedAnimalForEntry, logs: [entry, ...selectedAnimalForEntry.logs] });
                 onUpdateTask({ ...completingTask!, completed: true });
                 setShowEntryModal(false);
-            }} animal={selectedAnimalForEntry} initialType={LogType.HEALTH} foodOptions={{} as any} feedMethods={[]}/>
+            }} animal={selectedAnimalForEntry} initialType={completingTask?.type || LogType.HEALTH} foodOptions={{} as any} feedMethods={[]}/>
         )}
     </div>
   );

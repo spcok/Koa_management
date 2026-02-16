@@ -1,3 +1,4 @@
+
 import { LogType, HealthRecordType, IncidentType } from '../../types';
 
 export interface Column {
@@ -17,10 +18,11 @@ export const REPORT_SCHEMAS: Record<string, ReportSchema> = {
     id: 'DAILY_LOG',
     title: 'Daily Husbandry Ledger',
     columns: [
-      { label: 'Time', width: '15%', accessor: 'time' },
-      { label: 'Subject', width: '20%', accessor: 'subject' },
-      { label: 'Type', width: '15%', accessor: 'type' },
-      { label: 'Entry / Value', width: '40%', accessor: 'value' },
+      { label: 'Animal', width: '20%', accessor: 'subject' },
+      { label: 'Time', width: '10%', accessor: 'time' },
+      { label: 'Weight', width: '15%', accessor: 'weight' },
+      { label: 'Feed / Diet', width: '20%', accessor: 'feed' },
+      { label: 'Notes / Activity', width: '25%', accessor: 'value' },
       { label: 'Staff', width: '10%', accessor: 'initials' }
     ]
   },

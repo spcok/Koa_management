@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useTransition } from 'react';
 import { Animal, AnimalCategory, LogType, LogEntry, HazardRating, ConservationStatus } from '../types';
 import { X, Check, Camera, Scale, MapPin, Sparkles, Loader2, AlignLeft, Zap, Shield, History, Info, Fingerprint, AlertCircle, Thermometer, Droplets, Sun, Moon, FileText, Globe, Image as ImageIcon, Skull } from 'lucide-react';
 import { getLatinName, getConservationStatus } from '../services/geminiService';
@@ -74,10 +74,12 @@ const AnimalFormModal: React.FC<AnimalFormModalProps> = ({ isOpen, onClose, onSa
     targetNightTemp: undefined,
     targetBaskingTemp: undefined,
     targetCoolTemp: undefined,
-    targetHumidity: undefined,
+    targetHumidityMin: undefined,
+    targetHumidityMax: undefined,
   });
 
-  const [isAutoFilling, setIsAutoFilling] = useState(false);
+  // React 19 Transition
+  const [isPending, startTransition] = useTransition();
   const requirementsRef = useRef<HTMLTextAreaElement>(null);
 
   // Dynamic Resize Effect for Requirements
@@ -123,7 +125,8 @@ const AnimalFormModal: React.FC<AnimalFormModalProps> = ({ isOpen, onClose, onSa
                 targetNightTemp: undefined,
                 targetBaskingTemp: undefined,
                 targetCoolTemp: undefined,
-                targetHumidity: undefined,
+                targetHumidityMin: undefined,
+                targetHumidityMax: undefined,
             });
         }
     }
@@ -141,20 +144,22 @@ const AnimalFormModal: React.FC<AnimalFormModalProps> = ({ isOpen, onClose, onSa
     }
   };
 
-  const handleAutoFill = async () => {
-    if (!formData.species || isAutoFilling) return;
-    setIsAutoFilling(true);
-    try {
-        const [latin, status] = await Promise.all([
-            getLatinName(formData.species),
-            getConservationStatus(formData.species)
-        ]);
-        setFormData(prev => ({ 
-            ...prev, 
-            latinName: latin || prev.latinName,
-            redListStatus: status || prev.redListStatus 
-        }));
-    } catch (e) { console.error("AI Sync failed", e); } finally { setIsAutoFilling(false); }
+  const handleAutoFill = () => {
+    if (!formData.species) return;
+    
+    startTransition(async () => {
+        try {
+            const [latin, status] = await Promise.all([
+                getLatinName(formData.species!),
+                getConservationStatus(formData.species!)
+            ]);
+            setFormData(prev => ({ 
+                ...prev, 
+                latinName: latin || prev.latinName,
+                redListStatus: status || prev.redListStatus 
+            }));
+        } catch (e) { console.error("AI Sync failed", e); }
+    });
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -209,7 +214,8 @@ const AnimalFormModal: React.FC<AnimalFormModalProps> = ({ isOpen, onClose, onSa
         targetNightTemp: formData.targetNightTemp,
         targetBaskingTemp: formData.targetBaskingTemp,
         targetCoolTemp: formData.targetCoolTemp,
-        targetHumidity: formData.targetHumidity,
+        targetHumidityMin: formData.targetHumidityMin,
+        targetHumidityMax: formData.targetHumidityMax,
     };
     onSave(finalAnimal);
     onClose();
@@ -219,9 +225,10 @@ const AnimalFormModal: React.FC<AnimalFormModalProps> = ({ isOpen, onClose, onSa
 
   const inputClass = "w-full px-4 py-2.5 bg-[#f3f6f9] border border-[#e1e8ef] rounded-lg text-sm font-bold text-slate-700 focus:outline-none focus:border-emerald-500 transition-all placeholder-slate-300";
   const labelClass = "block text-[10px] font-black text-slate-400 uppercase mb-1.5 ml-1 tracking-widest";
+  const isBird = formData.category === AnimalCategory.OWLS || formData.category === AnimalCategory.RAPTORS;
 
   return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4 animate-in fade-in duration-300">
+    <div className="fixed inset-0 bg-slate-900/60 flex items-center justify-center z-[100] p-4 animate-in fade-in duration-300">
         <div className="bg-white rounded-xl shadow-2xl w-full max-w-6xl max-h-[95vh] flex flex-col animate-in zoom-in-95 duration-300 overflow-hidden">
             
             {/* Header Mirroring Reference */}
@@ -311,8 +318,13 @@ const AnimalFormModal: React.FC<AnimalFormModalProps> = ({ isOpen, onClose, onSa
                                     <label className={labelClass}>COMMON SPECIES NAME *</label>
                                     <div className="flex gap-2">
                                         <input type="text" required value={formData.species} onChange={e => setFormData({...formData, species: e.target.value})} className={inputClass} placeholder="Salmon Pink Tarantula" />
-                                        <button type="button" onClick={handleAutoFill} disabled={isAutoFilling} className="px-4 bg-[#0f172a] text-white rounded-lg hover:bg-black transition-all shadow-md active:scale-95 disabled:opacity-50">
-                                            {isAutoFilling ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={18} />}
+                                        <button 
+                                            type="button" 
+                                            onClick={handleAutoFill} 
+                                            disabled={isPending} 
+                                            className="px-4 bg-[#0f172a] text-white rounded-lg hover:bg-black transition-all shadow-md active:scale-95 disabled:opacity-50"
+                                        >
+                                            {isPending ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={18} />}
                                         </button>
                                     </div>
                                 </div>
@@ -415,9 +427,12 @@ const AnimalFormModal: React.FC<AnimalFormModalProps> = ({ isOpen, onClose, onSa
                                         </div>
                                     </>
                                 )}
-                                <div className={formData.category === AnimalCategory.EXOTICS ? 'col-span-full md:col-span-2 lg:col-span-1' : ''}>
-                                    <label className={labelClass}>TARGET HUMIDITY (%)</label>
-                                    <input type="number" value={formData.targetHumidity || ''} onChange={e => setFormData({...formData, targetHumidity: parseInt(e.target.value)})} className={inputClass} placeholder="e.g. 60" />
+                                <div className={formData.category === AnimalCategory.EXOTICS ? 'col-span-full md:col-span-2 lg:col-span-2' : 'col-span-1'}>
+                                    <label className={labelClass}>HUMIDITY RANGE (%)</label>
+                                    <div className="flex gap-2">
+                                        <input type="number" value={formData.targetHumidityMin || ''} onChange={e => setFormData({...formData, targetHumidityMin: parseInt(e.target.value)})} className={inputClass} placeholder="Min" />
+                                        <input type="number" value={formData.targetHumidityMax || ''} onChange={e => setFormData({...formData, targetHumidityMax: parseInt(e.target.value)})} className={inputClass} placeholder="Max" />
+                                    </div>
                                 </div>
                             </div>
                         </section>
@@ -441,9 +456,11 @@ const AnimalFormModal: React.FC<AnimalFormModalProps> = ({ isOpen, onClose, onSa
                                              <span className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">NO ID AVAILABLE</span>
                                          </div>
                                     </div>
-                                    <div className="grid grid-cols-2 gap-4">
+                                    <div className={`grid ${isBird ? 'grid-cols-2' : 'grid-cols-1'} gap-4`}>
                                         <input type="text" disabled={formData.hasNoId} value={formData.microchip} onChange={e => setFormData({...formData, microchip: e.target.value})} className={`${inputClass} font-mono ${formData.hasNoId ? 'opacity-50 cursor-not-allowed bg-slate-100' : ''}`} placeholder="Microchip..." />
-                                        <input type="text" disabled={formData.hasNoId} value={formData.ringNumber} onChange={e => setFormData({...formData, ringNumber: e.target.value})} className={`${inputClass} font-mono ${formData.hasNoId ? 'opacity-50 cursor-not-allowed bg-slate-100' : ''}`} placeholder="Ring Number..." />
+                                        {isBird && (
+                                            <input type="text" disabled={formData.hasNoId} value={formData.ringNumber} onChange={e => setFormData({...formData, ringNumber: e.target.value})} className={`${inputClass} font-mono ${formData.hasNoId ? 'opacity-50 cursor-not-allowed bg-slate-100' : ''}`} placeholder="Ring Number..." />
+                                        )}
                                     </div>
                                 </div>
                                 

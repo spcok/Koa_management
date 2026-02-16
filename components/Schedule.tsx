@@ -1,7 +1,7 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useTransition } from 'react';
 import { Animal, AnimalCategory, Task, LogType } from '../types';
-import { CalendarClock, Plus, Calendar, Trash2, Filter, Utensils, RefreshCw } from 'lucide-react';
+import { CalendarClock, Plus, Calendar, Trash2, Filter, Utensils, RefreshCw, Loader2 } from 'lucide-react';
 
 interface ScheduleProps {
   animals: Animal[];
@@ -19,6 +19,9 @@ const Schedule: React.FC<ScheduleProps> = ({ animals, tasks, foodOptions, onAddT
   const [quantity, setQuantity] = useState('');
   const [withCalciDust, setWithCalciDust] = useState(false);
   const [scheduleMode, setScheduleMode] = useState<'manual' | 'interval'>('manual');
+  
+  // React 19 Transition
+  const [isPending, startTransition] = useTransition();
   
   // Viewing State
   const [viewFilterAnimalId, setViewFilterAnimalId] = useState<string>('ALL');
@@ -39,49 +42,51 @@ const Schedule: React.FC<ScheduleProps> = ({ animals, tasks, foodOptions, onAddT
 
   const handleGenerate = () => {
       if (!selectedAnimalId || !foodType || !quantity) return;
-      const animal = animals.find(a => a.id === selectedAnimalId);
-      if (!animal) return;
+      
+      startTransition(() => {
+          const animal = animals.find(a => a.id === selectedAnimalId);
+          if (!animal) return;
 
-      let datesToSchedule: string[] = [];
+          let datesToSchedule: string[] = [];
 
-      if (scheduleMode === 'manual') {
-          datesToSchedule = selectedDates;
-      } else {
-          // Robust date calculation to avoid timezone offsets
-          const [y, m, d] = intervalStart.split('-').map(Number);
-          // Create date in local time (months are 0-indexed)
-          const startDate = new Date(y, m - 1, d);
+          if (scheduleMode === 'manual') {
+              datesToSchedule = selectedDates;
+          } else {
+              // Robust date calculation to avoid timezone offsets
+              const [y, m, d] = intervalStart.split('-').map(Number);
+              // Create date in local time (months are 0-indexed)
+              const startDate = new Date(y, m - 1, d);
 
-          for (let i = 0; i < occurrences; i++) {
-              const current = new Date(startDate);
-              current.setDate(startDate.getDate() + (i * intervalDays));
-              
-              // Format back to YYYY-MM-DD manually
-              const year = current.getFullYear();
-              const month = String(current.getMonth() + 1).padStart(2, '0');
-              const day = String(current.getDate()).padStart(2, '0');
-              datesToSchedule.push(`${year}-${month}-${day}`);
+              for (let i = 0; i < occurrences; i++) {
+                  const current = new Date(startDate);
+                  current.setDate(startDate.getDate() + (i * intervalDays));
+                  
+                  // Format back to YYYY-MM-DD manually to respect local time
+                  const year = current.getFullYear();
+                  const month = String(current.getMonth() + 1).padStart(2, '0');
+                  const day = String(current.getDate()).padStart(2, '0');
+                  datesToSchedule.push(`${year}-${month}-${day}`);
+              }
           }
-      }
 
-      const notes = `${quantity} ${foodType}${withCalciDust ? ' + Calci-dust' : ''}`;
-      
-      const newTasks: Task[] = datesToSchedule.map(date => ({
-          id: `task_${Date.now()}_${Math.random()}`,
-          animalId: selectedAnimalId,
-          type: LogType.FEED,
-          title: `Feed ${animal.name}`,
-          dueDate: date,
-          completed: false,
-          recurring: false,
-          notes: notes
-      }));
+          const notes = `${quantity} ${foodType}${withCalciDust ? ' + Calci-dust' : ''}`;
+          
+          const newTasks: Task[] = datesToSchedule.map(date => ({
+              id: `task_${Date.now()}_${Math.random()}`,
+              animalId: selectedAnimalId,
+              type: LogType.FEED,
+              title: `Feed ${animal.name}`,
+              dueDate: date,
+              completed: false,
+              recurring: false,
+              notes: notes
+          }));
 
-      onAddTasks(newTasks);
-      
-      // Reset
-      setSelectedDates([]);
-      alert(`Successfully scheduled ${newTasks.length} feeding tasks.`);
+          onAddTasks(newTasks);
+          
+          // Reset
+          setSelectedDates([]);
+      });
   };
 
   // View Filtering Logic
@@ -93,20 +98,22 @@ const Schedule: React.FC<ScheduleProps> = ({ animals, tasks, foodOptions, onAddT
   }, [tasks, viewFilterAnimalId]);
 
   // Calendar Grid Generator
-  const generateCalendarDays = () => {
+  const calendarDays = useMemo(() => {
       const today = new Date();
       const year = today.getFullYear();
       const month = today.getMonth();
       const daysInMonth = new Date(year, month + 1, 0).getDate();
       const days = [];
       for(let i=1; i<=daysInMonth; i++) {
+          // Construct local date manually to ensure YYYY-MM-DD matches display
           const d = new Date(year, month, i);
-          days.push(d.toISOString().split('T')[0]);
+          const y = d.getFullYear();
+          const m = String(d.getMonth() + 1).padStart(2, '0');
+          const day = String(d.getDate()).padStart(2, '0');
+          days.push(`${y}-${m}-${day}`);
       }
       return days;
-  };
-
-  const calendarDays = generateCalendarDays();
+  }, []); // Empty dependency array as this month view is static relative to current session
 
   const inputClass = "w-full px-3 py-2 bg-slate-700 text-white border border-slate-600 rounded-lg placeholder-slate-400 focus:ring-2 focus:ring-emerald-500 focus:outline-none";
 
@@ -156,7 +163,7 @@ const Schedule: React.FC<ScheduleProps> = ({ animals, tasks, foodOptions, onAddT
                                 <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Food Type *</label>
                                 <select value={foodType} onChange={e => setFoodType(e.target.value)} className={inputClass}>
                                     <option value="">Select...</option>
-                                    {foodOptions[selectedCategory]?.map(f => <option key={f} value={f}>{f}</option>)}
+                                    {(foodOptions?.[selectedCategory] || []).map(f => <option key={f} value={f}>{f}</option>)}
                                 </select>
                             </div>
                             <div>
@@ -197,13 +204,15 @@ const Schedule: React.FC<ScheduleProps> = ({ animals, tasks, foodOptions, onAddT
                                             <div key={d} className="text-center text-[10px] text-slate-400 font-bold py-1">{d}</div>
                                         ))}
                                         {calendarDays.map(date => {
-                                            const dObj = new Date(date);
-                                            const dayNum = dObj.getDate();
-                                            // Simple offset for first day of month (approximate for demo visual)
-                                            const colStart = dObj.getDay() + 1;
+                                            // date is strictly YYYY-MM-DD
+                                            const dObj = new Date(date); 
+                                            // getDate() on a local date constructed from YYYY, MM, DD returns correct day
+                                            const [y, m, d] = date.split('-').map(Number);
+                                            const localDate = new Date(y, m-1, d);
+                                            const dayNum = localDate.getDate();
+                                            const colStart = localDate.getDay() + 1;
                                             const isSelected = selectedDates.includes(date);
                                             
-                                            // Only apply grid-column-start to the first day
                                             const style = dayNum === 1 ? { gridColumnStart: colStart } : {};
 
                                             return (
@@ -252,10 +261,11 @@ const Schedule: React.FC<ScheduleProps> = ({ animals, tasks, foodOptions, onAddT
 
                         <button 
                             onClick={handleGenerate}
-                            disabled={!selectedAnimalId || !foodType || !quantity || (scheduleMode === 'manual' && selectedDates.length === 0)}
+                            disabled={!selectedAnimalId || !foodType || !quantity || (scheduleMode === 'manual' && selectedDates.length === 0) || isPending}
                             className="w-full bg-slate-800 text-white py-3 rounded-lg font-bold hover:bg-slate-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm flex items-center justify-center gap-2"
                         >
-                            <CalendarClock size={18} /> Confirm Schedule
+                            {isPending ? <Loader2 size={18} className="animate-spin" /> : <CalendarClock size={18} />}
+                            {isPending ? 'Scheduling...' : 'Confirm Schedule'}
                         </button>
                      </div>
                  </div>

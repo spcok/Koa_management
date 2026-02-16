@@ -44,7 +44,7 @@ const SiteMaintenance: React.FC<SiteMaintenanceProps> = ({ logs, currentUser, on
           setDescription(log.description);
           setPriority(log.priority);
           setStatus(log.status);
-          setCost(log.cost?.toString() || '');
+          setCost(log.cost !== undefined ? log.cost.toString() : '');
           setLogDate(log.date);
       } else {
           setEditingId(null);
@@ -69,7 +69,8 @@ const SiteMaintenance: React.FC<SiteMaintenanceProps> = ({ logs, currentUser, on
           location,
           priority,
           status,
-          cost: cost ? parseFloat(cost) : undefined,
+          // FIX: Explicitly check for empty string to allow '0' as valid cost
+          cost: cost !== '' ? parseFloat(cost) : undefined,
           loggedBy: editingId ? (logs.find(l => l.id === editingId)?.loggedBy || currentUser.initials) : currentUser.initials,
           timestamp: editingId ? (logs.find(l => l.id === editingId)?.timestamp || Date.now()) : Date.now()
       };
@@ -172,7 +173,7 @@ const SiteMaintenance: React.FC<SiteMaintenanceProps> = ({ logs, currentUser, on
                               <td className="px-6 py-4 text-right align-top">
                                   <div className="text-slate-900 font-black flex items-center justify-end gap-1">
                                       <PoundSterling size={14} className="text-slate-300"/>
-                                      {log.cost?.toLocaleString(undefined, {minimumFractionDigits: 2}) || '0.00'}
+                                      {log.cost !== undefined ? log.cost.toLocaleString(undefined, {minimumFractionDigits: 2}) : '0.00'}
                                   </div>
                               </td>
                               <td className="px-6 py-4 text-right align-top print:hidden">
@@ -192,7 +193,7 @@ const SiteMaintenance: React.FC<SiteMaintenanceProps> = ({ logs, currentUser, on
       </div>
 
       {isModalOpen && (
-          <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md flex items-center justify-center z-50 p-4">
+          <div className="fixed inset-0 bg-slate-900/80 flex items-center justify-center z-50 p-4">
               <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-0 animate-in zoom-in-95 border-2 border-slate-300 overflow-hidden">
                   <div className="p-6 border-b-2 border-slate-100 flex justify-between items-center bg-slate-50/50 shadow-sm">
                       <div><h2 className="text-xl font-bold text-slate-900 uppercase tracking-tight leading-none">{editingId ? 'Edit Record' : 'New Entry'}</h2><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Infrastructure Registry</p></div>
