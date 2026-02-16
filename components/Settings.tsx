@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Animal, AnimalCategory, User, OrganizationProfile, Contact, UserRole, 
@@ -7,7 +8,7 @@ import {
   Settings as SettingsIcon, Users, Database, MapPin, 
   Phone, Utensils, Building2, Save, Upload, Download, 
   Trash2, Plus, X, Shield, AlertTriangle, FileText, CheckCircle2,
-  RefreshCw, Lock, FolderOpen
+  RefreshCw, Lock, FolderOpen, ChevronRight, Link as LinkIcon
 } from 'lucide-react';
 import { backupService } from '../services/backupService';
 import { dataService } from '../services/dataService';
@@ -234,42 +235,53 @@ const Settings: React.FC<SettingsProps> = ({
   const inputClass = "w-full px-4 py-3 bg-slate-50 border-2 border-slate-200 rounded-xl text-sm font-bold focus:outline-none focus:border-emerald-500 transition-all placeholder-slate-400";
 
   return (
-    <div className="p-4 md:p-8 max-w-[1600px] mx-auto space-y-6 animate-in fade-in duration-500 pb-24">
-        <div className="flex items-center gap-4 mb-6">
-            <div className="p-3 bg-slate-900 rounded-xl text-white shadow-lg">
-                <SettingsIcon size={24} />
+    <div className="flex h-full max-h-[calc(100vh-4rem)] overflow-hidden bg-white animate-in fade-in duration-500">
+        
+        {/* LEFT SIDEBAR: Settings Menu */}
+        <div className="w-64 bg-slate-50 border-r border-slate-200 flex flex-col shrink-0">
+            <div className="p-6 border-b border-slate-200">
+                <h2 className="text-lg font-black text-slate-800 uppercase tracking-tight flex items-center gap-2">
+                    <SettingsIcon size={20} className="text-emerald-600" /> Configuration
+                </h2>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">System Control Panel</p>
             </div>
-            <div>
-                <h1 className="text-2xl font-black text-slate-900 uppercase tracking-tight">System Configuration</h1>
-                <p className="text-slate-500 text-sm font-medium">Manage organization profile, users, and system data.</p>
+            <div className="flex-1 overflow-y-auto p-4 space-y-2">
+                {[
+                    { id: 'org', label: 'Organization Profile', icon: Building2 },
+                    { id: 'users', label: 'Access Control', icon: Users },
+                    { id: 'lists', label: 'Operational Lists', icon: Utensils },
+                    { id: 'documents', label: 'Legal Vault', icon: FileText },
+                    { id: 'data', label: 'Data Integrity', icon: Database },
+                ].map(tab => (
+                    <button
+                        key={tab.id}
+                        onClick={() => setActiveTab(tab.id as any)}
+                        className={`w-full text-left px-4 py-3 rounded-xl flex items-center justify-between group transition-all ${
+                            activeTab === tab.id 
+                            ? 'bg-slate-900 text-white shadow-lg' 
+                            : 'bg-white text-slate-500 hover:bg-slate-100 border border-transparent hover:border-slate-200'
+                        }`}
+                    >
+                        <div className="flex items-center gap-3">
+                            <tab.icon size={16} className={activeTab === tab.id ? 'text-white' : 'text-slate-400'} />
+                            <span className="text-xs font-bold uppercase tracking-wide">{tab.label}</span>
+                        </div>
+                        {activeTab === tab.id && <ChevronRight size={14} className="text-emerald-400"/>}
+                    </button>
+                ))}
             </div>
         </div>
 
-        <div className="flex flex-wrap gap-2 mb-6">
-            {[
-                { id: 'org', label: 'Organization', icon: Building2 },
-                { id: 'users', label: 'Access Control', icon: Users },
-                { id: 'lists', label: 'Operational Lists', icon: Utensils },
-                { id: 'documents', label: 'Documents', icon: FileText },
-                { id: 'data', label: 'Data Integrity', icon: Database },
-            ].map(tab => (
-                <button
-                    key={tab.id}
-                    onClick={() => setActiveTab(tab.id as any)}
-                    className={`px-6 py-3 rounded-xl font-black text-xs uppercase tracking-widest flex items-center gap-2 transition-all ${
-                        activeTab === tab.id ? 'bg-slate-900 text-white shadow-lg' : 'bg-white text-slate-500 hover:bg-slate-50 border-2 border-slate-200'
-                    }`}
-                >
-                    <tab.icon size={16} /> {tab.label}
-                </button>
-            ))}
-        </div>
-
-        <div className="bg-white rounded-3xl border-2 border-slate-200 shadow-sm p-6 md:p-8">
+        {/* MAIN CONTENT AREA */}
+        <div className="flex-1 overflow-auto bg-slate-100/50 p-6 md:p-8">
+            <div className="max-w-4xl mx-auto bg-white rounded-3xl border border-slate-200 shadow-sm p-6 md:p-8 min-h-[600px]">
             
             {/* ORGANIZATION TAB */}
             {activeTab === 'org' && (
                 <div className="max-w-2xl space-y-6 animate-in slide-in-from-right-4">
+                    <h3 className="text-lg font-black text-slate-800 uppercase tracking-tight mb-4 flex items-center gap-2 border-b border-slate-100 pb-2">
+                        <Building2 size={20} className="text-slate-400"/> Organization Details
+                    </h3>
                     <div className="flex items-center gap-6">
                         <div className="relative group w-32 h-32 bg-slate-100 rounded-2xl flex items-center justify-center border-2 border-slate-200 overflow-hidden shrink-0">
                             {orgForm.logoUrl ? (
@@ -322,6 +334,9 @@ const Settings: React.FC<SettingsProps> = ({
             {/* USERS TAB */}
             {activeTab === 'users' && (
                 <div className="space-y-8 animate-in slide-in-from-right-4">
+                    <h3 className="text-lg font-black text-slate-800 uppercase tracking-tight mb-4 flex items-center gap-2 border-b border-slate-100 pb-2">
+                        <Users size={20} className="text-slate-400"/> Staff Registry
+                    </h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         {users.map(u => (
                             <div key={u.id} className="bg-slate-50 border-2 border-slate-200 rounded-xl p-4 flex flex-col gap-3 group hover:border-slate-300 transition-colors">
@@ -392,6 +407,9 @@ const Settings: React.FC<SettingsProps> = ({
             {/* LISTS TAB */}
             {activeTab === 'lists' && (
                 <div className="space-y-8 animate-in slide-in-from-right-4">
+                    <h3 className="text-lg font-black text-slate-800 uppercase tracking-tight mb-4 flex items-center gap-2 border-b border-slate-100 pb-2">
+                        <Utensils size={20} className="text-slate-400"/> Operational Lists
+                    </h3>
                     <div className="flex gap-2 overflow-x-auto pb-2">
                         {Object.values(AnimalCategory).map(cat => (
                             <button key={cat} onClick={() => setListCategory(cat)} className={`px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest whitespace-nowrap transition-all ${listCategory === cat ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>
@@ -455,6 +473,9 @@ const Settings: React.FC<SettingsProps> = ({
             {/* DOCUMENTS TAB */}
             {activeTab === 'documents' && (
                 <div className="space-y-8 animate-in slide-in-from-right-4">
+                    <h3 className="text-lg font-black text-slate-800 uppercase tracking-tight mb-4 flex items-center gap-2 border-b border-slate-100 pb-2">
+                        <FileText size={20} className="text-slate-400"/> Legal Vault
+                    </h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         {documents.map(doc => (
                             <div key={doc.id} className="bg-slate-50 border-2 border-slate-200 rounded-xl p-4 group hover:border-slate-300 transition-all">
@@ -477,7 +498,7 @@ const Settings: React.FC<SettingsProps> = ({
                     </div>
 
                     <div className="bg-slate-50 rounded-2xl border-2 border-slate-200 p-6 max-w-2xl">
-                        <h3 className="font-bold text-slate-900 mb-4 flex items-center gap-2"><Upload size={18}/> Upload Document</h3>
+                        <h3 className="font-bold text-slate-900 mb-4 flex items-center gap-2"><Upload size={18}/> Add Document</h3>
                         <div className="space-y-4">
                             <input type="text" placeholder="Document Name" value={docForm.name || ''} onChange={e => setDocForm({...docForm, name: e.target.value})} className={inputClass} />
                             <div className="grid grid-cols-2 gap-4">
@@ -490,30 +511,30 @@ const Settings: React.FC<SettingsProps> = ({
                                 <input type="date" placeholder="Expiry Date" value={docForm.expiryDate || ''} onChange={e => setDocForm({...docForm, expiryDate: e.target.value})} className={inputClass}/>
                             </div>
                             
+                            {/* RESTORED URL INPUT + UPLOAD HELPER */}
                             <div>
-                                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Upload File</label>
-                                <div className="flex items-center gap-2">
-                                    <label className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl border-2 cursor-pointer transition-all ${docForm.url ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-slate-50 border-slate-200 text-slate-500 hover:bg-slate-100'}`}>
-                                        <Upload size={16} />
-                                        <span className="text-xs font-bold uppercase tracking-wide">{docForm.url ? 'Replace File' : 'Choose File'}</span>
+                                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Document Source / URL</label>
+                                <div className="flex gap-2">
+                                    <div className="relative flex-1">
+                                        <LinkIcon size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"/>
+                                        <input 
+                                            type="text" 
+                                            placeholder="https://..." 
+                                            value={docForm.url || ''} 
+                                            onChange={e => setDocForm({...docForm, url: e.target.value})} 
+                                            className={`${inputClass} pl-10`} 
+                                        />
+                                    </div>
+                                    <label className="p-3 bg-white border-2 border-slate-200 rounded-xl cursor-pointer hover:bg-slate-100 transition-colors text-slate-500 hover:text-slate-700" title="Upload File to Generate URL">
+                                        <Upload size={20}/>
                                         <input type="file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" onChange={handleDocumentUpload} className="hidden" />
                                     </label>
-                                    {docForm.url && (
-                                        <button 
-                                            type="button"
-                                            onClick={() => setDocForm(prev => ({ ...prev, url: '' }))}
-                                            className="p-3 bg-slate-100 text-slate-400 hover:text-rose-500 rounded-xl transition-colors border border-slate-200"
-                                            title="Remove File"
-                                        >
-                                            <X size={16}/>
-                                        </button>
-                                    )}
                                 </div>
-                                {docForm.url && <p className="text-[10px] font-bold text-emerald-600 mt-2 ml-1 flex items-center gap-1"><CheckCircle2 size={12}/> Document Attached</p>}
+                                <p className="text-[10px] text-slate-400 mt-2 ml-1">Enter a URL or upload a file to generate a secure data link.</p>
                             </div>
                             
                             <button onClick={handleSaveDocument} disabled={!docForm.url || !docForm.name} className="w-full bg-slate-900 text-white px-8 py-3 rounded-xl font-black uppercase text-xs tracking-widest hover:bg-black transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed">
-                                Upload Document
+                                Save Document
                             </button>
                         </div>
                     </div>
@@ -523,6 +544,9 @@ const Settings: React.FC<SettingsProps> = ({
             {/* DATA TAB */}
             {activeTab === 'data' && (
                 <div className="space-y-8 animate-in slide-in-from-right-4">
+                    <h3 className="text-lg font-black text-slate-800 uppercase tracking-tight mb-4 flex items-center gap-2 border-b border-slate-100 pb-2">
+                        <Database size={20} className="text-slate-400"/> Data Management
+                    </h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div className="bg-slate-50 p-6 rounded-2xl border-2 border-slate-200 hover:border-slate-300 transition-colors">
                             <h3 className="font-bold text-slate-900 flex items-center gap-2 mb-2"><Download size={20}/> Backup Database</h3>
@@ -557,6 +581,7 @@ const Settings: React.FC<SettingsProps> = ({
                     </div>
                 </div>
             )}
+            </div>
         </div>
     </div>
   );
