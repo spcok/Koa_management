@@ -2,17 +2,18 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Animal, AnimalCategory, User, OrganizationProfile, Contact, UserRole, 
-  GlobalDocument, DocumentType 
+  GlobalDocument, Task, UserPermissions 
 } from '../types';
 import { 
   Settings as SettingsIcon, Users, Database, MapPin, 
-  Phone, Utensils, Building2, Save, Upload, Download, 
-  Trash2, Plus, X, Shield, AlertTriangle, FileText, CheckCircle2,
-  RefreshCw, Lock, FolderOpen, ChevronRight, Link as LinkIcon
+  Phone, Utensils, Building2, Upload, Download, 
+  Trash2, Plus, X, AlertTriangle, FileText, CheckCircle2,
+  RefreshCw, ChevronRight, Link as LinkIcon, Activity, ShieldCheck, AlertCircle, Globe, Lock, Edit2
 } from 'lucide-react';
 import { backupService } from '../services/backupService';
 import { dataService } from '../services/dataService';
 import { parseCSVToAnimals } from '../services/csvService';
+import { diagnosticsService, DiagnosticIssue } from '../services/diagnosticsService';
 
 interface SettingsProps {
   animals: Animal[];
@@ -30,6 +31,7 @@ interface SettingsProps {
   orgProfile: OrganizationProfile | null;
   onUpdateOrgProfile: (profile: OrganizationProfile) => void;
   onUpdateAnimal: (animal: Animal) => void;
+  tasks?: Task[];
 }
 
 const resizeImage = (file: File): Promise<string> => {
@@ -69,26 +71,42 @@ const Settings: React.FC<SettingsProps> = ({
   animals, onImport, foodOptions, onUpdateFoodOptions,
   feedMethods, onUpdateFeedMethods, users, onUpdateUsers,
   locations, onUpdateLocations, contacts, onUpdateContacts,
-  orgProfile, onUpdateOrgProfile, onUpdateAnimal
+  orgProfile, onUpdateOrgProfile, onUpdateAnimal, tasks = []
 }) => {
-  const [activeTab, setActiveTab] = useState<'org' | 'users' | 'lists' | 'documents' | 'data'>('org');
+  const [activeTab, setActiveTab] = useState<'org' | 'users' | 'directory' | 'lists' | 'documents' | 'diagnostics'>('org');
   
   // Organization State
   const [orgForm, setOrgForm] = useState<OrganizationProfile>({
-      name: '', address: '', licenseNumber: '', contactEmail: '', contactPhone: '', logoUrl: ''
+      name: '', address: '', licenseNumber: '', contactEmail: '', contactPhone: '', logoUrl: '', websiteUrl: '', adoptionUrl: ''
   });
 
   // Users State
+  const [isUserModalOpen, setIsUserModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
-  const [newUser, setNewUser] = useState<Partial<User>>({ role: UserRole.VOLUNTEER, active: true, permissions: { dashboard: true, dailyLog: true, tasks: true, medical: false, movements: false, safety: false, maintenance: true, settings: false, flightRecords: true, feedingSchedule: false, attendance: true, attendanceManager: false, holidayApprover: false, missingRecords: false, reports: false } });
+  const [newUser, setNewUser] = useState<Partial<User>>({ 
+      role: UserRole.VOLUNTEER, 
+      active: true, 
+      permissions: { 
+          dashboard: true, dailyLog: true, tasks: true, medical: false, movements: false, 
+          safety: false, maintenance: true, settings: false, flightRecords: true, 
+          feedingSchedule: false, attendance: true, attendanceManager: false, 
+          holidayApprover: false, missingRecords: false, reports: false 
+      } 
+  });
 
   // Lists State
   const [listCategory, setListCategory] = useState<AnimalCategory>(AnimalCategory.OWLS);
   const [newItem, setNewItem] = useState('');
 
+  // Contacts State
+  const [contactForm, setContactForm] = useState<Partial<Contact>>({});
+
   // Documents State
   const [documents, setDocuments] = useState<GlobalDocument[]>([]);
   const [docForm, setDocForm] = useState<Partial<GlobalDocument>>({});
+
+  // Diagnostics State
+  const [diagnosticIssues, setDiagnosticIssues] = useState<DiagnosticIssue[]>([]);
 
   useEffect(() => {
       if (orgProfile) setOrgForm(orgProfile);
@@ -101,6 +119,13 @@ const Settings: React.FC<SettingsProps> = ({
       };
       if (activeTab === 'documents') loadDocs();
   }, [activeTab]);
+
+  useEffect(() => {
+      if (activeTab === 'diagnostics') {
+          const issues = diagnosticsService.runDatabaseHealthCheck(animals, tasks, users);
+          setDiagnosticIssues(issues);
+      }
+  }, [activeTab, animals, tasks, users]);
 
   const handleOrgSave = () => {
       onUpdateOrgProfile(orgForm);
@@ -120,9 +145,30 @@ const Settings: React.FC<SettingsProps> = ({
   };
 
   // User Management
+  const handleAddUserClick = () => {
+      setEditingUser(null);
+      setNewUser({ 
+          role: UserRole.VOLUNTEER, 
+          active: true, 
+          permissions: { 
+              dashboard: true, dailyLog: true, tasks: true, medical: false, movements: false, 
+              safety: false, maintenance: true, settings: false, flightRecords: true, 
+              feedingSchedule: false, attendance: true, attendanceManager: false, 
+              holidayApprover: false, missingRecords: false, reports: false 
+          } 
+      });
+      setIsUserModalOpen(true);
+  };
+
+  const handleEditUserClick = (u: User) => {
+      setEditingUser(u);
+      setIsUserModalOpen(true);
+  };
+
   const handleSaveUser = () => {
       if (editingUser) {
-          onUpdateUsers(users.map(u => u.id === editingUser.id ? editingUser : u));
+          const updatedUsers = users.map(u => u.id === editingUser.id ? editingUser : u);
+          onUpdateUsers(updatedUsers);
           setEditingUser(null);
       } else if (newUser.name && newUser.pin) {
           const user: User = {
@@ -133,10 +179,26 @@ const Settings: React.FC<SettingsProps> = ({
               role: newUser.role || UserRole.VOLUNTEER,
               pin: newUser.pin,
               active: newUser.active ?? true,
-              permissions: newUser.permissions as any
+              permissions: newUser.permissions as UserPermissions
           };
           onUpdateUsers([...users, user]);
-          setNewUser({ role: UserRole.VOLUNTEER, active: true, permissions: {} as any });
+      }
+      setIsUserModalOpen(false);
+  };
+
+  const togglePermission = (key: keyof UserPermissions) => {
+      if (editingUser) {
+          const currentPermissions = editingUser.permissions || {} as UserPermissions;
+          setEditingUser({
+              ...editingUser,
+              permissions: { ...currentPermissions, [key]: !currentPermissions[key] }
+          });
+      } else {
+          const currentPermissions = newUser.permissions || {} as UserPermissions;
+          setNewUser({
+              ...newUser,
+              permissions: { ...currentPermissions, [key]: !currentPermissions[key] }
+          });
       }
   };
 
@@ -146,8 +208,30 @@ const Settings: React.FC<SettingsProps> = ({
       }
   };
 
+  // Contacts Management
+  const handleSaveContact = () => {
+      if (!contactForm.name || !contactForm.phone) return;
+      const newContact: Contact = {
+          id: `c_${Date.now()}`,
+          name: contactForm.name,
+          role: contactForm.role || 'Service Provider',
+          phone: contactForm.phone,
+          email: contactForm.email,
+          address: contactForm.address,
+          notes: contactForm.notes
+      };
+      onUpdateContacts([...contacts, newContact]);
+      setContactForm({});
+  };
+
+  const handleDeleteContact = (id: string) => {
+      if(window.confirm('Remove contact?')) {
+          onUpdateContacts(contacts.filter(c => c.id !== id));
+      }
+  };
+
   // Lists Management
-  const handleAddItem = (type: 'food' | 'method' | 'location' | 'contact') => {
+  const handleAddItem = (type: 'food' | 'method' | 'location') => {
       if (!newItem) return;
       if (type === 'food') {
           const current = foodOptions[listCategory] || [];
@@ -177,7 +261,6 @@ const Settings: React.FC<SettingsProps> = ({
   const handleDocumentUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (file) {
-          // In a real app, upload to storage. Here we use base64 for demo.
           const reader = new FileReader();
           reader.onload = (ev) => {
               setDocForm(prev => ({ ...prev, url: ev.target?.result as string }));
@@ -238,43 +321,45 @@ const Settings: React.FC<SettingsProps> = ({
     <div className="flex h-full max-h-[calc(100vh-4rem)] overflow-hidden bg-white animate-in fade-in duration-500">
         
         {/* LEFT SIDEBAR: Settings Menu */}
-        <div className="w-64 bg-slate-50 border-r border-slate-200 flex flex-col shrink-0">
-            <div className="p-6 border-b border-slate-200">
+        <div className="w-16 md:w-64 bg-slate-50 border-r border-slate-200 flex flex-col shrink-0">
+            <div className="p-4 md:p-6 border-b border-slate-200">
                 <h2 className="text-lg font-black text-slate-800 uppercase tracking-tight flex items-center gap-2">
-                    <SettingsIcon size={20} className="text-emerald-600" /> Configuration
+                    <SettingsIcon size={20} className="text-emerald-600" /> <span className="hidden md:inline">Configuration</span>
                 </h2>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">System Control Panel</p>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1 hidden md:block">System Control Panel</p>
             </div>
-            <div className="flex-1 overflow-y-auto p-4 space-y-2">
+            <div className="flex-1 overflow-y-auto p-2 md:p-4 space-y-2">
                 {[
-                    { id: 'org', label: 'Organization Profile', icon: Building2 },
+                    { id: 'org', label: 'Organization', icon: Building2 },
                     { id: 'users', label: 'Access Control', icon: Users },
-                    { id: 'lists', label: 'Operational Lists', icon: Utensils },
+                    { id: 'directory', label: 'Directory', icon: Phone },
+                    { id: 'lists', label: 'Lists', icon: Utensils },
                     { id: 'documents', label: 'Legal Vault', icon: FileText },
-                    { id: 'data', label: 'Data Integrity', icon: Database },
+                    { id: 'diagnostics', label: 'System Health', icon: Activity },
                 ].map(tab => (
                     <button
                         key={tab.id}
                         onClick={() => setActiveTab(tab.id as any)}
-                        className={`w-full text-left px-4 py-3 rounded-xl flex items-center justify-between group transition-all ${
+                        className={`w-full text-left px-3 md:px-4 py-3 rounded-xl flex items-center justify-center md:justify-between group transition-all ${
                             activeTab === tab.id 
                             ? 'bg-slate-900 text-white shadow-lg' 
                             : 'bg-white text-slate-500 hover:bg-slate-100 border border-transparent hover:border-slate-200'
                         }`}
+                        title={tab.label}
                     >
                         <div className="flex items-center gap-3">
-                            <tab.icon size={16} className={activeTab === tab.id ? 'text-white' : 'text-slate-400'} />
-                            <span className="text-xs font-bold uppercase tracking-wide">{tab.label}</span>
+                            <tab.icon size={18} className={activeTab === tab.id ? 'text-white' : 'text-slate-400'} />
+                            <span className="text-xs font-bold uppercase tracking-wide hidden md:block">{tab.label}</span>
                         </div>
-                        {activeTab === tab.id && <ChevronRight size={14} className="text-emerald-400"/>}
+                        {activeTab === tab.id && <ChevronRight size={14} className="text-emerald-400 hidden md:block"/>}
                     </button>
                 ))}
             </div>
         </div>
 
         {/* MAIN CONTENT AREA */}
-        <div className="flex-1 overflow-auto bg-slate-100/50 p-6 md:p-8">
-            <div className="max-w-4xl mx-auto bg-white rounded-3xl border border-slate-200 shadow-sm p-6 md:p-8 min-h-[600px]">
+        <div className="flex-1 overflow-auto bg-slate-100/50 p-4 md:p-8">
+            <div className="max-w-4xl mx-auto bg-white rounded-3xl border border-slate-200 shadow-sm p-4 md:p-8 min-h-[600px]">
             
             {/* ORGANIZATION TAB */}
             {activeTab === 'org' && (
@@ -319,6 +404,22 @@ const Settings: React.FC<SettingsProps> = ({
                                 <input type="email" value={orgForm.contactEmail} onChange={e => setOrgForm({...orgForm, contactEmail: e.target.value})} className={inputClass} />
                             </div>
                         </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Website URL</label>
+                                <div className="relative">
+                                    <Globe size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"/>
+                                    <input type="text" value={orgForm.websiteUrl || ''} onChange={e => setOrgForm({...orgForm, websiteUrl: e.target.value})} className={`${inputClass} pl-10`} />
+                                </div>
+                            </div>
+                            <div>
+                                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Adoption/Shop URL</label>
+                                <div className="relative">
+                                    <LinkIcon size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"/>
+                                    <input type="text" value={orgForm.adoptionUrl || ''} onChange={e => setOrgForm({...orgForm, adoptionUrl: e.target.value})} className={`${inputClass} pl-10`} />
+                                </div>
+                            </div>
+                        </div>
                         <div>
                             <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Address</label>
                             <textarea value={orgForm.address} onChange={e => setOrgForm({...orgForm, address: e.target.value})} className={`${inputClass} resize-none h-24`} />
@@ -334,9 +435,15 @@ const Settings: React.FC<SettingsProps> = ({
             {/* USERS TAB */}
             {activeTab === 'users' && (
                 <div className="space-y-8 animate-in slide-in-from-right-4">
-                    <h3 className="text-lg font-black text-slate-800 uppercase tracking-tight mb-4 flex items-center gap-2 border-b border-slate-100 pb-2">
-                        <Users size={20} className="text-slate-400"/> Staff Registry
-                    </h3>
+                    <div className="flex justify-between items-center border-b border-slate-100 pb-2 mb-4">
+                        <h3 className="text-lg font-black text-slate-800 uppercase tracking-tight flex items-center gap-2">
+                            <Users size={20} className="text-slate-400"/> Staff Registry
+                        </h3>
+                        <button onClick={handleAddUserClick} className="bg-emerald-600 text-white px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest hover:bg-emerald-700 transition-all shadow-lg flex items-center gap-2 active:scale-95">
+                            <Plus size={16} /> Add Staff
+                        </button>
+                    </div>
+
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         {users.map(u => (
                             <div key={u.id} className="bg-slate-50 border-2 border-slate-200 rounded-xl p-4 flex flex-col gap-3 group hover:border-slate-300 transition-colors">
@@ -353,52 +460,149 @@ const Settings: React.FC<SettingsProps> = ({
                                     {u.active ? <CheckCircle2 size={16} className="text-emerald-500" /> : <AlertTriangle size={16} className="text-amber-500" />}
                                 </div>
                                 <div className="flex gap-2 mt-auto pt-2">
-                                    <button onClick={() => setEditingUser(u)} className="flex-1 py-2 bg-white border border-slate-200 rounded-lg text-[10px] font-bold uppercase hover:bg-slate-100 transition-colors">Edit</button>
-                                    <button onClick={() => handleDeleteUser(u.id)} className="p-2 bg-white border border-slate-200 rounded-lg text-rose-500 hover:bg-rose-50 transition-colors"><Trash2 size={16}/></button>
+                                    <button onClick={() => handleEditUserClick(u)} className="flex-1 py-2 bg-white border border-slate-200 rounded-lg text-[10px] font-bold uppercase hover:bg-slate-100 transition-colors z-10 relative">Edit</button>
+                                    <button onClick={() => handleDeleteUser(u.id)} className="p-2 bg-white border border-slate-200 rounded-lg text-rose-500 hover:bg-rose-50 transition-colors z-10 relative"><Trash2 size={16}/></button>
                                 </div>
                             </div>
                         ))}
                     </div>
 
-                    <div className="bg-slate-50 rounded-2xl border-2 border-slate-200 p-6 max-w-2xl">
-                        <h3 className="font-bold text-slate-900 mb-4 flex items-center gap-2"><Plus size={18}/> {editingUser ? 'Edit User' : 'Add New User'}</h3>
-                        <div className="space-y-4">
-                            <div className="grid grid-cols-2 gap-4">
-                                <input 
-                                    type="text" placeholder="Full Name" 
-                                    value={editingUser ? editingUser.name : newUser.name || ''} 
-                                    onChange={e => editingUser ? setEditingUser({...editingUser, name: e.target.value}) : setNewUser({...newUser, name: e.target.value})} 
-                                    className={inputClass}
-                                />
-                                <input 
-                                    type="text" placeholder="Initials" maxLength={3}
-                                    value={editingUser ? editingUser.initials : newUser.initials || ''} 
-                                    onChange={e => editingUser ? setEditingUser({...editingUser, initials: e.target.value.toUpperCase()}) : setNewUser({...newUser, initials: e.target.value.toUpperCase()})} 
-                                    className={inputClass}
-                                />
+                    {/* USER MODAL */}
+                    {isUserModalOpen && (
+                        <div className="fixed inset-0 bg-slate-900/80 z-[100] flex items-center justify-center p-4 animate-in fade-in duration-200">
+                            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl p-0 animate-in zoom-in-95 border-2 border-slate-300 overflow-hidden">
+                                <div className="p-6 border-b-2 border-slate-100 flex justify-between items-center bg-slate-50/50">
+                                    <div>
+                                        <h2 className="text-xl font-bold text-slate-900 uppercase tracking-tight flex items-center gap-2">
+                                            {editingUser ? <Edit2 size={20}/> : <Plus size={20}/>}
+                                            {editingUser ? 'Edit Personnel' : 'New Staff Member'}
+                                        </h2>
+                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Access Control & Permissions</p>
+                                    </div>
+                                    <button onClick={() => setIsUserModalOpen(false)} className="text-slate-300 hover:text-slate-900 p-1 transition-colors"><X size={24}/></button>
+                                </div>
+                                <div className="p-6 space-y-6 max-h-[75vh] overflow-y-auto">
+                                    <div className="space-y-4">
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <input 
+                                                type="text" placeholder="Full Name" 
+                                                value={editingUser ? editingUser.name : newUser.name || ''} 
+                                                onChange={e => editingUser ? setEditingUser({...editingUser, name: e.target.value}) : setNewUser({...newUser, name: e.target.value})} 
+                                                className={inputClass}
+                                            />
+                                            <input 
+                                                type="text" placeholder="Initials (e.g. JD)" maxLength={3}
+                                                value={editingUser ? editingUser.initials : newUser.initials || ''} 
+                                                onChange={e => editingUser ? setEditingUser({...editingUser, initials: e.target.value.toUpperCase()}) : setNewUser({...newUser, initials: e.target.value.toUpperCase()})} 
+                                                className={inputClass}
+                                            />
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <select 
+                                                value={editingUser ? editingUser.role : newUser.role} 
+                                                onChange={e => editingUser ? setEditingUser({...editingUser, role: e.target.value as any}) : setNewUser({...newUser, role: e.target.value as any})} 
+                                                className={inputClass}
+                                            >
+                                                <option value={UserRole.VOLUNTEER}>Volunteer</option>
+                                                <option value={UserRole.ADMIN}>Admin</option>
+                                            </select>
+                                            <input 
+                                                type="text" placeholder="PIN (4 digits)" maxLength={4}
+                                                value={editingUser ? editingUser.pin : newUser.pin || ''} 
+                                                onChange={e => editingUser ? setEditingUser({...editingUser, pin: e.target.value}) : setNewUser({...newUser, pin: e.target.value})} 
+                                                className={inputClass}
+                                            />
+                                        </div>
+
+                                        {/* GRANULAR PERMISSIONS */}
+                                        <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                                            <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2"><Lock size={12}/> Granular Permissions</h4>
+                                            <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto scrollbar-thin">
+                                                {[
+                                                    'dashboard', 'dailyLog', 'tasks', 'medical', 'movements', 
+                                                    'safety', 'maintenance', 'settings', 'flightRecords', 
+                                                    'feedingSchedule', 'attendance', 'attendanceManager', 
+                                                    'holidayApprover', 'missingRecords', 'reports'
+                                                ].map((permKey) => {
+                                                    const perms = editingUser ? editingUser.permissions : (newUser.permissions as UserPermissions);
+                                                    const isChecked = perms?.[permKey as keyof UserPermissions] || false;
+                                                    
+                                                    return (
+                                                        <label key={permKey} className="flex items-center gap-2 text-xs font-bold text-slate-700 cursor-pointer p-1.5 hover:bg-white hover:shadow-sm rounded transition-all">
+                                                            <input 
+                                                                type="checkbox" 
+                                                                checked={isChecked} 
+                                                                onChange={() => togglePermission(permKey as keyof UserPermissions)}
+                                                                className="rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4 border-slate-300"
+                                                            />
+                                                            <span className="capitalize">{permKey.replace(/([A-Z])/g, ' $1').trim()}</span>
+                                                        </label>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+
+                                        <div className="flex gap-3 pt-2">
+                                            <button onClick={() => setIsUserModalOpen(false)} className="px-6 py-3 rounded-xl bg-white border-2 border-slate-200 text-slate-500 font-bold uppercase text-xs hover:bg-slate-50">Cancel</button>
+                                            <button onClick={handleSaveUser} className="flex-1 bg-slate-900 text-white rounded-xl font-bold uppercase text-xs tracking-widest hover:bg-black transition-all py-3 shadow-lg active:scale-95">
+                                                {editingUser ? 'Update User' : 'Create User'}
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
-                            <div className="grid grid-cols-2 gap-4">
-                                <select 
-                                    value={editingUser ? editingUser.role : newUser.role} 
-                                    onChange={e => editingUser ? setEditingUser({...editingUser, role: e.target.value as any}) : setNewUser({...newUser, role: e.target.value as any})} 
-                                    className={inputClass}
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* DIRECTORY TAB (CONTACTS) */}
+            {activeTab === 'directory' && (
+                <div className="space-y-8 animate-in slide-in-from-right-4">
+                    <h3 className="text-lg font-black text-slate-800 uppercase tracking-tight mb-4 flex items-center gap-2 border-b border-slate-100 pb-2">
+                        <Phone size={20} className="text-slate-400"/> Critical Contact Directory
+                    </h3>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {contacts.map(c => (
+                            <div key={c.id} className="bg-white border-2 border-slate-200 rounded-xl p-4 flex items-start gap-4 shadow-sm hover:shadow-md transition-all group relative">
+                                <div className="p-3 bg-slate-100 rounded-full text-slate-500">
+                                    <Phone size={20} />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <h4 className="font-bold text-slate-900 text-sm truncate">{c.name}</h4>
+                                    <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-1">{c.role}</p>
+                                    <a href={`tel:${c.phone}`} className="text-sm font-bold text-slate-600 hover:text-slate-900 block hover:underline">{c.phone}</a>
+                                    {c.email && <a href={`mailto:${c.email}`} className="text-xs text-slate-400 hover:text-slate-600 block truncate">{c.email}</a>}
+                                    {c.address && <p className="text-xs text-slate-400 mt-1 truncate">{c.address}</p>}
+                                </div>
+                                <button 
+                                    onClick={() => handleDeleteContact(c.id)} 
+                                    className="absolute top-3 right-3 text-slate-300 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-opacity"
                                 >
-                                    <option value={UserRole.VOLUNTEER}>Volunteer</option>
-                                    <option value={UserRole.ADMIN}>Admin</option>
-                                </select>
-                                <input 
-                                    type="text" placeholder="PIN (4 digits)" maxLength={4}
-                                    value={editingUser ? editingUser.pin : newUser.pin || ''} 
-                                    onChange={e => editingUser ? setEditingUser({...editingUser, pin: e.target.value}) : setNewUser({...newUser, pin: e.target.value})} 
-                                    className={inputClass}
-                                />
-                            </div>
-                            <div className="flex gap-3">
-                                {editingUser && <button onClick={() => setEditingUser(null)} className="px-6 py-3 rounded-xl bg-white border-2 border-slate-200 text-slate-500 font-bold uppercase text-xs">Cancel</button>}
-                                <button onClick={handleSaveUser} className="flex-1 bg-slate-900 text-white rounded-xl font-bold uppercase text-xs tracking-widest hover:bg-black transition-all py-3">
-                                    {editingUser ? 'Update User' : 'Create User'}
+                                    <Trash2 size={16} />
                                 </button>
                             </div>
+                        ))}
+                    </div>
+
+                    <div className="bg-slate-50 rounded-2xl border-2 border-slate-200 p-6 max-w-2xl">
+                        <h3 className="font-bold text-slate-900 mb-4 flex items-center gap-2"><Plus size={18}/> Add Contact</h3>
+                        <div className="space-y-4">
+                            <div className="grid grid-cols-2 gap-4">
+                                <input type="text" placeholder="Name / Company" value={contactForm.name || ''} onChange={e => setContactForm({...contactForm, name: e.target.value})} className={inputClass} />
+                                <input type="text" placeholder="Role (e.g. Vet, Supplier)" value={contactForm.role || ''} onChange={e => setContactForm({...contactForm, role: e.target.value})} className={inputClass} />
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <input type="tel" placeholder="Phone Number" value={contactForm.phone || ''} onChange={e => setContactForm({...contactForm, phone: e.target.value})} className={inputClass} />
+                                <input type="email" placeholder="Email Address" value={contactForm.email || ''} onChange={e => setContactForm({...contactForm, email: e.target.value})} className={inputClass} />
+                            </div>
+                            <input type="text" placeholder="Address / Location" value={contactForm.address || ''} onChange={e => setContactForm({...contactForm, address: e.target.value})} className={inputClass} />
+                            <textarea placeholder="Notes (Account numbers, hours, etc)" value={contactForm.notes || ''} onChange={e => setContactForm({...contactForm, notes: e.target.value})} className={`${inputClass} resize-none h-20`} />
+                            
+                            <button onClick={handleSaveContact} disabled={!contactForm.name} className="w-full bg-slate-900 text-white px-8 py-3 rounded-xl font-black uppercase text-xs tracking-widest hover:bg-black transition-all shadow-lg disabled:opacity-50">
+                                Save Entry
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -511,7 +715,6 @@ const Settings: React.FC<SettingsProps> = ({
                                 <input type="date" placeholder="Expiry Date" value={docForm.expiryDate || ''} onChange={e => setDocForm({...docForm, expiryDate: e.target.value})} className={inputClass}/>
                             </div>
                             
-                            {/* RESTORED URL INPUT + UPLOAD HELPER */}
                             <div>
                                 <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Document Source / URL</label>
                                 <div className="flex gap-2">
@@ -541,13 +744,15 @@ const Settings: React.FC<SettingsProps> = ({
                 </div>
             )}
 
-            {/* DATA TAB */}
-            {activeTab === 'data' && (
+            {/* DIAGNOSTICS & DATA TAB */}
+            {activeTab === 'diagnostics' && (
                 <div className="space-y-8 animate-in slide-in-from-right-4">
                     <h3 className="text-lg font-black text-slate-800 uppercase tracking-tight mb-4 flex items-center gap-2 border-b border-slate-100 pb-2">
-                        <Database size={20} className="text-slate-400"/> Data Management
+                        <Activity size={20} className="text-slate-400"/> System Health & Data Integrity
                     </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    
+                    {/* Data Integrity Section */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
                         <div className="bg-slate-50 p-6 rounded-2xl border-2 border-slate-200 hover:border-slate-300 transition-colors">
                             <h3 className="font-bold text-slate-900 flex items-center gap-2 mb-2"><Download size={20}/> Backup Database</h3>
                             <p className="text-xs text-slate-500 mb-6">Download a complete JSON snapshot of all animals, logs, and settings.</p>
@@ -572,11 +777,70 @@ const Settings: React.FC<SettingsProps> = ({
                         </div>
                     </div>
 
-                    <div className="p-4 bg-amber-50 rounded-xl border border-amber-100 flex items-start gap-3">
-                        <AlertTriangle className="text-amber-500 shrink-0 mt-0.5" size={18}/>
-                        <div>
-                            <h4 className="font-bold text-amber-800 text-sm">Data Safety Notice</h4>
-                            <p className="text-xs text-amber-700 mt-1">Importing a full database backup will overwrite existing records. Ensure you have a recent backup before proceeding with a restore operation.</p>
+                    {/* System Stats */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
+                        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4">
+                            <div className="p-3 bg-emerald-50 rounded-full text-emerald-600">
+                                <ShieldCheck size={24} />
+                            </div>
+                            <div>
+                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Active Nodes</p>
+                                <p className="text-xl font-black text-slate-800">{animals.length} Records</p>
+                            </div>
+                        </div>
+                        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4">
+                            <div className="p-3 bg-blue-50 rounded-full text-blue-600">
+                                <Database size={24} />
+                            </div>
+                            <div>
+                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Task Queue</p>
+                                <p className="text-xl font-black text-slate-800">{tasks.length} Items</p>
+                            </div>
+                        </div>
+                        <div className={`p-5 rounded-xl border shadow-sm flex items-center gap-4 ${diagnosticIssues.length === 0 ? 'bg-emerald-50 border-emerald-200' : 'bg-rose-50 border-rose-200'}`}>
+                            <div className={`p-3 rounded-full ${diagnosticIssues.length === 0 ? 'bg-emerald-200 text-emerald-700' : 'bg-rose-200 text-rose-700'}`}>
+                                <Activity size={24} />
+                            </div>
+                            <div>
+                                <p className={`text-[10px] font-black uppercase tracking-widest ${diagnosticIssues.length === 0 ? 'text-emerald-600' : 'text-rose-600'}`}>System Status</p>
+                                <p className={`text-xl font-black ${diagnosticIssues.length === 0 ? 'text-emerald-800' : 'text-rose-800'}`}>
+                                    {diagnosticIssues.length === 0 ? 'Healthy' : `${diagnosticIssues.length} Issues`}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="bg-slate-50 rounded-2xl border-2 border-slate-200 overflow-hidden">
+                        <div className="p-4 border-b border-slate-200 bg-slate-100 flex justify-between items-center">
+                            <h4 className="font-bold text-slate-700 text-sm">Diagnostic Report</h4>
+                            <span className="text-[10px] font-mono text-slate-400">{new Date().toLocaleTimeString()}</span>
+                        </div>
+                        <div className="divide-y divide-slate-200">
+                            {diagnosticIssues.length === 0 ? (
+                                <div className="p-8 text-center text-slate-400">
+                                    <CheckCircle2 size={48} className="mx-auto mb-3 text-emerald-400 opacity-50"/>
+                                    <p className="text-xs font-bold uppercase tracking-widest">No Anomalies Detected</p>
+                                    <p className="text-[10px] mt-1">System Integrity Verified</p>
+                                </div>
+                            ) : (
+                                diagnosticIssues.map(issue => (
+                                    <div key={issue.id} className="p-4 flex items-start gap-3 hover:bg-white transition-colors">
+                                        {issue.severity === 'Critical' ? <AlertCircle size={18} className="text-rose-600 mt-0.5 shrink-0"/> : <AlertTriangle size={18} className="text-amber-500 mt-0.5 shrink-0"/>}
+                                        <div className="flex-1">
+                                            <div className="flex justify-between mb-1">
+                                                <span className={`text-xs font-bold uppercase tracking-wide ${issue.severity === 'Critical' ? 'text-rose-700' : 'text-amber-700'}`}>{issue.category} Error</span>
+                                                <span className="text-[9px] font-mono text-slate-400">{issue.id}</span>
+                                            </div>
+                                            <p className="text-sm font-medium text-slate-800 mb-1">{issue.message}</p>
+                                            {issue.remediation && (
+                                                <p className="text-xs text-slate-500 italic bg-slate-200/50 p-1.5 rounded inline-block">
+                                                    <span className="font-bold not-italic mr-1">Fix:</span> {issue.remediation}
+                                                </p>
+                                            )}
+                                        </div>
+                                    </div>
+                                ))
+                            )}
                         </div>
                     </div>
                 </div>

@@ -121,7 +121,7 @@ const HolidayRegistry: React.FC<HolidayRegistryProps> = ({ requests, currentUser
                                                     </>
                                                 )}
                                                 
-                                                {(isOwner || canApprove) && (
+                                                {(canApprove || (isOwner && isPending)) && (
                                                     <button 
                                                         onClick={() => { if(window.confirm("Purge holiday request from the registry?")) onDeleteRequest(req.id) }} 
                                                         className="p-2 text-slate-300 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all"
