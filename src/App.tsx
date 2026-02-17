@@ -1,7 +1,6 @@
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Animal, AnimalCategory, Task, User, UserRole, SiteLogEntry, Incident, FirstAidLogEntry, OrganizationProfile, Contact, SortOption, TimeLogEntry, UserPermissions, HolidayRequest } from './types.ts';
-import { dataService } from './services/dataService.ts';
+import React, { useState, Suspense } from 'react';
+import { UserRole, UserPermissions, Animal } from './types.ts';
 import Layout from './components/Layout.tsx';
 import Dashboard from './components/Dashboard.tsx';
 import DailyLog from './components/DailyLog.tsx';
@@ -28,38 +27,40 @@ import DiagnosticOverlay from './components/DiagnosticOverlay.tsx';
 import React19Playground from './components/React19Playground.tsx';
 import { useAppData } from './hooks/useAppData.ts';
 import { Loader2 } from 'lucide-react';
+import { AppProvider } from './components/AppProvider.tsx';
 
-const App: React.FC = () => {
+// Inner component to consume context
+const AppContent: React.FC = () => {
   const {
-    currentUser, isInitializing, view, setView, selectedAnimal, animals, tasks, users,
+    currentUser, animals, tasks, users,
     siteLogs, incidents, firstAidLogs, timeLogs, holidayRequests, foodOptions,
     feedMethods, eventTypes, locations, contacts, orgProfile, sortOption, isOrderLocked,
-    activeCategory, setActiveCategory, viewDate, setViewDate, isOffline, fontScale, 
-    setFontScale, activeShift, systemPreferences,
-    handleLogin, handleLogout, selectAnimalAndNavigate, handleUpdateSortOption,
-    handleToggleLock, handleUpdateAnimal, handleAddAnimal, handleDeleteAnimal,
-    handleAddTask, handleAddTasks, handleUpdateTask, handleDeleteTask, handleAddSiteLog,
-    handleDeleteSiteLog, handleAddIncident, handleUpdateIncident, handleDeleteIncident,
-    handleAddFirstAid, handleDeleteFirstAid, handleUpdateUsers, handleImport,
-    handleReorderAnimals, handleUpdateFoodOptions, handleUpdateFeedMethods, handleUpdateEventTypes,
-    handleUpdateLocations, handleUpdateContacts, handleUpdateOrgProfile,
-    handleClockIn, handleClockOut, handleDeleteTimeLog, handleAddHoliday,
-    handleUpdateHoliday, handleDeleteHoliday, handleUpdateSystemPreferences
+    activeShift, systemPreferences,
+    login, logout, setSortOption,
+    toggleOrderLock, updateAnimal, addAnimal, deleteAnimal,
+    addTask, addHoliday, updateHoliday, deleteHoliday,
+    updateTask, deleteTask, addSiteLog, deleteSiteLog,
+    addIncident, updateIncident, deleteIncident,
+    addFirstAid, deleteFirstAid, updateUsers, importAnimals,
+    reorderAnimals, updateFoodOptions, updateFeedMethods, updateEventTypes,
+    updateLocations, updateContacts, updateOrgProfile,
+    clockIn, clockOut, deleteTimeLog, updateSystemPreferences
   } = useAppData();
 
-  if (isInitializing) {
-    return (
-      <div className="h-screen w-screen flex flex-col items-center justify-center bg-slate-100 gap-4">
-          <Loader2 className="animate-spin text-emerald-600" size={48} />
-          <p className="font-black text-slate-400 uppercase tracking-[0.2em] text-xs">Initializing Secure Environment...</p>
-      </div>
-    );
-  }
+  const [view, setView] = useState<string>('dashboard');
+  const [selectedAnimal, setSelectedAnimal] = useState<Animal | null>(null);
+  const [activeCategory, setActiveCategory] = useState<any>('Owls'); // Default
+  const [viewDate, setViewDate] = useState(new Date().toISOString().split('T')[0]);
+  const [fontScale, setFontScale] = useState(100);
 
-  if (!currentUser) return <LoginScreen users={users} onLogin={handleLogin} orgProfile={orgProfile} />;
+  const selectAnimalAndNavigate = (animal: Animal) => {
+    setSelectedAnimal(animal);
+    setView('animal_profile');
+  };
+
+  if (!currentUser) return <LoginScreen users={users} onLogin={login} orgProfile={orgProfile} />;
 
   const isAdmin = currentUser.role === UserRole.ADMIN;
-  // Memoize permissions for performance
   const p: UserPermissions = { 
     dashboard: true, dailyLog: true, tasks: true, medical: isAdmin, movements: isAdmin, 
     safety: isAdmin, maintenance: true, settings: isAdmin, flightRecords: true, 
@@ -70,26 +71,26 @@ const App: React.FC = () => {
 
   return (
     <div style={{ fontSize: `${fontScale}%` }}>
-      <Layout activeView={view} onNavigate={setView} currentUser={currentUser} onLogout={handleLogout} isOffline={isOffline} fontScale={fontScale} setFontScale={setFontScale} activeShift={activeShift} onClockIn={handleClockIn} onClockOut={handleClockOut} orgProfile={orgProfile}>
-        {view === 'dashboard' && p.dashboard && <Dashboard animals={animals} userRole={currentUser.role} onSelectAnimal={selectAnimalAndNavigate} onAddAnimal={handleAddAnimal} onUpdateAnimal={handleUpdateAnimal} onReorderAnimals={handleReorderAnimals} foodOptions={foodOptions} feedMethods={feedMethods} locations={locations} sortOption={sortOption} setSortOption={handleUpdateSortOption} isOrderLocked={isOrderLocked} onToggleLock={handleToggleLock} tasks={tasks} onUpdateTask={handleUpdateTask} activeTab={activeCategory} setActiveTab={setActiveCategory} viewDate={viewDate} setViewDate={setViewDate} />}
-        {view === 'timesheets' && p.attendance && <TimeSheets timeLogs={timeLogs} currentUser={currentUser} users={users} onDeleteLog={handleDeleteTimeLog} />}
-        {view === 'holidays' && <HolidayRegistry requests={holidayRequests} currentUser={currentUser} onAddRequest={handleAddHoliday} onUpdateRequest={handleUpdateHoliday} onDeleteRequest={handleDeleteHoliday} />}
-        {view === 'animal_profile' && selectedAnimal && <AnimalProfile animal={selectedAnimal} allAnimals={animals} onBack={() => setView('dashboard')} onUpdateAnimal={handleUpdateAnimal} onDeleteAnimal={handleDeleteAnimal} foodOptions={foodOptions} feedMethods={feedMethods} eventTypes={eventTypes} orgProfile={orgProfile} locations={locations} isAdmin={p.settings} onAddTask={handleAddTask} />}
-        {view === 'daily' && p.dailyLog && <DailyLog animals={animals} onUpdateAnimal={handleUpdateAnimal} foodOptions={foodOptions} feedMethods={feedMethods} eventTypes={eventTypes} sortOption={sortOption} setSortOption={handleUpdateSortOption} currentUser={currentUser} activeCategory={activeCategory} setActiveCategory={setActiveCategory} viewDate={viewDate} setViewDate={setViewDate} />}
-        {view === 'rounds' && p.rounds && <DailyRounds animals={animals} currentUser={currentUser} onAddSiteLog={handleAddSiteLog} onAddIncident={handleAddIncident} />}
-        {view === 'tasks' && p.tasks && <Tasks tasks={tasks} animals={animals} onAddTask={handleAddTask} onUpdateTask={handleUpdateTask} onDeleteTask={handleDeleteTask} users={users} currentUser={currentUser} onAddSiteLog={handleAddSiteLog} onUpdateAnimal={handleUpdateAnimal} />}
+      <Layout activeView={view} onNavigate={setView} currentUser={currentUser} onLogout={logout} activeShift={activeShift} onClockIn={clockIn} onClockOut={clockOut} orgProfile={orgProfile}>
+        {view === 'dashboard' && p.dashboard && <Dashboard animals={animals} userRole={currentUser.role} onSelectAnimal={selectAnimalAndNavigate} onAddAnimal={addAnimal} onUpdateAnimal={updateAnimal} onReorderAnimals={reorderAnimals} foodOptions={foodOptions} feedMethods={feedMethods} locations={locations} sortOption={sortOption} setSortOption={setSortOption} isOrderLocked={isOrderLocked} onToggleLock={toggleOrderLock} tasks={tasks} onUpdateTask={updateTask} activeTab={activeCategory} setActiveTab={setActiveCategory} viewDate={viewDate} setViewDate={setViewDate} />}
+        {view === 'timesheets' && p.attendance && <TimeSheets timeLogs={timeLogs} currentUser={currentUser} users={users} onDeleteLog={deleteTimeLog} />}
+        {view === 'holidays' && <HolidayRegistry requests={holidayRequests} currentUser={currentUser} onAddRequest={addHoliday} onUpdateRequest={updateHoliday} onDeleteRequest={deleteHoliday} />}
+        {view === 'animal_profile' && selectedAnimal && <AnimalProfile animal={selectedAnimal} allAnimals={animals} onBack={() => setView('dashboard')} onUpdateAnimal={updateAnimal} onDeleteAnimal={deleteAnimal} foodOptions={foodOptions} feedMethods={feedMethods} eventTypes={eventTypes} orgProfile={orgProfile} locations={locations} isAdmin={p.settings} onAddTask={addTask} />}
+        {view === 'daily' && p.dailyLog && <DailyLog animals={animals} onUpdateAnimal={updateAnimal} foodOptions={foodOptions} feedMethods={feedMethods} eventTypes={eventTypes} sortOption={sortOption} setSortOption={setSortOption} currentUser={currentUser} activeCategory={activeCategory} setActiveCategory={setActiveCategory} viewDate={viewDate} setViewDate={setViewDate} />}
+        {view === 'rounds' && p.rounds && <DailyRounds animals={animals} currentUser={currentUser} onAddSiteLog={addSiteLog} onAddIncident={addIncident} />}
+        {view === 'tasks' && p.tasks && <Tasks tasks={tasks} animals={animals} onAddTask={addTask} onUpdateTask={updateTask} onDeleteTask={deleteTask} users={users} currentUser={currentUser} onAddSiteLog={addSiteLog} onUpdateAnimal={updateAnimal} />}
         {view === 'flight_records' && p.flightRecords && <FlightRecords animals={animals} />}
-        {view === 'schedule' && p.feedingSchedule && <Schedule animals={animals} tasks={tasks} foodOptions={foodOptions} onAddTasks={handleAddTasks} onDeleteTask={handleDeleteTask} />}
+        {view === 'schedule' && p.feedingSchedule && <Schedule animals={animals} tasks={tasks} foodOptions={foodOptions} onAddTasks={(ts) => ts.forEach(addTask)} onDeleteTask={deleteTask} />}
         {view === 'weather' && <WeatherView />}
-        {view === 'health' && p.medical && <Health animals={animals} onSelectAnimal={selectAnimalAndNavigate} onUpdateAnimal={handleUpdateAnimal} tasks={tasks} onAddTask={handleAddTask} onUpdateTask={handleUpdateTask} onDeleteTask={handleDeleteTask} users={users} currentUser={currentUser} orgProfile={orgProfile} />}
-        {view === 'movements' && p.movements && <Movements animals={animals} onUpdateAnimal={handleUpdateAnimal} currentUser={currentUser} />}
-        {view === 'drills' && p.safety && <SafetyDrills logs={siteLogs} timeLogs={timeLogs} users={users} onAddLog={handleAddSiteLog} onDeleteLog={handleDeleteTimeLog} currentUser={currentUser} />}
-        {view === 'incidents' && p.safety && <Incidents incidents={incidents} animals={animals} currentUser={currentUser} onAddIncident={handleAddIncident} onUpdateIncident={handleUpdateIncident} onDeleteIncident={handleDeleteIncident} />}
-        {view === 'first_aid' && (currentUser.role === UserRole.ADMIN || p.safety) && <FirstAid logs={firstAidLogs} currentUser={currentUser} onAddLog={handleAddFirstAid} onDeleteLog={handleDeleteFirstAid} />}
-        {view === 'maintenance' && p.maintenance && <SiteMaintenance logs={siteLogs} currentUser={currentUser} onAddLog={handleAddSiteLog} onDeleteLog={handleDeleteTimeLog} />}
+        {view === 'health' && p.medical && <Health animals={animals} onSelectAnimal={selectAnimalAndNavigate} onUpdateAnimal={updateAnimal} tasks={tasks} onAddTask={addTask} onUpdateTask={updateTask} onDeleteTask={deleteTask} users={users} currentUser={currentUser} orgProfile={orgProfile} />}
+        {view === 'movements' && p.movements && <Movements animals={animals} onUpdateAnimal={updateAnimal} currentUser={currentUser} />}
+        {view === 'drills' && p.safety && <SafetyDrills logs={siteLogs} timeLogs={timeLogs} users={users} onAddLog={addSiteLog} onDeleteLog={deleteSiteLog} currentUser={currentUser} />}
+        {view === 'incidents' && p.safety && <Incidents incidents={incidents} animals={animals} currentUser={currentUser} onAddIncident={addIncident} onUpdateIncident={updateIncident} onDeleteIncident={deleteIncident} />}
+        {view === 'first_aid' && (currentUser.role === UserRole.ADMIN || p.safety) && <FirstAid logs={firstAidLogs} currentUser={currentUser} onAddLog={addFirstAid} onDeleteLog={deleteFirstAid} />}
+        {view === 'maintenance' && p.maintenance && <SiteMaintenance logs={siteLogs} currentUser={currentUser} onAddLog={addSiteLog} onDeleteLog={deleteSiteLog} />}
         {view === 'missing_records' && p.missingRecords && <MissingRecords animals={animals} />}
         {view === 'reports' && p.reports && <Reports animals={animals} users={users} orgProfile={orgProfile} currentUser={currentUser} incidents={incidents} siteLogs={siteLogs} timeLogs={timeLogs} />}
-        {view === 'settings' && p.settings && <Settings animals={animals} onImport={handleImport} foodOptions={foodOptions} onUpdateFoodOptions={handleUpdateFoodOptions} feedMethods={feedMethods} onUpdateFeedMethods={handleUpdateFeedMethods} eventTypes={eventTypes} onUpdateEventTypes={handleUpdateEventTypes} users={users} onUpdateUsers={handleUpdateUsers} locations={locations} onUpdateLocations={handleUpdateLocations} contacts={contacts} onUpdateContacts={handleUpdateContacts} orgProfile={orgProfile} onUpdateOrgProfile={handleUpdateOrgProfile} onUpdateAnimal={handleUpdateAnimal} tasks={tasks} onDeleteTask={handleDeleteTask} systemPreferences={systemPreferences} onUpdateSystemPreferences={handleUpdateSystemPreferences} onLaunchBenchmark={() => setView('benchmark')} />}
+        {view === 'settings' && p.settings && <Settings animals={animals} onImport={importAnimals} foodOptions={foodOptions} onUpdateFoodOptions={updateFoodOptions} feedMethods={feedMethods} onUpdateFeedMethods={updateFeedMethods} eventTypes={eventTypes} onUpdateEventTypes={updateEventTypes} users={users} onUpdateUsers={updateUsers} locations={locations} onUpdateLocations={updateLocations} contacts={contacts} onUpdateContacts={updateContacts} orgProfile={orgProfile} onUpdateOrgProfile={updateOrgProfile} onUpdateAnimal={updateAnimal} tasks={tasks} onDeleteTask={deleteTask} systemPreferences={systemPreferences} onUpdateSystemPreferences={updateSystemPreferences} onLaunchBenchmark={() => setView('benchmark')} />}
         {view === 'help' && <HelpCenter currentUser={currentUser} />}
         {view === 'benchmark' && <React19Playground onBack={() => setView('settings')} />}
       </Layout>
@@ -99,4 +100,20 @@ const App: React.FC = () => {
     </div>
   );
 };
+
+const App: React.FC = () => {
+  return (
+    <Suspense fallback={
+      <div className="h-screen w-screen flex flex-col items-center justify-center bg-slate-100 gap-4">
+          <Loader2 className="animate-spin text-emerald-600" size={48} />
+          <p className="font-black text-slate-400 uppercase tracking-[0.2em] text-xs">Initializing Secure Environment...</p>
+      </div>
+    }>
+      <AppProvider>
+        <AppContent />
+      </AppProvider>
+    </Suspense>
+  );
+};
+
 export default App;
