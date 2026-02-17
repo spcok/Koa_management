@@ -157,42 +157,47 @@ const Tasks: React.FC<TasksProps> = ({
                     <form onSubmit={handleCreateTask} className="p-6 space-y-6">
                         <div className="space-y-4">
                             <div>
-                                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Duty Description</label>
+                                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Duty Description
                                 <input 
                                     type="text" required value={newTitle} 
-                                    onChange={e => setNewTitle(e.target.value)} 
+                                    onChange={e => { if(newTitle !== e.target.value) setNewTitle(e.target.value); }} 
                                     className={inputClass} 
                                     placeholder="e.g. Annual Health Check"
                                 />
+                                </label>
                             </div>
                             
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Duty Type</label>
-                                    <select value={newType} onChange={e => setNewType(e.target.value as any)} className={inputClass}>
+                                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Duty Type
+                                    <select value={newType} onChange={e => { const val = e.target.value as any; if(newType !== val) setNewType(val); }} className={inputClass}>
                                         {Object.values(LogType).map(t => <option key={t} value={t}>{t}</option>)}
                                     </select>
+                                    </label>
                                 </div>
                                 <div>
-                                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Target Subject</label>
-                                    <select value={newAnimalId} onChange={e => setNewAnimalId(e.target.value)} className={inputClass}>
+                                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Target Subject
+                                    <select value={newAnimalId} onChange={e => { if(newAnimalId !== e.target.value) setNewAnimalId(e.target.value); }} className={inputClass}>
                                         <option value="">No specific animal</option>
                                         {animals.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
                                     </select>
+                                    </label>
                                 </div>
                             </div>
 
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Due Date</label>
-                                    <input type="date" required value={newDueDate} onChange={e => setNewDueDate(e.target.value)} className={inputClass} />
+                                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Due Date
+                                    <input type="date" required value={newDueDate} onChange={e => { if(newDueDate !== e.target.value) setNewDueDate(e.target.value); }} className={inputClass} />
+                                    </label>
                                 </div>
                                 <div>
-                                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Assigned To</label>
-                                    <select value={newAssignedTo} onChange={e => setNewAssignedTo(e.target.value)} className={inputClass}>
+                                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Assigned To
+                                    <select value={newAssignedTo} onChange={e => { if(newAssignedTo !== e.target.value) setNewAssignedTo(e.target.value); }} className={inputClass}>
                                         <option value="">Unassigned</option>
                                         {users.map(u => <option key={u.id} value={u.id}>{u.name} ({u.initials})</option>)}
                                     </select>
+                                    </label>
                                 </div>
                             </div>
                         </div>

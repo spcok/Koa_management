@@ -97,7 +97,7 @@ const MissingRecords: React.FC<MissingRecordsProps> = ({ animals }) => {
                             type="number" 
                             min="1" max="30"
                             value={daysToCheck}
-                            onChange={(e) => setDaysToCheck(parseInt(e.target.value))}
+                            onChange={(e) => setDaysToCheck(Number.parseInt(e.target.value))}
                             className={inputClass}
                         />
                     </div>

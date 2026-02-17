@@ -1,6 +1,7 @@
+
 import React, { useState, useMemo, useTransition } from 'react';
-import { Animal, LogType, LogEntry, HealthRecordType, HealthCondition, AnimalCategory, Task, User, UserRole, OrganizationProfile } from '../types';
-import { Heart, Activity, Calendar, Save, Upload, FileText, AlertCircle, Plus, X, Filter, RotateCcw, Clock, User as UserIcon, Edit2, Trash2, Skull, Printer, Biohazard, ShieldCheck, Thermometer, AlertTriangle, Pill, ClipboardList, ArrowRight, Sparkles, Loader2, Check, BarChart3 } from 'lucide-react';
+import { Animal, LogType, LogEntry, HealthRecordType, HealthCondition, AnimalCategory, Task, User, UserRole, OrganizationProfile, ShellQuality } from '../types';
+import { Heart, Activity, Calendar, Save, Upload, FileText, AlertCircle, Plus, X, Filter, RotateCcw, Clock, User as UserIcon, Edit2, Trash2, Skull, Printer, Biohazard, ShieldCheck, Thermometer, AlertTriangle, Pill, ClipboardList, ArrowRight, Sparkles, Loader2, Check, BarChart3, Egg } from 'lucide-react';
 import { analyzeHealthHistory, analyzeCollectionHealth } from '../services/geminiService';
 import ReactMarkdown from 'react-markdown';
 import AddEntryModal from './AddEntryModal';
@@ -21,9 +22,13 @@ interface HealthProps {
 }
 
 const Health: React.FC<HealthProps> = ({ animals, onSelectAnimal, onUpdateAnimal, tasks, onAddTask, onUpdateTask, onDeleteTask, users, currentUser, orgProfile }) => {
-  const [activeTab, setActiveTab] = useState<'medical' | 'quarantine' | 'mar'>('medical');
+  const [activeTab, setActiveTab] = useState<'medical' | 'quarantine' | 'mar' | 'repro'>('medical');
   const [isModalOpen, setIsModalOpen] = useState(false);
   
+  // Repro Logic
+  const [isEggLogOpen, setIsEggLogOpen] = useState(false);
+  const [eggLogAnimal, setEggLogAnimal] = useState<Animal | null>(null);
+
   // React 19 Transitions for AI
   const [isPendingAi, startTransitionAi] = useTransition();
   const [isPendingBrief, startTransitionBrief] = useTransition();
@@ -104,6 +109,25 @@ const Health: React.FC<HealthProps> = ({ animals, onSelectAnimal, onUpdateAnimal
 
   const quarantineAnimals = useMemo(() => animals.filter(a => a.isQuarantine), [animals]);
 
+  // Logic for Reproduction Tab
+  const breedingFemales = useMemo(() => {
+      return animals.filter(a => 
+          a.sex === 'Female' && 
+          !a.archived &&
+          (filterCategory === 'ALL' || a.category === filterCategory)
+      );
+  }, [animals, filterCategory]);
+
+  const getReproStats = (animal: Animal) => {
+      const currentYear = new Date().getFullYear();
+      const eggLogs = (animal.logs || []).filter(l => l.type === LogType.EGG);
+      const seasonCount = eggLogs
+          .filter(l => new Date(l.date).getFullYear() === currentYear)
+          .reduce((acc, l) => acc + (l.eggCount || 0), 0);
+      const lastClutch = eggLogs.length > 0 ? eggLogs[0].date : null;
+      return { seasonCount, lastClutch, totalLogs: eggLogs.length };
+  };
+
   const inputClass = "w-full px-3 py-2 bg-slate-100 text-slate-800 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 placeholder-slate-400 transition-all";
 
   return (
@@ -133,7 +157,8 @@ const Health: React.FC<HealthProps> = ({ animals, onSelectAnimal, onUpdateAnimal
           {[
               { id: 'medical', label: 'Clinical Ledger', icon: FileText },
               { id: 'mar', label: 'MAR Charts', icon: Pill },
-              { id: 'quarantine', label: 'Isolation Station', icon: Biohazard }
+              { id: 'quarantine', label: 'Isolation Station', icon: Biohazard },
+              { id: 'repro', label: 'Reproduction', icon: Egg }
           ].map(tab => (
               <button 
                 key={tab.id} onClick={() => setActiveTab(tab.id as any)}
@@ -144,6 +169,8 @@ const Health: React.FC<HealthProps> = ({ animals, onSelectAnimal, onUpdateAnimal
           ))}
       </div>
 
+      {/* ... (Existing Medical/Quarantine/MAR tabs remain the same content-wise) ... */}
+      
       {activeTab === 'medical' && (
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 animate-in slide-in-from-left-2 duration-300">
               <div className="lg:col-span-3 space-y-5">
@@ -280,6 +307,7 @@ const Health: React.FC<HealthProps> = ({ animals, onSelectAnimal, onUpdateAnimal
               </div>
               
               <div className="lg:col-span-1 space-y-6">
+                  {/* ... (Sidebar Widgets remain) ... */}
                   <div className="bg-slate-900 rounded-[2rem] p-6 text-white shadow-xl border-2 border-slate-800">
                       <h3 className="text-xs font-black uppercase tracking-[0.3em] mb-8 flex items-center gap-3 border-b-2 border-white/5 pb-4">
                           <Clock size={16} className="text-emerald-500"/> Clinical Rota
@@ -381,6 +409,80 @@ const Health: React.FC<HealthProps> = ({ animals, onSelectAnimal, onUpdateAnimal
           </div>
       )}
 
+      {/* REPRODUCTION TAB */}
+      {activeTab === 'repro' && (
+          <div className="space-y-6 animate-in slide-in-from-right-2 duration-300">
+              <div className="flex justify-between items-center bg-purple-50 p-6 rounded-2xl border-2 border-purple-100">
+                  <div>
+                      <h3 className="text-lg font-black text-purple-900 uppercase tracking-tight flex items-center gap-2">
+                          <Egg size={20} className="text-purple-600"/> Reproductive Management
+                      </h3>
+                      <p className="text-xs text-purple-600 font-bold uppercase tracking-widest mt-1">Breeding Female Registry</p>
+                  </div>
+                  <div className="flex gap-2">
+                        <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value as any)} className="px-3 py-2 bg-white text-purple-900 border border-purple-200 rounded-lg text-xs font-bold focus:outline-none">
+                            <option value="ALL">All Sections</option>
+                            {Object.values(AnimalCategory).map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                  </div>
+              </div>
+
+              <div className="bg-white rounded-2xl border-2 border-slate-300 shadow-md overflow-hidden">
+                  <table className="w-full text-left">
+                      <thead className="bg-slate-50 border-b-2 border-slate-200">
+                          <tr>
+                              <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Subject</th>
+                              <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Classification</th>
+                              <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Season Total</th>
+                              <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Latest Activity</th>
+                              <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest text-right">Quick Actions</th>
+                          </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                          {breedingFemales.map(animal => {
+                              const stats = getReproStats(animal);
+                              return (
+                                  <tr key={animal.id} className="hover:bg-slate-50 transition-colors group">
+                                      <td className="px-6 py-4">
+                                          <div className="font-black text-slate-900 text-sm uppercase tracking-tight">{animal.name}</div>
+                                          <div className="text-[10px] font-bold text-slate-400 uppercase">ID: {animal.ringNumber || animal.microchip || 'N/A'}</div>
+                                      </td>
+                                      <td className="px-6 py-4 text-xs font-bold text-slate-600 uppercase">
+                                          {animal.species}
+                                      </td>
+                                      <td className="px-6 py-4">
+                                          <div className="flex items-center gap-2">
+                                              <span className="text-lg font-black text-purple-700">{stats.seasonCount}</span>
+                                              <span className="text-[9px] font-bold text-purple-400 uppercase tracking-widest">Eggs</span>
+                                          </div>
+                                      </td>
+                                      <td className="px-6 py-4">
+                                          {stats.lastClutch ? (
+                                              <span className="text-xs font-bold text-slate-700">{new Date(stats.lastClutch).toLocaleDateString('en-GB')}</span>
+                                          ) : (
+                                              <span className="text-[10px] text-slate-300 font-bold uppercase tracking-widest">No Recent Data</span>
+                                          )}
+                                      </td>
+                                      <td className="px-6 py-4 text-right">
+                                          <button 
+                                              onClick={() => { setEggLogAnimal(animal); setIsEggLogOpen(true); }}
+                                              className="bg-purple-100 text-purple-700 hover:bg-purple-200 px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all inline-flex items-center gap-2"
+                                          >
+                                              <Plus size={12}/> Log Clutch
+                                          </button>
+                                      </td>
+                                  </tr>
+                              );
+                          })}
+                          {breedingFemales.length === 0 && (
+                              <tr><td colSpan={5} className="px-6 py-12 text-center text-slate-400 text-xs italic">No female subjects found in current filter.</td></tr>
+                          )}
+                      </tbody>
+                  </table>
+              </div>
+          </div>
+      )}
+
       {/* MODALS */}
       {editingLog && editingAnimal && isModalOpen && (
           <AddEntryModal 
@@ -402,7 +504,7 @@ const Health: React.FC<HealthProps> = ({ animals, onSelectAnimal, onUpdateAnimal
           />
       )}
 
-      {/* QUICK ADD MODAL (WHEN NOT EDITING) */}
+      {/* QUICK ADD MODAL (MEDICAL) */}
       {!editingLog && isModalOpen && (
           <MedicalRecordModal 
             isOpen={isModalOpen}
@@ -410,6 +512,25 @@ const Health: React.FC<HealthProps> = ({ animals, onSelectAnimal, onUpdateAnimal
             onSave={handleSaveMedicalRecord}
             animals={animals}
             currentUser={currentUser}
+          />
+      )}
+
+      {/* QUICK ADD MODAL (EGG) */}
+      {isEggLogOpen && eggLogAnimal && (
+          <AddEntryModal
+              isOpen={isEggLogOpen}
+              onClose={() => { setIsEggLogOpen(false); setEggLogAnimal(null); }}
+              onSave={(entry) => {
+                 const updatedLogs = [entry, ...(eggLogAnimal.logs || [])];
+                 onUpdateAnimal({ ...eggLogAnimal, logs: updatedLogs });
+                 // Note: AddEntryModal automatically calls onClose after onSave if implemented correctly, but we manage state here too.
+                 setIsEggLogOpen(false);
+                 setEggLogAnimal(null);
+              }}
+              animal={eggLogAnimal}
+              initialType={LogType.EGG}
+              foodOptions={{} as any}
+              feedMethods={[]}
           />
       )}
     </div>

@@ -103,51 +103,58 @@ export const useAppData = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [
-            fetchedAnimals, fetchedTasks, fetchedUsers, fetchedSiteLogs, fetchedIncidents, 
-            fetchedFirstAid, fetchedFood, fetchedMethods, fetchedLocs, fetchedContacts, 
-            fetchedProfile, fetchedTimeLogs, fetchedHolidays, savedSort, savedLocked,
-            fetchedEventTypes, fetchedSystemPrefs
-        ] = await Promise.all([
-          dataService.fetchAnimals(), 
-          dataService.fetchTasks(), 
-          dataService.fetchUsers(), 
-          dataService.fetchSiteLogs(), 
-          dataService.fetchIncidents(), 
-          dataService.fetchFirstAidLogs(), 
-          dataService.fetchFoodOptions(), 
-          dataService.fetchFeedMethods(), 
-          dataService.fetchLocations(), 
-          dataService.fetchContacts(), 
-          dataService.fetchOrgProfile(), 
-          dataService.fetchTimeLogs(), 
-          dataService.fetchHolidayRequests(),
-          dataService.fetchSettingsKey('dashboard_sort', 'alpha-asc'),
-          dataService.fetchSettingsKey('dashboard_locked', true),
-          dataService.fetchEventTypes(),
-          dataService.fetchSystemPreferences()
+        const results = await Promise.allSettled([
+          dataService.fetchAnimals(),       // 0
+          dataService.fetchTasks(),         // 1
+          dataService.fetchUsers(),         // 2
+          dataService.fetchSiteLogs(),      // 3
+          dataService.fetchIncidents(),     // 4
+          dataService.fetchFirstAidLogs(),  // 5
+          dataService.fetchFoodOptions(),   // 6
+          dataService.fetchFeedMethods(),   // 7
+          dataService.fetchLocations(),     // 8
+          dataService.fetchContacts(),      // 9
+          dataService.fetchOrgProfile(),    // 10
+          dataService.fetchTimeLogs(),      // 11
+          dataService.fetchHolidayRequests(),// 12
+          dataService.fetchSettingsKey('dashboard_sort', 'alpha-asc'), // 13
+          dataService.fetchSettingsKey('dashboard_locked', true),       // 14
+          dataService.fetchSystemPreferences(), // 15
+          dataService.fetchEventTypes()     // 16
         ]);
+
+        const unwrap = <T>(result: PromiseSettledResult<T>, fallback: T): T => {
+            if (result.status === 'fulfilled') return result.value;
+            console.warn('Data fetch failed for one resource:', result.reason);
+            return fallback;
+        };
+
+        const fetchedAnimals = unwrap(results[0], []);
         
-        setAnimals(fetchedAnimals); 
-        setTasks(fetchedTasks); 
-        setUsers(fetchedUsers); 
-        setSiteLogs(fetchedSiteLogs); 
-        setIncidents(fetchedIncidents); 
-        setFirstAidLogs(fetchedFirstAid); 
-        setTimeLogs(fetchedTimeLogs); 
-        setHolidayRequests(fetchedHolidays);
-        setSortOption(savedSort as SortOption);
-        setIsOrderLocked(!!savedLocked);
-        if (fetchedFood) setFoodOptions(fetchedFood);
-        if (fetchedMethods) setFeedMethods(fetchedMethods);
-        if (fetchedLocs) setLocations(fetchedLocs);
-        if (fetchedContacts) setContacts(fetchedContacts);
-        if (fetchedProfile) setOrgProfile(fetchedProfile);
-        if (fetchedEventTypes) setEventTypes(fetchedEventTypes);
-        if (fetchedSystemPrefs) setSystemPreferences(fetchedSystemPrefs);
-        
+        if (results[0].status === 'rejected') setIsOffline(true);
+
+        setAnimals(fetchedAnimals);
+        setTasks(unwrap(results[1], []));
+        setUsers(unwrap(results[2], []));
+        setSiteLogs(unwrap(results[3], []));
+        setIncidents(unwrap(results[4], []));
+        setFirstAidLogs(unwrap(results[5], []));
+        setFoodOptions(unwrap(results[6], DEFAULT_FOOD_OPTIONS));
+        setFeedMethods(unwrap(results[7], DEFAULT_FEED_METHODS));
+        setLocations(unwrap(results[8], []));
+        setContacts(unwrap(results[9], []));
+        setOrgProfile(unwrap(results[10], null));
+        setTimeLogs(unwrap(results[11], []));
+        setHolidayRequests(unwrap(results[12], []));
+        setSortOption(unwrap(results[13], 'alpha-asc') as SortOption);
+        setIsOrderLocked(unwrap(results[14], true));
+        setSystemPreferences(unwrap(results[15], DEFAULT_SYSTEM_PREFERENCES));
+        setEventTypes(unwrap(results[16], DEFAULT_EVENT_TYPES));
+
         performAutoSync(fetchedAnimals);
+
       } catch (error) { 
+        console.error("Catastrophic initialization error", error);
         setIsOffline(true); 
       } finally {
         setIsInitializing(false);
@@ -155,6 +162,33 @@ export const useAppData = () => {
     };
     fetchData();
   }, [performAutoSync]);
+
+  // --- INACTIVITY TIMER ---
+  useEffect(() => {
+    if (!currentUser) return;
+    const timeoutMinutes = systemPreferences.sessionTimeoutMinutes || 5;
+    const timeoutMs = timeoutMinutes * 60 * 1000;
+    let timer: ReturnType<typeof setTimeout>;
+
+    const logoutUser = () => {
+        handleLogout();
+        alert("Session expired due to inactivity.");
+    };
+
+    const resetTimer = () => {
+        clearTimeout(timer);
+        timer = setTimeout(logoutUser, timeoutMs);
+    };
+
+    const events = ['mousemove', 'mousedown', 'keypress', 'touchstart', 'scroll', 'click'];
+    events.forEach(event => window.addEventListener(event, resetTimer));
+    resetTimer();
+
+    return () => {
+        clearTimeout(timer);
+        events.forEach(event => window.removeEventListener(event, resetTimer));
+    };
+  }, [currentUser, systemPreferences.sessionTimeoutMinutes]);
 
   // --- HANDLERS ---
 
@@ -174,15 +208,59 @@ export const useAppData = () => {
     dataService.saveSettingsKey('dashboard_locked', locked);
   }, []);
 
+  // Robust Animal Update with Rollback
   const handleUpdateAnimal = useCallback(async (animal: Animal) => { 
+    const previousAnimals = [...animals];
+    const previousSelected = selectedAnimal;
+
+    // Optimistic update
     setAnimals(prev => prev.map(a => a.id === animal.id ? animal : a)); 
     if (selectedAnimal?.id === animal.id) setSelectedAnimal(animal); 
-    try { await dataService.saveAnimal(animal); } catch (e) { console.error(e); } 
-  }, [selectedAnimal?.id]);
+    
+    try { 
+        await dataService.saveAnimal(animal); 
+    } catch (e) { 
+        console.error("Failed to save animal update:", e);
+        // Rollback on failure
+        setAnimals(previousAnimals);
+        if (previousSelected?.id === animal.id) setSelectedAnimal(previousSelected);
+        alert("Failed to save changes. Please check your connection.");
+    } 
+  }, [animals, selectedAnimal]);
 
-  const handleAddAnimal = useCallback(async (animal: Animal) => { setAnimals(prev => [...prev, animal]); try { await dataService.saveAnimal(animal); } catch (e) { console.error(e); } }, []);
+  const handleAddAnimal = useCallback(async (animal: Animal) => { 
+      const previousAnimals = [...animals];
+      setAnimals(prev => [...prev, animal]); 
+      try { 
+          await dataService.saveAnimal(animal); 
+      } catch (e) { 
+          console.error("Failed to add animal:", e);
+          setAnimals(previousAnimals);
+          alert("Failed to add animal. Please check your connection.");
+      } 
+  }, [animals]);
   
-  const handleDeleteAnimal = useCallback(async () => { if (selectedAnimal) { const id = selectedAnimal.id; setAnimals(prev => prev.filter(a => a.id !== id)); setView('dashboard'); setSelectedAnimal(null); try { await dataService.deleteAnimal(id); } catch (e) { console.error(e); } } }, [selectedAnimal]);
+  const handleDeleteAnimal = useCallback(async () => { 
+      if (selectedAnimal) { 
+          const id = selectedAnimal.id; 
+          const previousAnimals = [...animals];
+          
+          setAnimals(prev => prev.filter(a => a.id !== id)); 
+          setView('dashboard'); 
+          setSelectedAnimal(null); 
+          
+          try { 
+              await dataService.deleteAnimal(id); 
+          } catch (e) { 
+              console.error("Failed to delete animal:", e);
+              // Rollback
+              setAnimals(previousAnimals);
+              setSelectedAnimal(selectedAnimal);
+              setView('animal_profile');
+              alert("Failed to delete record. System state restored.");
+          } 
+      } 
+  }, [selectedAnimal, animals]);
   
   const handleAddTask = useCallback(async (task: Task) => { setTasks(prev => [...prev, task]); await dataService.saveTasks([task]); }, []);
   
@@ -215,9 +293,9 @@ export const useAppData = () => {
   const handleUpdateFoodOptions = useCallback(async (options: Record<AnimalCategory, string[]>) => { setFoodOptions(options); await dataService.saveFoodOptions(options); }, []);
   
   const handleUpdateFeedMethods = useCallback(async (methods: Record<AnimalCategory, string[]>) => { setFeedMethods(methods); await dataService.saveFeedMethods(methods); }, []);
-  
-  const handleUpdateEventTypes = useCallback(async (types: string[]) => { setEventTypes(types); await dataService.saveEventTypes(types); }, []);
 
+  const handleUpdateEventTypes = useCallback(async (types: string[]) => { setEventTypes(types); await dataService.saveEventTypes(types); }, []);
+  
   const handleUpdateLocations = useCallback(async (locs: string[]) => { setLocations(locs); await dataService.saveLocations(locs); }, []);
   
   const handleUpdateContacts = useCallback(async (cons: Contact[]) => { setContacts(cons); await dataService.saveContacts(cons); }, []);
@@ -275,8 +353,6 @@ export const useAppData = () => {
     feedMethods, eventTypes, locations, contacts, orgProfile, sortOption, isOrderLocked,
     activeCategory, setActiveCategory, viewDate, setViewDate, isOffline, fontScale, 
     setFontScale, activeShift, systemPreferences,
-
-    // Handlers
     handleLogin, handleLogout, selectAnimalAndNavigate, handleUpdateSortOption,
     handleToggleLock, handleUpdateAnimal, handleAddAnimal, handleDeleteAnimal,
     handleAddTask, handleAddTasks, handleUpdateTask, handleDeleteTask, handleAddSiteLog,

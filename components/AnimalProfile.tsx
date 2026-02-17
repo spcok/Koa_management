@@ -1,13 +1,14 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { Animal, LogType, LogEntry, AnimalCategory, HealthCondition, Incident, OrganizationProfile, HazardRating, ConservationStatus } from '../types';
+import { Animal, LogType, LogEntry, AnimalCategory, HealthCondition, Incident, OrganizationProfile, HazardRating, ConservationStatus, Task, ShellQuality } from '../types';
 import { 
-  ArrowLeft, Utensils, Scale, Heart, Edit2, Trash2, 
-  Plus, Calendar, Globe, 
-  Loader2, Zap, FileText, Stethoscope, Plane, Trophy, Droplets, Check, AlertTriangle, Skull, ArrowRight, Sun, Moon, AlignLeft, Info, Printer, X, Thermometer, ShieldAlert, Sparkles, RefreshCw, Image as ImageIcon
+  ArrowLeft, Utensils, Scale, Edit2, Trash2, 
+  Plus, Globe, 
+  Loader2, Zap, Stethoscope, Plane, Activity, Sparkles, Image as ImageIcon, Egg, Heart, Calendar, Info,
+  Skull, AlertTriangle, AlignLeft, Sun, Moon, Droplets
 } from 'lucide-react';
-import { ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid, ComposedChart, Area } from 'recharts';
-import { generateSpeciesCard, generateExoticSummary } from '../services/geminiService';
+import { ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid, ComposedChart, Area, Line } from 'recharts';
+import { generateSpeciesCard } from '../services/geminiService';
 import { formatWeightDisplay } from '../services/weightUtils';
 import AddEntryModal from './AddEntryModal';
 import AnimalFormModal from './AnimalFormModal';
@@ -25,22 +26,25 @@ const DetailItem = ({ label, value, italic = false, mono = false, color = 'text-
 
 interface AnimalProfileProps {
   animal: Animal;
+  allAnimals?: Animal[];
   onBack: () => void;
   onUpdateAnimal: (updatedAnimal: Animal) => void;
   onDeleteAnimal: () => void;
   foodOptions: Record<AnimalCategory, string[]>;
   feedMethods: Record<AnimalCategory, string[]>;
+  eventTypes?: string[];
   onAddIncident?: (incident: Incident) => void; 
+  onAddTask?: (task: Task) => void;
   orgProfile?: OrganizationProfile | null;
   locations?: string[];
   isAdmin: boolean;
 }
 
 const AnimalProfile: React.FC<AnimalProfileProps> = ({ 
-  animal, onBack, onUpdateAnimal, onDeleteAnimal, foodOptions, feedMethods, 
-  isAdmin, locations, onAddIncident, orgProfile 
+  animal, allAnimals = [], onBack, onUpdateAnimal, onDeleteAnimal, foodOptions, feedMethods, 
+  eventTypes = [], isAdmin, locations, onAddIncident, orgProfile, onAddTask
 }) => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'husbandry' | 'medical' | 'intelligence'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'husbandry' | 'medical' | 'repro' | 'intelligence'>('overview');
   const [husbandryFilter, setHusbandryFilter] = useState<LogType | 'ALL'>('ALL');
   
   const [isEditing, setIsEditing] = useState(false);
@@ -55,7 +59,7 @@ const AnimalProfile: React.FC<AnimalProfileProps> = ({
   const sortedLogs = useMemo(() => [...(animal.logs || [])].sort((a, b) => b.timestamp - a.timestamp), [animal.logs]);
 
   const husbandryLogs = useMemo(() => {
-      let logs = sortedLogs.filter(l => l.type !== LogType.HEALTH);
+      let logs = sortedLogs.filter(l => l.type !== LogType.HEALTH && l.type !== LogType.EGG);
       if (husbandryFilter !== 'ALL') {
           logs = logs.filter(l => l.type === husbandryFilter);
       }
@@ -63,23 +67,39 @@ const AnimalProfile: React.FC<AnimalProfileProps> = ({
   }, [sortedLogs, husbandryFilter]);
 
   const medicalLogs = useMemo(() => sortedLogs.filter(l => l.type === LogType.HEALTH), [sortedLogs]);
+  const reproLogs = useMemo(() => sortedLogs.filter(l => l.type === LogType.EGG), [sortedLogs]);
 
+  // Chart Data: Weight + BCS
   const chartData = useMemo(() => {
-    return [...sortedLogs]
-      .filter(l => l.type === LogType.WEIGHT)
-      .slice(0, 30)
-      .reverse()
-      .map(l => ({
-        date: new Date(l.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
-        weight: l.weightGrams || parseFloat(l.value) || 0
-      }));
+    const dataPoints: { date: string, timestamp: number, weight?: number, bcs?: number }[] = [];
+    [...sortedLogs].reverse().forEach(l => {
+        if (l.type === LogType.WEIGHT || l.type === LogType.HEALTH) {
+            const dateStr = new Date(l.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+            const point = {
+                date: dateStr,
+                timestamp: l.timestamp,
+                weight: l.type === LogType.WEIGHT ? (l.weightGrams || Number.parseFloat(l.value)) : undefined,
+                bcs: l.bcs
+            };
+            if (point.weight || point.bcs) {
+                dataPoints.push(point);
+            }
+        }
+    });
+    return dataPoints.slice(-30);
   }, [sortedLogs]);
 
   const handleGenerateIntelligence = async () => {
+      if (isGeneratingSpecies) return;
       setIsGeneratingSpecies(true);
-      const data = await generateSpeciesCard(animal.species);
-      setSpeciesCardData(data);
-      setIsGeneratingSpecies(false);
+      try {
+          const data = await generateSpeciesCard(animal.species);
+          setSpeciesCardData(data);
+      } catch (e) {
+          console.error("Dossier generation error", e);
+      } finally {
+          setIsGeneratingSpecies(false);
+      }
   };
 
   const getAge = (subject: Animal) => {
@@ -163,6 +183,21 @@ const AnimalProfile: React.FC<AnimalProfileProps> = ({
           archived: isDeceased 
       });
   };
+
+  const clutchStats = useMemo(() => {
+      const currentYear = new Date().getFullYear();
+      const seasonEggs = reproLogs.filter(l => new Date(l.date).getFullYear() === currentYear).reduce((acc, l) => acc + (l.eggCount || 0), 0);
+      const totalEggs = reproLogs.reduce((acc, l) => acc + (l.eggCount || 0), 0);
+      return { seasonEggs, totalEggs };
+  }, [reproLogs]);
+
+  const tabs = [
+      { id: 'overview', label: 'Overview' },
+      { id: 'husbandry', label: 'Husbandry Logs' },
+      { id: 'medical', label: 'Medical Records' },
+      ...(animal.sex === 'Female' ? [{ id: 'repro', label: 'Reproduction' }] : []),
+      { id: 'intelligence', label: 'Species Info' },
+  ];
 
   return (
     <div className="min-h-screen bg-slate-200 pb-24 animate-in fade-in duration-500">
@@ -256,12 +291,7 @@ const AnimalProfile: React.FC<AnimalProfileProps> = ({
 
           {/* Tabs */}
           <div className="flex border-b-2 border-slate-300 mb-8 overflow-x-auto gap-8 no-print">
-              {[
-                  { id: 'overview', label: 'Overview' },
-                  { id: 'husbandry', label: 'Husbandry Logs' },
-                  { id: 'medical', label: 'Medical Records' },
-                  { id: 'intelligence', label: 'Species Info' },
-              ].map(tab => (
+              {tabs.map(tab => (
                   <button 
                     key={tab.id} onClick={() => setActiveTab(tab.id as any)} 
                     className={`pb-3 text-sm font-bold transition-colors whitespace-nowrap border-b-4 -mb-[2px] ${
@@ -386,7 +416,17 @@ const AnimalProfile: React.FC<AnimalProfileProps> = ({
                         </section>
                         
                         <section>
-                            <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Weight History (30 Days)</h3>
+                            <div className="flex justify-between items-center mb-3">
+                                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Weight & Health Trend (30 Days)</h3>
+                                <div className="flex gap-4">
+                                    <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500">
+                                        <div className="w-2 h-2 rounded-full bg-teal-500"></div> Weight
+                                    </div>
+                                    <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500">
+                                        <div className="w-2 h-2 rounded-full bg-rose-500"></div> Keel Score
+                                    </div>
+                                </div>
+                            </div>
                             <div className="bg-white p-4 rounded-2xl border-2 border-slate-300 shadow-md h-72">
                                 {chartData.length > 0 ? (
                                     <ResponsiveContainer width="100%" height="100%">
@@ -399,17 +439,18 @@ const AnimalProfile: React.FC<AnimalProfileProps> = ({
                                             </defs>
                                             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                                             <XAxis dataKey="date" stroke="#94a3b8" fontSize={10} fontWeight="600" tickLine={false} axisLine={false} dy={10} minTickGap={30} />
-                                            <YAxis domain={['auto', 'auto']} stroke="#94a3b8" fontSize={10} fontWeight="600" tickLine={false} axisLine={false} dx={-10} />
+                                            <YAxis yAxisId="left" domain={['auto', 'auto']} stroke="#14b8a6" fontSize={10} fontWeight="600" tickLine={false} axisLine={false} dx={-10} />
+                                            <YAxis yAxisId="right" orientation="right" domain={[1, 5]} ticks={[1,2,3,4,5]} stroke="#f43f5e" fontSize={10} fontWeight="600" tickLine={false} axisLine={false} dx={10} />
                                             <Tooltip 
                                                 contentStyle={{ backgroundColor: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', fontWeight: 'bold', fontSize: '12px' }}
-                                                itemStyle={{ color: '#0f766e' }}
                                             />
-                                            <Area type="monotone" dataKey="weight" stroke="#14b8a6" fill="url(#colorWeight)" strokeWidth={3} activeDot={{ r: 6, strokeWidth: 0, fill: '#0f766e' }} />
+                                            <Area yAxisId="left" type="monotone" dataKey="weight" stroke="#14b8a6" fill="url(#colorWeight)" strokeWidth={3} activeDot={{ r: 6, strokeWidth: 0, fill: '#0f766e' }} />
+                                            <Line yAxisId="right" type="step" dataKey="bcs" stroke="#f43f5e" strokeWidth={2} dot={{r: 3, fill: '#f43f5e'}} connectNulls />
                                         </ComposedChart>
                                     </ResponsiveContainer>
                                 ) : (
                                     <div className="h-full flex items-center justify-center text-slate-400 text-sm italic">
-                                        No weight data available to chart.
+                                        No weight or health data available to chart.
                                     </div>
                                 )}
                             </div>
@@ -472,107 +513,6 @@ const AnimalProfile: React.FC<AnimalProfileProps> = ({
                 </div>
               )}
 
-              {activeTab === 'husbandry' && (
-                <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-300">
-                    <div className="flex justify-between items-center">
-                        <div className="flex gap-2">
-                            {(['ALL', LogType.FEED, LogType.WEIGHT, LogType.FLIGHT, LogType.TRAINING, LogType.TEMPERATURE] as const).map(type => (
-                                <button
-                                    key={type}
-                                    onClick={() => setHusbandryFilter(type)}
-                                    className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest border-2 transition-all ${husbandryFilter === type ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-400 border-slate-200'}`}
-                                >
-                                    {type}
-                                </button>
-                            ))}
-                        </div>
-                        <button onClick={() => { setEditingLog(undefined); setLogFormType(LogType.FEED); setIsAddLogOpen(true); }} className="bg-emerald-600 text-white px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center gap-2 hover:bg-emerald-700 transition-all">
-                            <Plus size={14}/> Add Husbandry Log
-                        </button>
-                    </div>
-                    <div className="bg-white rounded-2xl border-2 border-slate-300 shadow-md overflow-hidden">
-                        <table className="w-full text-left">
-                            <thead className="bg-slate-50 border-b-2 border-slate-200">
-                                <tr>
-                                    <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Date</th>
-                                    <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Type</th>
-                                    <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Value</th>
-                                    <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Notes</th>
-                                    <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest text-right">Auth & Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100">
-                                {husbandryLogs.map(log => (
-                                    <tr key={log.id} className="hover:bg-slate-50 transition-colors group">
-                                        <td className="px-6 py-4 text-sm font-bold text-slate-700">{new Date(log.date).toLocaleDateString('en-GB')}</td>
-                                        <td className="px-6 py-4"><span className="px-2 py-0.5 bg-slate-100 border border-slate-200 rounded text-[9px] font-black uppercase text-slate-500">{log.type}</span></td>
-                                        <td className="px-6 py-4 text-sm font-black text-slate-900">{log.weightGrams ? formatWeightDisplay(log.weightGrams, animal.weightUnit) : log.value}</td>
-                                        <td className="px-6 py-4 text-xs text-slate-500 italic">{log.notes || '-'}</td>
-                                        <td className="px-6 py-4 text-right">
-                                            <div className="flex items-center justify-end gap-3">
-                                                <span className="font-mono text-[10px] font-black text-slate-300 uppercase">{log.userInitials}</span>
-                                                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    <button onClick={() => handleEditLog(log)} className="p-1.5 text-slate-400 hover:text-emerald-600 transition-colors"><Edit2 size={12}/></button>
-                                                    <button onClick={() => window.confirm('Purge log?') && handleDeleteLog(log.id)} className="p-1.5 text-slate-400 hover:text-rose-600 transition-colors"><Trash2 size={12}/></button>
-                                                </div>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-              )}
-
-              {activeTab === 'medical' && (
-                <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-300">
-                    <div className="flex justify-end">
-                        <button onClick={() => setIsMedicalModalOpen(true)} className="bg-rose-600 text-white px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center gap-2 hover:bg-rose-700 transition-all shadow-lg shadow-rose-900/20">
-                            <Stethoscope size={14}/> Log Medical Record
-                        </button>
-                    </div>
-                    <div className="bg-white rounded-2xl border-2 border-slate-300 shadow-md overflow-hidden">
-                        <table className="w-full text-left">
-                            <thead className="bg-slate-50 border-b-2 border-slate-200">
-                                <tr>
-                                    <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Clinical Date</th>
-                                    <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest">Diagnosis / Condition</th>
-                                    <th className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest text-right">Auth & Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100">
-                                {medicalLogs.map(log => (
-                                    <tr key={log.id} className="hover:bg-slate-50 transition-colors group">
-                                        <td className="px-6 py-4 whitespace-nowrap">
-                                            <div className="text-sm font-bold text-slate-700">{new Date(log.date).toLocaleDateString('en-GB')}</div>
-                                            <div className="text-[9px] font-black text-rose-500 uppercase tracking-widest mt-1">{log.healthType}</div>
-                                        </td>
-                                        <td className="px-6 py-4">
-                                            <div className="flex items-center gap-3 mb-1">
-                                                <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase border ${log.condition === HealthCondition.HEALTHY ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-rose-50 text-rose-700 border-rose-200'}`}>{log.condition}</span>
-                                                {log.bcs && <span className="text-[10px] font-bold text-slate-400">BCS: {log.bcs}/10</span>}
-                                            </div>
-                                            <p className="text-sm font-medium text-slate-800 leading-relaxed italic">"{log.value}"</p>
-                                            {log.notes && <p className="text-xs text-slate-500 mt-2">{log.notes}</p>}
-                                        </td>
-                                        <td className="px-6 py-4 text-right">
-                                            <div className="flex items-center justify-end gap-3">
-                                                <span className="font-mono text-[10px] font-black text-slate-300 uppercase">{log.userInitials}</span>
-                                                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    <button onClick={() => handleEditLog(log)} className="p-1.5 text-slate-400 hover:text-emerald-600 transition-colors"><Edit2 size={12}/></button>
-                                                    <button onClick={() => window.confirm('Purge log?') && handleDeleteLog(log.id)} className="p-1.5 text-slate-400 hover:text-rose-600 transition-colors"><Trash2 size={12}/></button>
-                                                </div>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-              )}
-
               {activeTab === 'intelligence' && (
                 <div className="animate-in slide-in-from-bottom-4 duration-300">
                     {!speciesCardData ? (
@@ -588,7 +528,7 @@ const AnimalProfile: React.FC<AnimalProfileProps> = ({
                                 className="bg-slate-900 text-white px-8 py-4 rounded-xl font-black uppercase text-xs tracking-[0.2em] shadow-xl hover:bg-black transition-all flex items-center gap-3 mx-auto disabled:opacity-50"
                             >
                                 {isGeneratingSpecies ? <Loader2 className="animate-spin" size={18}/> : <Sparkles size={18}/>}
-                                {isGeneratingSpecies ? 'Synthesizing...' : 'Generate Dossier'}
+                                {isGeneratingSpecies ? 'Synthesizing...' : 'Generate Report'}
                             </button>
                         </div>
                     ) : (
@@ -637,13 +577,21 @@ const AnimalProfile: React.FC<AnimalProfileProps> = ({
                 onUpdateAnimal({ ...animal, logs: updatedLogs }); 
                 setIsAddLogOpen(false); 
                 setEditingLog(undefined);
-            }} 
+            }}
+            onAddTask={(task) => {
+                if (onAddTask) {
+                    onAddTask(task);
+                }
+            }}
             onDelete={handleDeleteLog}
-            animal={animal} 
+            onUpdateAnimal={onUpdateAnimal}
+            animal={animal}
+            allAnimals={allAnimals} 
             initialType={logFormType} 
             existingLog={editingLog}
             foodOptions={foodOptions} 
             feedMethods={feedMethods[animal.category] || []}
+            eventTypes={eventTypes}
           />
       )}
 

@@ -6,7 +6,7 @@
  */
 export const formatWeightDisplay = (grams: number | undefined | null, unit: 'g' | 'oz' | 'lbs_oz' = 'g') => {
     // 1. Hardened Input Check
-    if (grams === undefined || grams === null || typeof grams !== 'number' || isNaN(grams) || !isFinite(grams)) {
+    if (grams === undefined || grams === null || typeof grams !== 'number' || Number.isNaN(grams) || !Number.isFinite(grams)) {
         return '';
     }
     

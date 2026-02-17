@@ -23,7 +23,9 @@ import TimeSheets from './components/TimeSheets.tsx';
 import HelpCenter from './components/HelpCenter.tsx';
 import Reports from './components/Reports.tsx';
 import HolidayRegistry from './components/HolidayRegistry.tsx';
+import DailyRounds from './components/DailyRounds.tsx';
 import DiagnosticOverlay from './components/DiagnosticOverlay.tsx';
+import React19Playground from './components/React19Playground.tsx';
 import { useAppData } from './hooks/useAppData.ts';
 import { Loader2 } from 'lucide-react';
 
@@ -31,18 +33,18 @@ const App: React.FC = () => {
   const {
     currentUser, isInitializing, view, setView, selectedAnimal, animals, tasks, users,
     siteLogs, incidents, firstAidLogs, timeLogs, holidayRequests, foodOptions,
-    feedMethods, locations, contacts, orgProfile, sortOption, isOrderLocked,
+    feedMethods, eventTypes, locations, contacts, orgProfile, sortOption, isOrderLocked,
     activeCategory, setActiveCategory, viewDate, setViewDate, isOffline, fontScale, 
-    setFontScale, activeShift,
+    setFontScale, activeShift, systemPreferences,
     handleLogin, handleLogout, selectAnimalAndNavigate, handleUpdateSortOption,
     handleToggleLock, handleUpdateAnimal, handleAddAnimal, handleDeleteAnimal,
     handleAddTask, handleAddTasks, handleUpdateTask, handleDeleteTask, handleAddSiteLog,
     handleDeleteSiteLog, handleAddIncident, handleUpdateIncident, handleDeleteIncident,
     handleAddFirstAid, handleDeleteFirstAid, handleUpdateUsers, handleImport,
-    handleReorderAnimals, handleUpdateFoodOptions, handleUpdateFeedMethods,
+    handleReorderAnimals, handleUpdateFoodOptions, handleUpdateFeedMethods, handleUpdateEventTypes,
     handleUpdateLocations, handleUpdateContacts, handleUpdateOrgProfile,
     handleClockIn, handleClockOut, handleDeleteTimeLog, handleAddHoliday,
-    handleUpdateHoliday, handleDeleteHoliday
+    handleUpdateHoliday, handleDeleteHoliday, handleUpdateSystemPreferences
   } = useAppData();
 
   if (isInitializing) {
@@ -57,12 +59,12 @@ const App: React.FC = () => {
   if (!currentUser) return <LoginScreen users={users} onLogin={handleLogin} orgProfile={orgProfile} />;
 
   const isAdmin = currentUser.role === UserRole.ADMIN;
-  // Memoize permissions
+  // Memoize permissions for performance
   const p: UserPermissions = { 
     dashboard: true, dailyLog: true, tasks: true, medical: isAdmin, movements: isAdmin, 
     safety: isAdmin, maintenance: true, settings: isAdmin, flightRecords: true, 
     feedingSchedule: isAdmin, attendance: isAdmin, attendanceManager: isAdmin, 
-    holidayApprover: isAdmin, missingRecords: isAdmin, reports: isAdmin, 
+    holidayApprover: isAdmin, missingRecords: isAdmin, reports: isAdmin, rounds: true,
     ...(currentUser.permissions || {}) 
   };
 
@@ -72,8 +74,9 @@ const App: React.FC = () => {
         {view === 'dashboard' && p.dashboard && <Dashboard animals={animals} userRole={currentUser.role} onSelectAnimal={selectAnimalAndNavigate} onAddAnimal={handleAddAnimal} onUpdateAnimal={handleUpdateAnimal} onReorderAnimals={handleReorderAnimals} foodOptions={foodOptions} feedMethods={feedMethods} locations={locations} sortOption={sortOption} setSortOption={handleUpdateSortOption} isOrderLocked={isOrderLocked} onToggleLock={handleToggleLock} tasks={tasks} onUpdateTask={handleUpdateTask} activeTab={activeCategory} setActiveTab={setActiveCategory} viewDate={viewDate} setViewDate={setViewDate} />}
         {view === 'timesheets' && p.attendance && <TimeSheets timeLogs={timeLogs} currentUser={currentUser} users={users} onDeleteLog={handleDeleteTimeLog} />}
         {view === 'holidays' && <HolidayRegistry requests={holidayRequests} currentUser={currentUser} onAddRequest={handleAddHoliday} onUpdateRequest={handleUpdateHoliday} onDeleteRequest={handleDeleteHoliday} />}
-        {view === 'animal_profile' && selectedAnimal && <AnimalProfile animal={selectedAnimal} onBack={() => setView('dashboard')} onUpdateAnimal={handleUpdateAnimal} onDeleteAnimal={handleDeleteAnimal} foodOptions={foodOptions} feedMethods={feedMethods} orgProfile={orgProfile} locations={locations} isAdmin={p.settings} />}
-        {view === 'daily' && p.dailyLog && <DailyLog animals={animals} onUpdateAnimal={handleUpdateAnimal} foodOptions={foodOptions} feedMethods={feedMethods} sortOption={sortOption} setSortOption={handleUpdateSortOption} currentUser={currentUser} activeCategory={activeCategory} setActiveCategory={setActiveCategory} viewDate={viewDate} setViewDate={setViewDate} />}
+        {view === 'animal_profile' && selectedAnimal && <AnimalProfile animal={selectedAnimal} allAnimals={animals} onBack={() => setView('dashboard')} onUpdateAnimal={handleUpdateAnimal} onDeleteAnimal={handleDeleteAnimal} foodOptions={foodOptions} feedMethods={feedMethods} eventTypes={eventTypes} orgProfile={orgProfile} locations={locations} isAdmin={p.settings} onAddTask={handleAddTask} />}
+        {view === 'daily' && p.dailyLog && <DailyLog animals={animals} onUpdateAnimal={handleUpdateAnimal} foodOptions={foodOptions} feedMethods={feedMethods} eventTypes={eventTypes} sortOption={sortOption} setSortOption={handleUpdateSortOption} currentUser={currentUser} activeCategory={activeCategory} setActiveCategory={setActiveCategory} viewDate={viewDate} setViewDate={setViewDate} />}
+        {view === 'rounds' && p.rounds && <DailyRounds animals={animals} currentUser={currentUser} onAddSiteLog={handleAddSiteLog} onAddIncident={handleAddIncident} />}
         {view === 'tasks' && p.tasks && <Tasks tasks={tasks} animals={animals} onAddTask={handleAddTask} onUpdateTask={handleUpdateTask} onDeleteTask={handleDeleteTask} users={users} currentUser={currentUser} onAddSiteLog={handleAddSiteLog} onUpdateAnimal={handleUpdateAnimal} />}
         {view === 'flight_records' && p.flightRecords && <FlightRecords animals={animals} />}
         {view === 'schedule' && p.feedingSchedule && <Schedule animals={animals} tasks={tasks} foodOptions={foodOptions} onAddTasks={handleAddTasks} onDeleteTask={handleDeleteTask} />}
@@ -86,11 +89,12 @@ const App: React.FC = () => {
         {view === 'maintenance' && p.maintenance && <SiteMaintenance logs={siteLogs} currentUser={currentUser} onAddLog={handleAddSiteLog} onDeleteLog={handleDeleteTimeLog} />}
         {view === 'missing_records' && p.missingRecords && <MissingRecords animals={animals} />}
         {view === 'reports' && p.reports && <Reports animals={animals} users={users} orgProfile={orgProfile} currentUser={currentUser} incidents={incidents} siteLogs={siteLogs} timeLogs={timeLogs} />}
-        {view === 'settings' && p.settings && <Settings animals={animals} onImport={handleImport} foodOptions={foodOptions} onUpdateFoodOptions={handleUpdateFoodOptions} feedMethods={feedMethods} onUpdateFeedMethods={handleUpdateFeedMethods} users={users} onUpdateUsers={handleUpdateUsers} locations={locations} onUpdateLocations={handleUpdateLocations} contacts={contacts} onUpdateContacts={handleUpdateContacts} orgProfile={orgProfile} onUpdateOrgProfile={handleUpdateOrgProfile} onUpdateAnimal={handleUpdateAnimal} tasks={tasks} />}
+        {view === 'settings' && p.settings && <Settings animals={animals} onImport={handleImport} foodOptions={foodOptions} onUpdateFoodOptions={handleUpdateFoodOptions} feedMethods={feedMethods} onUpdateFeedMethods={handleUpdateFeedMethods} eventTypes={eventTypes} onUpdateEventTypes={handleUpdateEventTypes} users={users} onUpdateUsers={handleUpdateUsers} locations={locations} onUpdateLocations={handleUpdateLocations} contacts={contacts} onUpdateContacts={handleUpdateContacts} orgProfile={orgProfile} onUpdateOrgProfile={handleUpdateOrgProfile} onUpdateAnimal={handleUpdateAnimal} tasks={tasks} onDeleteTask={handleDeleteTask} systemPreferences={systemPreferences} onUpdateSystemPreferences={handleUpdateSystemPreferences} onLaunchBenchmark={() => setView('benchmark')} />}
         {view === 'help' && <HelpCenter currentUser={currentUser} />}
+        {view === 'benchmark' && <React19Playground onBack={() => setView('settings')} />}
       </Layout>
       {(currentUser.role === UserRole.ADMIN || currentUser.permissions?.settings) && (
-          <DiagnosticOverlay animals={animals} users={users} />
+          <DiagnosticOverlay animals={animals} users={users} tasks={tasks} />
       )}
     </div>
   );

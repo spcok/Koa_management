@@ -17,7 +17,8 @@ const parseCSVLine = (line: string): string[] => {
     let current = '';
     let inQuote = false;
     
-    for (let i = 0; i < line.length; i++) {
+    let i = 0;
+    while (i < line.length) {
         const char = line[i];
         if (char === '"') {
             // Check for escaped quote ""
@@ -33,6 +34,7 @@ const parseCSVLine = (line: string): string[] => {
         } else {
             current += char;
         }
+        i++;
     }
     values.push(current);
     return values;
@@ -52,10 +54,10 @@ const parseFalconryWeight = (str: string): number => {
     const parsePart = (p: string) => {
         if (p.includes('/')) {
             const [n, d] = p.split('/').map(Number);
-            return (d !== 0 && !isNaN(n) && !isNaN(d)) ? n / d : 0;
+            return (d !== 0 && !Number.isNaN(n) && !Number.isNaN(d)) ? n / d : 0;
         }
-        const floatVal = parseFloat(p);
-        return isNaN(floatVal) ? 0 : floatVal;
+        const floatVal = Number.parseFloat(p);
+        return Number.isNaN(floatVal) ? 0 : floatVal;
     };
 
     if (parts.length === 3) {
@@ -151,6 +153,7 @@ export const parseCSVToAnimals = (csvContent: string): Animal[] => {
         targetHumidityMax: Number(clean(values[17])) || undefined,
         mistingFrequency: clean(values[18]) || undefined,
         waterType: clean(values[19]) || undefined,
+        weightUnit: 'g',
         logs: [],
         documents: []
       });
@@ -161,7 +164,7 @@ export const parseCSVToAnimals = (csvContent: string): Animal[] => {
       const animal = animalsMap.get(id);
       if (animal) {
         const dateStr = clean(values[21]);
-        const validDate = isNaN(Date.parse(dateStr)) ? new Date().toISOString() : dateStr;
+        const validDate = Number.isNaN(Date.parse(dateStr)) ? new Date().toISOString() : dateStr;
         
         animal.logs.push({
           id: logId,
@@ -183,10 +186,6 @@ export const parseCSVToAnimals = (csvContent: string): Animal[] => {
 
   return Array.from(animalsMap.values());
 };
-
-// ... Rest of the file (parseDailyBirdRecords, parseSmartCSV) follows similar robust patterns ...
-// Re-exporting smart parser without changes as the logic within was already fairly distinct,
-// but relying on the now hardened parseCSVLine helper.
 
 export const parseSmartCSV = (csvContent: string, currentAnimals: Animal[], defaultCategory: AnimalCategory = AnimalCategory.OWLS): Animal[] => {
   const lines = csvContent.trim().split('\n');
@@ -252,6 +251,7 @@ export const parseSmartCSV = (csvContent: string, currentAnimals: Animal[], defa
               description: 'Imported Record',
               specialRequirements: '',
               imageUrl: `https://picsum.photos/seed/${name.replace(/\s/g,'')}/400/400`,
+              weightUnit: 'g',
               logs: [],
               documents: []
           };
@@ -264,7 +264,7 @@ export const parseSmartCSV = (csvContent: string, currentAnimals: Animal[], defa
           const [d, m, y] = dateStr.split('/');
           dateStr = `${y}-${m}-${d}`;
       }
-      if (isNaN(Date.parse(dateStr))) dateStr = new Date().toISOString().split('T')[0];
+      if (Number.isNaN(Date.parse(dateStr))) dateStr = new Date().toISOString().split('T')[0];
       
       let timeStr = '12:00';
       if (idx.time > -1 && clean(values[idx.time])) {
@@ -291,15 +291,15 @@ export const parseSmartCSV = (csvContent: string, currentAnimals: Animal[], defa
           let grams = 0;
           let valStr = '';
           if (idx.weightGrams > -1 && clean(values[idx.weightGrams])) {
-              grams = parseFloat(clean(values[idx.weightGrams]));
+              grams = Number.parseFloat(clean(values[idx.weightGrams]));
               valStr = grams.toString();
           } else if (idx.weight > -1) {
               valStr = clean(values[idx.weight]);
               const strictGrams = parseFalconryWeight(valStr);
               if (strictGrams > 0) grams = strictGrams;
-              else grams = parseFloat(valStr);
+              else grams = Number.parseFloat(valStr);
           }
-          if (!isNaN(grams) && (grams > 0 || valStr)) {
+          if (!Number.isNaN(grams) && (grams > 0 || valStr)) {
               newLog = {
                   id: `log_${timestamp}_w_${Math.random().toString(36).substr(2,4)}`,
                   date: dateTime,

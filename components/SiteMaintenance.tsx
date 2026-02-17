@@ -71,7 +71,7 @@ const SiteMaintenance: React.FC<SiteMaintenanceProps> = ({ logs, currentUser, on
           priority,
           status,
           // FIX: Explicitly check for empty string to allow '0' as valid cost
-          cost: cost !== '' ? parseFloat(cost) : undefined,
+          cost: cost !== '' ? Number.parseFloat(cost) : undefined,
           loggedBy: editingId ? (logs.find(l => l.id === editingId)?.loggedBy || currentUser.initials) : currentUser.initials,
           timestamp: editingId ? (logs.find(l => l.id === editingId)?.timestamp || Date.now()) : Date.now()
       };

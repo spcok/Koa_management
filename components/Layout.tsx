@@ -1,10 +1,11 @@
+
 import React, { useState, useEffect } from 'react';
 import { 
   LayoutDashboard, ClipboardList, ListTodo, Map, CalendarClock, CloudSun, 
   ArrowLeftRight, ShieldAlert, AlertTriangle, Stethoscope, Heart, Wrench, 
   AlertOctagon, Clock, Settings, LogOut, Menu, Power, 
   ChevronLeft, ChevronRight, Maximize, Minimize,
-  HelpCircle, FileText, Calendar
+  HelpCircle, FileText, Calendar, ClipboardCheck
 } from 'lucide-react';
 import { UserRole, User, TimeLogEntry, UserPermissions, OrganizationProfile } from '../types';
 
@@ -61,7 +62,7 @@ const Layout: React.FC<LayoutProps> = ({
     flightRecords: true, feedingSchedule: isAdmin, attendance: true, 
     holidayApprover: isAdmin,
     attendanceManager: isAdmin, missingRecords: isAdmin,
-    reports: isAdmin,
+    reports: isAdmin, rounds: true,
     ...(currentUser.permissions || {})
   };
 
@@ -117,6 +118,7 @@ const Layout: React.FC<LayoutProps> = ({
         <SectionHeader title="Main Menu" />
         <NavItem view="dashboard" icon={LayoutDashboard} label="Dashboard" permission={p.dashboard} />
         <NavItem view="daily" icon={ClipboardList} label="Daily Log" permission={p.dailyLog} />
+        <NavItem view="rounds" icon={ClipboardCheck} label="Rounds & Checks" permission={p.rounds} />
         <NavItem view="tasks" icon={ListTodo} label="To-Do List" permission={p.tasks} />
         <NavItem view="flight_records" icon={Map} label="Flight Records & GPS" permission={p.flightRecords} />
         <NavItem view="schedule" icon={CalendarClock} label="Feeding Schedule" permission={p.feedingSchedule} />

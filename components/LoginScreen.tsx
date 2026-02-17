@@ -1,6 +1,7 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { User, OrganizationProfile } from '../types';
-import { ArrowRight, User as UserIcon, ShieldCheck, AlertCircle, Loader2 } from 'lucide-react';
+import { ArrowRight, User as UserIcon, ShieldCheck, AlertCircle, Loader2, ChevronLeft, Delete } from 'lucide-react';
 
 interface LoginScreenProps {
   users: User[];
@@ -38,6 +39,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ users, onLogin, orgProfile })
         setSelectedUser(user);
         setStep('pin');
         setError('');
+        setPin('');
     } else {
         setError('User not found');
         setTimeout(() => setError(''), 2000);
@@ -98,79 +100,110 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ users, onLogin, orgProfile })
   }, [step, handlePinInput]);
 
   return (
-    <div className="fixed inset-0 bg-slate-100 flex items-center justify-center p-6">
-         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-blue-500/5 blur-[150px] rounded-full pointer-events-none"></div>
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6 relative overflow-hidden">
+         {/* Subtle Background Pattern */}
+         <div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{ backgroundImage: 'radial-gradient(#64748b 1px, transparent 1px)', backgroundSize: '32px 32px' }}></div>
          
-         <div className="bg-white border border-slate-200 p-8 md:p-12 rounded-3xl shadow-2xl w-full max-w-sm relative z-10 text-center animate-in zoom-in-95 duration-500">
+         {/* Main Card */}
+         <div className="bg-white w-full max-w-md rounded-[2rem] shadow-2xl shadow-slate-200/50 border border-slate-100 overflow-hidden relative z-10 animate-in fade-in zoom-in-95 duration-500">
              
-             <div className="w-20 h-20 bg-white rounded-2xl flex items-center justify-center mx-auto mb-8 shadow-xl">
-                <img src={logoSrc} alt="Logo" className="w-auto h-12" />
-             </div>
-             
-             <h1 className="text-xl font-bold text-slate-800 mb-1">{orgName}</h1>
-             <p className="text-emerald-600 mb-8 text-[10px] font-black uppercase tracking-widest">Institutional Management System</p>
-
-             {step === 'initials' ? (
-                 <form onSubmit={handleInitialsSubmit} className="space-y-4">
-                    <p className="text-slate-500 text-sm font-medium">Enter your staff initials to begin.</p>
-                    <div className="relative">
-                        <UserIcon className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20}/>
-                        <input 
-                            type="text" value={initialsInput} onChange={(e) => setInitialsInput(e.target.value)}
-                            className="w-full bg-white border-2 border-slate-200 text-slate-800 text-center text-xl font-bold py-4 rounded-xl focus:outline-none focus:border-emerald-500 transition-all uppercase pl-10 tracking-[0.2em]"
-                            placeholder="XX" maxLength={3} autoFocus
-                            disabled={users.length === 0}
-                        />
-                    </div>
-                    <button type="submit" disabled={users.length === 0} className="w-full bg-slate-900 text-white font-black uppercase text-xs tracking-widest py-4 rounded-xl hover:bg-black transition-all shadow-lg shadow-slate-900/20 flex items-center justify-center gap-2 active:scale-95 disabled:bg-slate-400 disabled:shadow-none">
-                        {users.length === 0 ? <Loader2 className="animate-spin" size={18} /> : 'Validate Credentials'} {users.length > 0 && <ArrowRight size={18} />}
-                    </button>
-                    {error && (
-                        <div className="flex items-center justify-center gap-2 text-rose-500 text-xs font-bold animate-in fade-in slide-in-from-top-1 mt-2">
-                            <AlertCircle size={14}/> {error}
-                        </div>
-                    )}
-                    {users.length === 0 && !error && (
-                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest animate-pulse mt-2">Connecting to Staff Registry...</p>
-                    )}
-                 </form>
-             ) : (
-                 <div className="space-y-6 animate-in slide-in-from-right-4">
-                    <div className="flex items-center gap-3 bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
-                        <div className="w-10 h-10 rounded-lg bg-slate-800 flex items-center justify-center text-white font-black text-xs">{selectedUser?.initials}</div>
-                        <div className="text-left">
-                            <p className="text-slate-800 font-bold text-sm truncate uppercase tracking-tight">{selectedUser?.name}</p>
-                            <span className="text-[9px] font-black text-emerald-600 uppercase tracking-widest block">{selectedUser?.jobPosition || selectedUser?.role}</span>
-                        </div>
-                        <button onClick={() => { setStep('initials'); setPin(''); }} className="ml-auto text-[9px] font-black text-slate-400 uppercase hover:text-slate-800 transition-colors">Switch</button>
-                    </div>
-
-                    <p className="text-slate-500 text-sm font-medium">Enter your 4-digit PIN.</p>
-                    <div className="flex justify-center gap-4">
-                        {[0,1,2,3].map(i => (
-                            <div key={i} className={`w-4 h-4 rounded-full transition-all duration-300 ${pin.length > i ? 'bg-emerald-500 scale-110' : 'bg-slate-200'}`} />
-                        ))}
-                    </div>
-
-                    <div className="grid grid-cols-3 gap-3">
-                        {[1,2,3,4,5,6,7,8,9, 'CLR', 0, 'DEL'].map(val => (
-                            <button 
-                                key={val} type="button" 
-                                onClick={() => handlePinInput(val.toString())}
-                                className={`py-4 rounded-xl font-black text-lg transition-all active:scale-95 border-b-4 ${
-                                    typeof val === 'number' ? 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50' : 'bg-slate-200 text-slate-500 border-slate-300 text-[10px] uppercase font-black tracking-widest'
-                                }`}
-                            >
-                                {val}
-                            </button>
-                        ))}
-                    </div>
-                    {error && <p className="text-rose-500 text-xs font-bold animate-pulse">{error}</p>}
+             {/* Header Section */}
+             <div className="pt-12 pb-8 px-8 text-center bg-gradient-to-b from-white to-slate-50/50">
+                 <div className="w-24 h-24 bg-white rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg shadow-slate-100 border border-slate-50">
+                    <img src={logoSrc} alt="Logo" className="w-auto h-14 object-contain" />
                  </div>
-             )}
+                 
+                 <h1 className="text-xl font-bold text-slate-900 tracking-tight">{orgName}</h1>
+                 <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mt-2">Management System</p>
+             </div>
 
-             <div className="mt-8 flex items-center justify-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                 <ShieldCheck size={14} /> Statutory Secure Environment
+             <div className="px-8 pb-12">
+                 {step === 'initials' ? (
+                     <form onSubmit={handleInitialsSubmit} className="space-y-6">
+                        <div className="space-y-2">
+                            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider text-center">Identify Yourself</label>
+                            <div className="relative group">
+                                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                                    <UserIcon className="text-slate-300 group-focus-within:text-emerald-500 transition-colors" size={20}/>
+                                </div>
+                                <input 
+                                    type="text" 
+                                    value={initialsInput} 
+                                    onChange={(e) => { if(initialsInput !== e.target.value) setInitialsInput(e.target.value); }}
+                                    className="block w-full pl-12 pr-4 py-4 bg-slate-50 border-2 border-slate-100 text-slate-900 placeholder-slate-300 text-center text-lg font-bold rounded-xl focus:outline-none focus:border-emerald-500 focus:bg-white transition-all uppercase tracking-[0.2em]"
+                                    placeholder="INITIALS" 
+                                    maxLength={3} 
+                                    autoFocus
+                                    disabled={users.length === 0}
+                                />
+                            </div>
+                        </div>
+
+                        <button 
+                            type="submit" 
+                            disabled={!initialsInput || users.length === 0} 
+                            className="w-full bg-slate-900 text-white font-bold uppercase text-xs tracking-widest py-4 rounded-xl hover:bg-black hover:shadow-lg hover:shadow-slate-900/20 transition-all active:scale-[0.98] flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            {users.length === 0 ? <Loader2 className="animate-spin" size={16} /> : 'Continue'} 
+                            {users.length > 0 && <ArrowRight size={16} />}
+                        </button>
+
+                        {error && (
+                            <div className="flex items-center justify-center gap-2 text-rose-500 text-xs font-bold animate-in fade-in slide-in-from-top-1 bg-rose-50 py-3 rounded-lg">
+                                <AlertCircle size={14}/> {error}
+                            </div>
+                        )}
+                     </form>
+                 ) : (
+                     <div className="space-y-8 animate-in slide-in-from-right-8 duration-300">
+                        {/* User Profile Summary */}
+                        <div className="flex flex-col items-center gap-3">
+                            <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center text-slate-700 font-black text-xl border-4 border-white shadow-sm">
+                                {selectedUser?.initials}
+                            </div>
+                            <div className="text-center">
+                                <p className="text-slate-900 font-bold text-lg">{selectedUser?.name}</p>
+                                <p className="text-emerald-600 text-xs font-bold uppercase tracking-widest">{selectedUser?.jobPosition || selectedUser?.role}</p>
+                            </div>
+                        </div>
+
+                        {/* PIN Dots */}
+                        <div className="flex justify-center gap-4 py-2">
+                            {[0,1,2,3].map(i => (
+                                <div key={i} className={`w-3 h-3 rounded-full transition-all duration-300 ${pin.length > i ? 'bg-slate-900 scale-125' : 'bg-slate-200'}`} />
+                            ))}
+                        </div>
+
+                        {/* Numpad */}
+                        <div className="grid grid-cols-3 gap-3 max-w-[280px] mx-auto">
+                            {[1,2,3,4,5,6,7,8,9].map(val => (
+                                <button 
+                                    key={val} type="button" 
+                                    onClick={() => handlePinInput(val.toString())}
+                                    className="w-full aspect-square rounded-2xl font-bold text-xl bg-slate-50 text-slate-700 hover:bg-white hover:shadow-md hover:text-slate-900 transition-all active:scale-90 flex items-center justify-center border border-transparent hover:border-slate-100"
+                                >
+                                    {val}
+                                </button>
+                            ))}
+                            <button onClick={() => setStep('initials')} className="w-full aspect-square rounded-2xl flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-all active:scale-90">
+                                <ChevronLeft size={24} />
+                            </button>
+                            <button onClick={() => handlePinInput('0')} className="w-full aspect-square rounded-2xl font-bold text-xl bg-slate-50 text-slate-700 hover:bg-white hover:shadow-md hover:text-slate-900 transition-all active:scale-90 flex items-center justify-center border border-transparent hover:border-slate-100">
+                                0
+                            </button>
+                            <button onClick={() => handlePinInput('DEL')} className="w-full aspect-square rounded-2xl flex items-center justify-center text-rose-400 hover:text-rose-600 hover:bg-rose-50 transition-all active:scale-90">
+                                <Delete size={20} />
+                            </button>
+                        </div>
+                        
+                        {error && <p className="text-rose-500 text-xs font-bold text-center animate-pulse">{error}</p>}
+                     </div>
+                 )}
+             </div>
+
+             {/* Footer */}
+             <div className="bg-slate-50 py-4 px-8 border-t border-slate-100 flex items-center justify-center gap-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                 <ShieldCheck size={12} className="text-emerald-500" /> Secure Environment
              </div>
          </div>
     </div>

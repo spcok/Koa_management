@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { Animal, LogType, LogEntry, HealthRecordType, HealthCondition, User } from '../types';
 import { X, Check, Pill, Skull } from 'lucide-react';
+import { BCSSelector } from './BCSSelector';
 
 interface MedicalRecordModalProps {
   isOpen: boolean;
@@ -20,7 +21,7 @@ const MedicalRecordModal: React.FC<MedicalRecordModalProps> = ({
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [condition, setCondition] = useState<HealthCondition>(HealthCondition.HEALTHY);
   const [logEntry, setLogEntry] = useState('');
-  const [bcs, setBcs] = useState(5);
+  const [bcs, setBcs] = useState(3);
   const [featherCondition, setFeatherCondition] = useState('');
   const [initials, setInitials] = useState(currentUser?.initials || '');
   
@@ -111,15 +112,15 @@ const MedicalRecordModal: React.FC<MedicalRecordModalProps> = ({
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
-                         <div>
-                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Body Cond. Score (1-10)</label>
-                            <input type="number" min="1" max="10" step="0.5" value={bcs} onChange={e => setBcs(parseFloat(e.target.value))} className={inputClass}/>
-                         </div>
-                         <div>
-                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Feather/Coat Status</label>
-                            <input type="text" value={featherCondition} onChange={e => setFeatherCondition(e.target.value)} className={inputClass} placeholder="Excellent/Molt/Worn"/>
-                         </div>
+                    {/* VISUAL BCS */}
+                    <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
+                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Body Condition Score (Keel)</label>
+                        <BCSSelector value={bcs} onChange={setBcs} />
+                    </div>
+
+                    <div>
+                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Feather/Coat Status</label>
+                        <input type="text" value={featherCondition} onChange={e => setFeatherCondition(e.target.value)} className={inputClass} placeholder="Excellent/Molt/Worn"/>
                     </div>
                 </div>
 

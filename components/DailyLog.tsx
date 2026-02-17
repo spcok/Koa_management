@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { Animal, AnimalCategory, LogType, LogEntry, User, SortOption } from '../types';
 import { ClipboardList, Check, Droplets, ChevronLeft, ChevronRight, Plus, Thermometer, Scale, Utensils, ArrowRight } from 'lucide-react';
@@ -9,6 +10,7 @@ interface DailyLogProps {
   onUpdateAnimal: (animal: Animal) => void;
   foodOptions: Record<AnimalCategory, string[]>;
   feedMethods: Record<AnimalCategory, string[]>;
+  eventTypes?: string[];
   customOrder?: string[];
   sortOption: SortOption;
   setSortOption: (option: SortOption) => void;
@@ -20,7 +22,7 @@ interface DailyLogProps {
 }
 
 const DailyLog: React.FC<DailyLogProps> = ({ 
-    animals, onUpdateAnimal, foodOptions, feedMethods, sortOption, setSortOption, 
+    animals, onUpdateAnimal, foodOptions, feedMethods, eventTypes = [], sortOption, setSortOption, 
     currentUser, activeCategory, setActiveCategory, viewDate, setViewDate 
 }) => {
   const [modalOpen, setModalOpen] = useState(false);
@@ -159,7 +161,7 @@ const DailyLog: React.FC<DailyLogProps> = ({
             </div>
             <div className="flex items-center bg-white p-1 rounded-xl border-2 border-slate-300 shadow-sm">
                 <button onClick={() => { const d = new Date(viewDate); d.setDate(d.getDate() - 1); setViewDate(d.toISOString().split('T')[0]); }} className="p-2 text-slate-400 hover:text-slate-900 transition-colors"><ChevronLeft size={18}/></button>
-                <input type="date" value={viewDate} onChange={e => setViewDate(e.target.value)} className="bg-transparent border-none focus:ring-0 text-slate-800 font-black text-[10px] w-32 text-center p-0 uppercase tracking-widest"/>
+                <input type="date" value={viewDate} onChange={e => { if(viewDate !== e.target.value) setViewDate(e.target.value); }} className="bg-transparent border-none focus:ring-0 text-slate-800 font-black text-[10px] w-32 text-center p-0 uppercase tracking-widest"/>
                 <button onClick={() => { const d = new Date(viewDate); d.setDate(d.getDate() + 1); setViewDate(d.toISOString().split('T')[0]); }} className="p-2 text-slate-400 hover:text-slate-900 transition-colors"><ChevronRight size={18}/></button>
             </div>
         </div>
@@ -279,7 +281,7 @@ const DailyLog: React.FC<DailyLogProps> = ({
           <AddEntryModal isOpen={modalOpen} onClose={() => setModalOpen(false)} onSave={(entry) => {
               const animal = animals.find(a => a.id === selectedAnimalId);
               if (animal) onUpdateAnimal({ ...animal, logs: [entry, ...(animal.logs || []).filter(l => l.id !== entry.id)] });
-          }} animal={animals.find(a => a.id === selectedAnimalId)!} initialType={logType} existingLog={editingLog} foodOptions={foodOptions} feedMethods={feedMethods[activeCategory] || []} initialDate={viewDate}/>
+          }} onUpdateAnimal={onUpdateAnimal} animal={animals.find(a => a.id === selectedAnimalId)!} allAnimals={animals} initialType={logType} existingLog={editingLog} foodOptions={foodOptions} feedMethods={feedMethods[activeCategory] || []} eventTypes={eventTypes} initialDate={viewDate}/>
       )}
     </div>
   );

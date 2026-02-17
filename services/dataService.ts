@@ -1,7 +1,7 @@
 
 import { supabase } from './supabaseClient';
-import { Animal, AnimalCategory, Task, User, UserRole, SiteLogEntry, Contact, OrganizationProfile, Incident, FirstAidLogEntry, TimeLogEntry, GlobalDocument, AuditLogEntry, LocalBackupConfig, LocalBackupEntry, HolidayRequest } from '../types';
-import { DEFAULT_FOOD_OPTIONS, DEFAULT_FEED_METHODS, MOCK_ANIMALS } from '../constants';
+import { Animal, AnimalCategory, Task, User, UserRole, SiteLogEntry, Contact, OrganizationProfile, Incident, FirstAidLogEntry, TimeLogEntry, GlobalDocument, AuditLogEntry, LocalBackupConfig, LocalBackupEntry, HolidayRequest, SystemPreferences } from '../types';
+import { DEFAULT_FOOD_OPTIONS, DEFAULT_FEED_METHODS, MOCK_ANIMALS, DEFAULT_SYSTEM_PREFERENCES, DEFAULT_EVENT_TYPES } from '../constants';
 import { RealtimeChannel } from '@supabase/supabase-js';
 
 const DEFAULT_USERS: User[] = [
@@ -13,7 +13,7 @@ const DEFAULT_USERS: User[] = [
             dashboard: true, dailyLog: true, tasks: true, medical: true, movements: true, 
             safety: true, maintenance: true, settings: true,
             flightRecords: true, feedingSchedule: true, attendance: true, attendanceManager: true, 
-            holidayApprover: true, missingRecords: true, reports: true
+            holidayApprover: true, missingRecords: true, reports: true, rounds: true
         }
     },
     { 
@@ -24,7 +24,7 @@ const DEFAULT_USERS: User[] = [
             dashboard: true, dailyLog: true, tasks: true, medical: false, movements: false, 
             safety: false, maintenance: true, settings: false,
             flightRecords: true, feedingSchedule: false, attendance: true, attendanceManager: false, 
-            holidayApprover: false, missingRecords: false, reports: false
+            holidayApprover: false, missingRecords: false, reports: false, rounds: true
         }
     }
 ];
@@ -275,6 +275,9 @@ export const dataService = {
     fetchFeedMethods: async () => dataService.fetchSettingsKey('feed_methods', DEFAULT_FEED_METHODS),
     saveFeedMethods: async (val: any) => dataService.saveSettingsKey('feed_methods', val),
 
+    fetchEventTypes: async () => dataService.fetchSettingsKey('event_types', DEFAULT_EVENT_TYPES),
+    saveEventTypes: async (val: string[]) => dataService.saveSettingsKey('event_types', val),
+
     fetchLocations: async () => dataService.fetchSettingsKey('locations', []),
     saveLocations: async (val: string[]) => dataService.saveSettingsKey('locations', val),
 
@@ -286,4 +289,7 @@ export const dataService = {
 
     fetchLocalBackupConfig: async (): Promise<LocalBackupConfig> => dataService.fetchSettingsKey('local_backup_config', DEFAULT_LOCAL_BACKUP_CONFIG),
     saveLocalBackupConfig: async (val: LocalBackupConfig) => dataService.saveSettingsKey('local_backup_config', val),
+
+    fetchSystemPreferences: async (): Promise<SystemPreferences> => dataService.fetchSettingsKey('system_preferences', DEFAULT_SYSTEM_PREFERENCES),
+    saveSystemPreferences: async (val: SystemPreferences) => dataService.saveSettingsKey('system_preferences', val),
 };

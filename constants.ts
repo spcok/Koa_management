@@ -1,5 +1,14 @@
 
-import { Animal, AnimalCategory, LogType } from './types';
+import { Animal, AnimalCategory, LogType, SystemPreferences } from './types';
+
+export const DEFAULT_SYSTEM_PREFERENCES: SystemPreferences = {
+  unitSystem: 'Metric',
+  tempUnit: 'C',
+  dashboardDensity: 'Standard',
+  brandColor: '#10b981',
+  sessionTimeoutMinutes: 5,
+  autoPurgeDays: 365
+};
 
 export const DEFAULT_FOOD_OPTIONS = {
   [AnimalCategory.OWLS]: ['Day Old Chick', 'Mouse', 'Rat', 'Quail', 'Rabbit'],
@@ -14,6 +23,16 @@ export const DEFAULT_FEED_METHODS = {
   [AnimalCategory.MAMMALS]: ['Bowl', 'Scatter', 'Hand', 'Hidden', 'Puzzle'],
   [AnimalCategory.EXOTICS]: ['Tongs', 'Bowl', 'Drop Feed'],
 };
+
+export const DEFAULT_EVENT_TYPES = [
+    'Educational Talk',
+    'Flying Display',
+    'Experience Day',
+    'Training Demo',
+    'Off-Site Event',
+    'School Visit',
+    'Photography Session'
+];
 
 export const DEFAULT_ENRICHMENT_TYPES = [
     'Food - Scatter',
@@ -44,10 +63,11 @@ export const MOCK_ANIMALS: Animal[] = [
     winterWeight: 340,
     flyingWeight: 320,
     ringNumber: 'BTO-12345',
+    weightUnit: 'g',
     logs: [
-      { id: 'l1', date: '2023-10-25T09:00:00Z', type: LogType.WEIGHT, value: '325', timestamp: 1698224400000 },
-      { id: 'l2', date: '2023-10-25T17:00:00Z', type: LogType.FEED, value: '2 Mice', feedMethod: 'Bowl', timestamp: 1698253200000 },
-      { id: 'l3', date: '2023-10-24T09:00:00Z', type: LogType.WEIGHT, value: '322', timestamp: 1698138000000 },
+      { id: 'l1', date: '2023-10-25T09:00:00Z', type: LogType.WEIGHT, value: '325', timestamp: 1698224400000, userInitials: 'DM' },
+      { id: 'l2', date: '2023-10-25T17:00:00Z', type: LogType.FEED, value: '2 Mice', feedMethod: 'Bowl', timestamp: 1698253200000, userInitials: 'DM' },
+      { id: 'l3', date: '2023-10-24T09:00:00Z', type: LogType.WEIGHT, value: '322', timestamp: 1698138000000, userInitials: 'DM' },
     ],
     documents: []
   },
@@ -66,9 +86,10 @@ export const MOCK_ANIMALS: Animal[] = [
     winterWeight: 4200,
     flyingWeight: 3950,
     ringNumber: 'GE-9988',
+    weightUnit: 'g',
     logs: [
-      { id: 'l4', date: '2023-10-26T08:30:00Z', type: LogType.WEIGHT, value: '4050', timestamp: 1698309000000 },
-      { id: 'l5', date: '2023-10-25T16:00:00Z', type: LogType.FEED, value: '1 Rabbit', feedMethod: 'Tongs', timestamp: 1698249600000 },
+      { id: 'l4', date: '2023-10-26T08:30:00Z', type: LogType.WEIGHT, value: '4050', timestamp: 1698309000000, userInitials: 'DM' },
+      { id: 'l5', date: '2023-10-25T16:00:00Z', type: LogType.FEED, value: '1 Rabbit', feedMethod: 'Tongs', timestamp: 1698249600000, userInitials: 'DM' },
     ],
     documents: []
   },
@@ -86,9 +107,10 @@ export const MOCK_ANIMALS: Animal[] = [
     summerWeight: 720,
     winterWeight: 750,
     flyingWeight: 0,
+    weightUnit: 'g',
     logs: [
-      { id: 'l6', date: '2023-10-26T09:15:00Z', type: LogType.WEIGHT, value: '735', timestamp: 1698311700000 },
-      { id: 'l7', date: '2023-10-26T12:00:00Z', type: LogType.HEALTH, value: 'Routine Check', notes: 'Teeth look good.', timestamp: 1698321600000 },
+      { id: 'l6', date: '2023-10-26T09:15:00Z', type: LogType.WEIGHT, value: '735', timestamp: 1698311700000, userInitials: 'DM' },
+      { id: 'l7', date: '2023-10-26T12:00:00Z', type: LogType.HEALTH, value: 'Routine Check', notes: 'Teeth look good.', timestamp: 1698321600000, userInitials: 'DM' },
     ],
     documents: []
   },
@@ -108,8 +130,9 @@ export const MOCK_ANIMALS: Animal[] = [
     flyingWeight: 0,
     targetDayTemp: 28,
     targetNightTemp: 22,
+    weightUnit: 'g',
     logs: [
-        { id: 'l8', date: '2023-10-20T10:00:00Z', type: LogType.FEED, value: '1 Mouse', feedMethod: 'Tongs', timestamp: 1697796000000 },
+        { id: 'l8', date: '2023-10-20T10:00:00Z', type: LogType.FEED, value: '1 Mouse', feedMethod: 'Tongs', timestamp: 1697796000000, userInitials: 'DM' },
     ],
     documents: []
   }

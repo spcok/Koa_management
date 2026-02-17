@@ -254,19 +254,25 @@ export const generateSpeciesCard = async (species: string): Promise<{ text: stri
   const ai = getAi();
   try {
     const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
-      model: 'gemini-2.5-flash-image',
-      contents: { parts: [{ text: `Dossier and high-contrast range map (red on black/white) for "${species}".` }] },
-      config: { imageConfig: { aspectRatio: "16:9" } }
+      model: 'gemini-3-flash-preview',
+      contents: `Generate a comprehensive "Species Intelligence Dossier" for "${species}".
+      Include sections for:
+      - Global Conservation Status & Threats
+      - Dietary Adaptations
+      - Behavioral Traits
+      - Native Range description
+      
+      Format as clean Markdown. Do not include images.`,
     }));
-    let text = ""; let mapImage = undefined;
-    if (response.candidates?.[0]?.content?.parts) {
-      for (const part of response.candidates[0].content.parts) {
-        if (part.text) text += part.text;
-        else if (part.inlineData) mapImage = `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
-      }
-    }
-    return { text: text || "Synthesis failed.", mapImage };
-  } catch (error) { return { text: "Diagnostic engine error." }; }
+    
+    return { text: response.text || "Synthesis failed." };
+  } catch (error) { 
+    // Fallback Mock Data on Error
+    console.error("Gemini Error (generateSpeciesCard):", error);
+    return { 
+        text: `### **${species} (Simulated Dossier)**\n\n*Note: The AI service is currently unavailable. Displaying mock data for demonstration purposes.*\n\n**Global Conservation Status:**\nMost populations of ${species} are currently considered stable, though local declines due to habitat loss are noted.\n\n**Dietary Adaptations:**\nOpportunistic carnivores, they have adapted to hunt a wide variety of prey including small mammals and invertebrates.\n\n**Behavioral Traits:**\nTypically solitary and nocturnal, though crepuscular activity is common in the breeding season.` 
+    }; 
+  }
 };
 
 export const generateExoticSummary = async (species: string): Promise<string> => {

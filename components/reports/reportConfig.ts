@@ -26,6 +26,34 @@ export const REPORT_SCHEMAS: Record<string, ReportSchema> = {
       { label: 'Staff', width: '10%', accessor: 'initials' }
     ]
   },
+  ROUNDS: {
+    id: 'ROUNDS',
+    title: 'Rounds Log (Summary)',
+    columns: [
+      { label: 'Date / Time', width: '15%', accessor: 'timestamp' },
+      { label: 'Round Type', width: '10%', accessor: 'type' },
+      { label: 'Section', width: '15%', accessor: 'section' },
+      { label: 'Officer', width: '10%', accessor: 'staff' },
+      { label: 'Audit', width: '15%', accessor: 'completion' },
+      { label: 'Status', width: '10%', accessor: 'status' },
+      { label: 'Notes', width: '25%', accessor: 'notes' }
+    ]
+  },
+  ROUNDS_CHECKLIST: {
+    id: 'ROUNDS_CHECKLIST',
+    title: 'Daily Rounds Checklist (Detailed)',
+    columns: [
+      { label: 'Date', width: '10%', accessor: 'date' },
+      { label: 'Animal', width: '18%', accessor: 'animal' },
+      { label: 'AM Well', width: '7%', accessor: 'am_well' },
+      { label: 'AM Water', width: '7%', accessor: 'am_water' },
+      { label: 'AM Sec', width: '7%', accessor: 'am_secure' },
+      { label: 'PM Well', width: '7%', accessor: 'pm_well' },
+      { label: 'PM Water', width: '7%', accessor: 'pm_water' },
+      { label: 'PM Sec', width: '7%', accessor: 'pm_secure' },
+      { label: 'Comments', width: '30%', accessor: 'comments' }
+    ]
+  },
   STOCK_LIST: {
     id: 'STOCK_LIST',
     title: 'Section 9 Stock Inventory',
@@ -53,14 +81,10 @@ export const REPORT_SCHEMAS: Record<string, ReportSchema> = {
   },
   WEIGHTS: {
     id: 'WEIGHTS',
-    title: 'Biometric Weight Matrix',
+    title: 'Weekly Weight Chart',
     columns: [
-      { label: 'Date', width: '15%', accessor: 'date' },
-      { label: 'Subject', width: '25%', accessor: 'subject' },
-      { label: 'Prev', width: '15%', accessor: 'prev' },
-      { label: 'Curr', width: '15%', accessor: 'curr' },
-      { label: 'Diff', width: '15%', accessor: 'diff' },
-      { label: 'Staff', width: '15%', accessor: 'initials' }
+      { label: 'Subject', width: '20%', accessor: 'subject' }
+      // Dynamic columns generated in component
     ]
   },
   CLINICAL: {

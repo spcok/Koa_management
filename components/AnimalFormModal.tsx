@@ -287,26 +287,23 @@ const AnimalFormModal: React.FC<AnimalFormModalProps> = ({ isOpen, onClose, onSa
                             
                             <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
                                 <div className="md:col-span-5">
-                                    <label className={labelClass}>SUBJECT CALL NAME *</label>
-                                    <input type="text" required value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className={inputClass} placeholder="Aragog" />
+                                    <label className={labelClass}>SUBJECT CALL NAME * <input type="text" required value={formData.name} onChange={e => { if(formData.name !== e.target.value) setFormData({...formData, name: e.target.value}); }} className={inputClass} placeholder="Aragog" /></label>
                                 </div>
                                 <div className="md:col-span-4">
-                                    <label className={labelClass}>COLLECTION SECTION *</label>
-                                    <select value={formData.category} onChange={e => setFormData({...formData, category: e.target.value as AnimalCategory})} className={inputClass}>
+                                    <label className={labelClass}>COLLECTION SECTION * <select value={formData.category} onChange={e => { const val = e.target.value as AnimalCategory; if(formData.category !== val) setFormData({...formData, category: val}); }} className={inputClass}>
                                         {Object.values(AnimalCategory).map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                                    </select>
+                                    </select></label>
                                 </div>
                                 <div className="md:col-span-3">
-                                    <label className={labelClass}>ENCLOSURE / LOCATION *</label>
-                                    <input 
+                                    <label className={labelClass}>ENCLOSURE / LOCATION * <input 
                                         type="text" 
                                         list="location-list"
                                         required 
                                         value={formData.location} 
-                                        onChange={e => setFormData({...formData, location: e.target.value})} 
+                                        onChange={e => { if(formData.location !== e.target.value) setFormData({...formData, location: e.target.value}); }} 
                                         className={inputClass} 
                                         placeholder="Aviary 1" 
-                                    />
+                                    /></label>
                                     <datalist id="location-list">
                                         {locations.map(loc => <option key={loc} value={loc} />)}
                                     </datalist>
@@ -317,7 +314,7 @@ const AnimalFormModal: React.FC<AnimalFormModalProps> = ({ isOpen, onClose, onSa
                                 <div className="md:col-span-7">
                                     <label className={labelClass}>COMMON SPECIES NAME *</label>
                                     <div className="flex gap-2">
-                                        <input type="text" required value={formData.species} onChange={e => setFormData({...formData, species: e.target.value})} className={inputClass} placeholder="Salmon Pink Tarantula" />
+                                        <input type="text" required value={formData.species} onChange={e => { if(formData.species !== e.target.value) setFormData({...formData, species: e.target.value}); }} className={inputClass} placeholder="Salmon Pink Tarantula" />
                                         <button 
                                             type="button" 
                                             onClick={handleAutoFill} 
@@ -329,19 +326,17 @@ const AnimalFormModal: React.FC<AnimalFormModalProps> = ({ isOpen, onClose, onSa
                                     </div>
                                 </div>
                                 <div className="md:col-span-5">
-                                    <label className={labelClass}>SCIENTIFIC (LATIN) NAME</label>
-                                    <input type="text" value={formData.latinName} onChange={e => setFormData({...formData, latinName: e.target.value})} className={`${inputClass} italic`} placeholder="Lasiodora parahybana" />
+                                    <label className={labelClass}>SCIENTIFIC (LATIN) NAME <input type="text" value={formData.latinName} onChange={e => { if(formData.latinName !== e.target.value) setFormData({...formData, latinName: e.target.value}); }} className={`${inputClass} italic`} placeholder="Lasiodora parahybana" /></label>
                                 </div>
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
                                 <div className="md:col-span-4">
-                                    <label className={labelClass}>BIOLOGICAL SEX</label>
-                                    <select value={formData.sex} onChange={e => setFormData({...formData, sex: e.target.value as any})} className={inputClass}>
+                                    <label className={labelClass}>BIOLOGICAL SEX <select value={formData.sex} onChange={e => { if(formData.sex !== e.target.value) setFormData({...formData, sex: e.target.value as any}); }} className={inputClass}>
                                         <option value="Male">Male</option>
                                         <option value="Female">Female</option>
                                         <option value="Unknown">Unknown</option>
-                                    </select>
+                                    </select></label>
                                 </div>
                                 <div className="md:col-span-4">
                                     <div className="flex justify-between items-center mb-1.5 px-1">
@@ -353,13 +348,12 @@ const AnimalFormModal: React.FC<AnimalFormModalProps> = ({ isOpen, onClose, onSa
                                             <span className="text-[9px] font-black text-slate-400 uppercase tracking-tighter">D.O.B UNKNOWN</span>
                                         </div>
                                     </div>
-                                    <input type="date" disabled={formData.isDobUnknown} value={formData.dob} onChange={e => setFormData({...formData, dob: e.target.value})} className={`${inputClass} ${formData.isDobUnknown ? 'opacity-30 grayscale' : ''}`} />
+                                    <input type="date" disabled={formData.isDobUnknown} value={formData.dob} onChange={e => { if(formData.dob !== e.target.value) setFormData({...formData, dob: e.target.value}); }} className={`${inputClass} ${formData.isDobUnknown ? 'opacity-30 grayscale' : ''}`} />
                                 </div>
                                 <div className="md:col-span-4">
-                                    <label className={labelClass}>IUCN RED LIST STATUS</label>
-                                    <select value={formData.redListStatus} onChange={e => setFormData({...formData, redListStatus: e.target.value as ConservationStatus})} className={inputClass}>
+                                    <label className={labelClass}>IUCN RED LIST STATUS <select value={formData.redListStatus} onChange={e => { const val = e.target.value as ConservationStatus; if(formData.redListStatus !== val) setFormData({...formData, redListStatus: val}); }} className={inputClass}>
                                         {Object.values(ConservationStatus).map(status => <option key={status} value={status}>{status}</option>)}
-                                    </select>
+                                    </select></label>
                                 </div>
                             </div>
                         </section>
@@ -372,13 +366,11 @@ const AnimalFormModal: React.FC<AnimalFormModalProps> = ({ isOpen, onClose, onSa
                             
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                                 <div>
-                                    <label className={labelClass}>DATE OF ARRIVAL *</label>
-                                    <input type="date" required value={formData.arrivalDate} onChange={e => setFormData({...formData, arrivalDate: e.target.value})} className={inputClass} />
+                                    <label className={labelClass}>DATE OF ARRIVAL * <input type="date" required value={formData.arrivalDate} onChange={e => { if(formData.arrivalDate !== e.target.value) setFormData({...formData, arrivalDate: e.target.value}); }} className={inputClass} /></label>
                                     <p className="text-[8px] font-black text-slate-300 uppercase tracking-widest mt-2">DATE ACQUIRED BY KENT OWL ACADEMY</p>
                                 </div>
                                 <div>
-                                    <label className={labelClass}>SOURCE / ORIGIN</label>
-                                    <input type="text" value={formData.origin} onChange={e => setFormData({...formData, origin: e.target.value})} className={inputClass} placeholder="Previous zoo, breeder, or rescue local..." />
+                                    <label className={labelClass}>SOURCE / ORIGIN <input type="text" value={formData.origin} onChange={e => { if(formData.origin !== e.target.value) setFormData({...formData, origin: e.target.value}); }} className={inputClass} placeholder="Previous zoo, breeder, or rescue local..." /></label>
                                     <p className="text-[8px] font-black text-slate-300 uppercase tracking-widest mt-2">MANDATORY FOR MOVEMENT AUDIT TRAIL</p>
                                 </div>
                             </div>
@@ -388,14 +380,14 @@ const AnimalFormModal: React.FC<AnimalFormModalProps> = ({ isOpen, onClose, onSa
                                     <label className={labelClass}>SIRE (FATHER)</label>
                                     <div className="relative">
                                         <Fingerprint className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={16}/>
-                                        <input type="text" value={formData.sire} onChange={e => setFormData({...formData, sire: e.target.value})} className={`${inputClass} pl-12`} placeholder="Ancestry ID or Name" />
+                                        <input type="text" value={formData.sire} onChange={e => { if(formData.sire !== e.target.value) setFormData({...formData, sire: e.target.value}); }} className={`${inputClass} pl-12`} placeholder="Ancestry ID or Name" />
                                     </div>
                                 </div>
                                 <div>
                                     <label className={labelClass}>DAM (MOTHER)</label>
                                     <div className="relative">
                                         <Fingerprint className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={16}/>
-                                        <input type="text" value={formData.dam} onChange={e => setFormData({...formData, dam: e.target.value})} className={`${inputClass} pl-12`} placeholder="Ancestry ID or Name" />
+                                        <input type="text" value={formData.dam} onChange={e => { if(formData.dam !== e.target.value) setFormData({...formData, dam: e.target.value}); }} className={`${inputClass} pl-12`} placeholder="Ancestry ID or Name" />
                                     </div>
                                 </div>
                             </div>
@@ -408,30 +400,26 @@ const AnimalFormModal: React.FC<AnimalFormModalProps> = ({ isOpen, onClose, onSa
                             </h3>
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                                 <div>
-                                    <label className={labelClass}>TARGET DAY TEMP (°C)</label>
-                                    <input type="number" step="0.5" value={formData.targetDayTemp || ''} onChange={e => setFormData({...formData, targetDayTemp: parseFloat(e.target.value)})} className={inputClass} placeholder="e.g. 28" />
+                                    <label className={labelClass}>TARGET DAY TEMP (°C) <input type="number" step="0.5" value={formData.targetDayTemp || ''} onChange={e => { const val = Number.parseFloat(e.target.value); if(formData.targetDayTemp !== val) setFormData({...formData, targetDayTemp: val}); }} className={inputClass} placeholder="e.g. 28" /></label>
                                 </div>
                                 <div>
-                                    <label className={labelClass}>TARGET NIGHT TEMP (°C)</label>
-                                    <input type="number" step="0.5" value={formData.targetNightTemp || ''} onChange={e => setFormData({...formData, targetNightTemp: parseFloat(e.target.value)})} className={inputClass} placeholder="e.g. 20" />
+                                    <label className={labelClass}>TARGET NIGHT TEMP (°C) <input type="number" step="0.5" value={formData.targetNightTemp || ''} onChange={e => { const val = Number.parseFloat(e.target.value); if(formData.targetNightTemp !== val) setFormData({...formData, targetNightTemp: val}); }} className={inputClass} placeholder="e.g. 20" /></label>
                                 </div>
                                 {formData.category === AnimalCategory.EXOTICS && (
                                     <>
                                         <div>
-                                            <label className={labelClass}>BASKING TARGET (°C)</label>
-                                            <input type="number" step="0.5" value={formData.targetBaskingTemp || ''} onChange={e => setFormData({...formData, targetBaskingTemp: parseFloat(e.target.value)})} className={inputClass} placeholder="e.g. 35" />
+                                            <label className={labelClass}>BASKING TARGET (°C) <input type="number" step="0.5" value={formData.targetBaskingTemp || ''} onChange={e => { const val = Number.parseFloat(e.target.value); if(formData.targetBaskingTemp !== val) setFormData({...formData, targetBaskingTemp: val}); }} className={inputClass} placeholder="e.g. 35" /></label>
                                         </div>
                                         <div>
-                                            <label className={labelClass}>COOL END TARGET (°C)</label>
-                                            <input type="number" step="0.5" value={formData.targetCoolTemp || ''} onChange={e => setFormData({...formData, targetCoolTemp: parseFloat(e.target.value)})} className={inputClass} placeholder="e.g. 24" />
+                                            <label className={labelClass}>COOL END TARGET (°C) <input type="number" step="0.5" value={formData.targetCoolTemp || ''} onChange={e => { const val = Number.parseFloat(e.target.value); if(formData.targetCoolTemp !== val) setFormData({...formData, targetCoolTemp: val}); }} className={inputClass} placeholder="e.g. 24" /></label>
                                         </div>
                                     </>
                                 )}
                                 <div className={formData.category === AnimalCategory.EXOTICS ? 'col-span-full md:col-span-2 lg:col-span-2' : 'col-span-1'}>
                                     <label className={labelClass}>HUMIDITY RANGE (%)</label>
                                     <div className="flex gap-2">
-                                        <input type="number" value={formData.targetHumidityMin || ''} onChange={e => setFormData({...formData, targetHumidityMin: parseInt(e.target.value)})} className={inputClass} placeholder="Min" />
-                                        <input type="number" value={formData.targetHumidityMax || ''} onChange={e => setFormData({...formData, targetHumidityMax: parseInt(e.target.value)})} className={inputClass} placeholder="Max" />
+                                        <input type="number" value={formData.targetHumidityMin || ''} onChange={e => { const val = Number.parseInt(e.target.value); if(formData.targetHumidityMin !== val) setFormData({...formData, targetHumidityMin: val}); }} className={inputClass} placeholder="Min" />
+                                        <input type="number" value={formData.targetHumidityMax || ''} onChange={e => { const val = Number.parseInt(e.target.value); if(formData.targetHumidityMax !== val) setFormData({...formData, targetHumidityMax: val}); }} className={inputClass} placeholder="Max" />
                                     </div>
                                 </div>
                             </div>
@@ -457,18 +445,17 @@ const AnimalFormModal: React.FC<AnimalFormModalProps> = ({ isOpen, onClose, onSa
                                          </div>
                                     </div>
                                     <div className={`grid ${isBird ? 'grid-cols-2' : 'grid-cols-1'} gap-4`}>
-                                        <input type="text" disabled={formData.hasNoId} value={formData.microchip} onChange={e => setFormData({...formData, microchip: e.target.value})} className={`${inputClass} font-mono ${formData.hasNoId ? 'opacity-50 cursor-not-allowed bg-slate-100' : ''}`} placeholder="Microchip..." />
+                                        <input type="text" disabled={formData.hasNoId} value={formData.microchip} onChange={e => { if(formData.microchip !== e.target.value) setFormData({...formData, microchip: e.target.value}); }} className={`${inputClass} font-mono ${formData.hasNoId ? 'opacity-50 cursor-not-allowed bg-slate-100' : ''}`} placeholder="Microchip..." />
                                         {isBird && (
-                                            <input type="text" disabled={formData.hasNoId} value={formData.ringNumber} onChange={e => setFormData({...formData, ringNumber: e.target.value})} className={`${inputClass} font-mono ${formData.hasNoId ? 'opacity-50 cursor-not-allowed bg-slate-100' : ''}`} placeholder="Ring Number..." />
+                                            <input type="text" disabled={formData.hasNoId} value={formData.ringNumber} onChange={e => { if(formData.ringNumber !== e.target.value) setFormData({...formData, ringNumber: e.target.value}); }} className={`${inputClass} font-mono ${formData.hasNoId ? 'opacity-50 cursor-not-allowed bg-slate-100' : ''}`} placeholder="Ring Number..." />
                                         )}
                                     </div>
                                 </div>
                                 
                                 <div>
-                                    <label className={labelClass}>HAZARD CLASS</label>
-                                    <select value={formData.hazardRating} onChange={e => setFormData({...formData, hazardRating: e.target.value as HazardRating})} className={inputClass}>
+                                    <label className={labelClass}>HAZARD CLASS <select value={formData.hazardRating} onChange={e => { const val = e.target.value as HazardRating; if(formData.hazardRating !== val) setFormData({...formData, hazardRating: val}); }} className={inputClass}>
                                         {Object.values(HazardRating).map(h => <option key={h} value={h}>{h}</option>)}
-                                    </select>
+                                    </select></label>
                                 </div>
                                 <div className="flex flex-col justify-end pb-1.5">
                                     <label className="flex items-center gap-2 cursor-pointer group p-2 rounded-lg hover:bg-slate-50 transition-colors">
@@ -487,8 +474,7 @@ const AnimalFormModal: React.FC<AnimalFormModalProps> = ({ isOpen, onClose, onSa
                         {/* SECTION: NARRATIVE & CRITICAL REQUIREMENTS */}
                         <section className="space-y-6">
                             <div>
-                                <label className={labelClass}>INTERNAL SUBJECT DESCRIPTION</label>
-                                <textarea rows={4} value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} className={`${inputClass} resize-none h-32 font-medium bg-white`} placeholder="Record physical attributes, personality, or role in collection..."/>
+                                <label className={labelClass}>INTERNAL SUBJECT DESCRIPTION <textarea rows={4} value={formData.description} onChange={e => { if(formData.description !== e.target.value) setFormData({...formData, description: e.target.value}); }} className={`${inputClass} resize-none h-32 font-medium bg-white`} placeholder="Record physical attributes, personality, or role in collection..."/></label>
                             </div>
                             
                             <div className="bg-[#eef2ff] p-8 rounded-3xl border border-[#dbeafe] shadow-inner">
@@ -499,7 +485,7 @@ const AnimalFormModal: React.FC<AnimalFormModalProps> = ({ isOpen, onClose, onSa
                                     ref={requirementsRef}
                                     rows={3} 
                                     value={formData.specialRequirements} 
-                                    onChange={e => setFormData({...formData, specialRequirements: e.target.value})} 
+                                    onChange={e => { if(formData.specialRequirements !== e.target.value) setFormData({...formData, specialRequirements: e.target.value}); }} 
                                     className="w-full px-5 py-4 bg-white border border-[#c7d2fe] rounded-2xl text-sm font-bold text-slate-800 focus:outline-none focus:border-[#4f46e5] transition-all resize-y shadow-sm placeholder-[#94a3b8] min-h-[100px] overflow-hidden" 
                                     placeholder="Enter each requirement on a new line. Each line will appear as a separate bullet point in the subject file..."/>
                                 <p className="text-[8px] font-black text-[#6366f1] uppercase tracking-widest mt-3 opacity-60">TIP: EACH LINE REPRESENTS ONE STATUTORY REQUIREMENT</p>

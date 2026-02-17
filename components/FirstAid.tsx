@@ -21,7 +21,7 @@ const FirstAid: React.FC<FirstAidProps> = ({ logs, currentUser, onAddLog, onDele
   const [location, setLocation] = useState('');
   const [description, setDescription] = useState('');
   const [treatment, setTreatment] = useState('');
-  const [outcome, setOutcome] = useState<'Returned to Work' | 'Sent Home' | 'Hospital' | 'Ambulance Called' | 'None'>('Returned to Work');
+  const [outcome, setOutcome] = useState<FirstAidLogEntry['outcome']>('Returned to Work');
 
   const filteredLogs = useMemo(() => {
     return logs.filter(log => 
@@ -131,7 +131,17 @@ const FirstAid: React.FC<FirstAidProps> = ({ logs, currentUser, onAddLog, onDele
                                 </div>
                                 <div>
                                     <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Outcome</label>
-                                    <select value={outcome} onChange={e => setOutcome(e.target.value as any)} className={inputClass}><option value="Returned to Work">Returned to Work</option><option value="Sent Home">Sent Home</option><option value="Hospital">Hospital</option><option value="Ambulance Called">Ambulance Called</option></select>
+                                    <select value={outcome} onChange={e => setOutcome(e.target.value as any)} className={inputClass}>
+                                        <option value="Returned to Work">Returned to Work</option>
+                                        <option value="Restricted Duties">Restricted Duties</option>
+                                        <option value="Monitoring">Monitoring (On Site)</option>
+                                        <option value="Sent Home">Sent Home</option>
+                                        <option value="GP Visit">GP / Medical Advice</option>
+                                        <option value="Hospital">Hospital</option>
+                                        <option value="Ambulance Called">Ambulance Called</option>
+                                        <option value="Refused Treatment">Refused Treatment</option>
+                                        <option value="None">None / Resolved</option>
+                                    </select>
                                 </div>
                             </div>
                         </div>

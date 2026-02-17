@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { Animal, AnimalCategory, LogType, LogEntry, UserRole, SortOption, Task, HazardRating } from '../types';
 import { Search, Plus, Scale, Utensils, ChevronLeft, ChevronRight, GripVertical, ArrowRight, Heart, ChevronDown, ChevronUp, CheckCircle, AlertCircle, ClipboardCheck, Skull, AlertTriangle, Lock, Unlock } from 'lucide-react';
@@ -40,8 +41,7 @@ const Dashboard: React.FC<DashboardProps> = ({
   const [isCreateAnimalModalOpen, setIsCreateAnimalModalOpen] = useState(false);
   
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
-  const [isTasksOpen, setIsTasksOpen] = useState(false);
-  const [isHealthOpen, setIsHealthOpen] = useState(false);
+  const [areTasksOpen, setAreTasksOpen] = useState(false);
 
   // Split Memoization: Animal Stats (Heavy)
   // This depends only on animals, activeTab, and viewDate. It will NOT re-run when tasks change.
@@ -215,7 +215,7 @@ const Dashboard: React.FC<DashboardProps> = ({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-6">
           <div className="bg-white border-2 border-slate-300 rounded-xl overflow-hidden shadow-sm">
               <button 
-                onClick={() => setIsTasksOpen(!isTasksOpen)}
+                onClick={() => setAreTasksOpen(!areTasksOpen)}
                 className="w-full flex justify-between items-center p-3 md:p-4 bg-slate-50 hover:bg-slate-100 transition-colors"
               >
                   <div className="flex items-center gap-3">
@@ -226,10 +226,10 @@ const Dashboard: React.FC<DashboardProps> = ({
                   </div>
                   <div className="flex items-center gap-3">
                       <span className="bg-slate-200 text-slate-600 text-[10px] md:text-xs font-bold px-2 py-0.5 rounded-full">{taskStats.pendingTasks.length}</span>
-                      {isTasksOpen ? <ChevronUp size={16} className="text-slate-400"/> : <ChevronDown size={16} className="text-slate-400"/>}
+                      {areTasksOpen ? <ChevronUp size={16} className="text-slate-400"/> : <ChevronDown size={16} className="text-slate-400"/>}
                   </div>
               </button>
-              {isTasksOpen && (
+              {areTasksOpen && (
                   <div className="p-3 md:p-4 bg-white border-t-2 border-slate-100 max-h-60 overflow-y-auto">
                       {taskStats.pendingTasks.length > 0 ? (
                           <div className="space-y-2">
@@ -255,7 +255,7 @@ const Dashboard: React.FC<DashboardProps> = ({
 
           <div className="bg-white border-2 border-slate-300 rounded-xl overflow-hidden shadow-sm">
               <button 
-                onClick={() => setIsHealthOpen(!isHealthOpen)}
+                onClick={() => setAreTasksOpen(!areTasksOpen)}
                 className="w-full flex justify-between items-center p-3 md:p-4 bg-slate-50 hover:bg-slate-100 transition-colors"
               >
                   <div className="flex items-center gap-3">
@@ -266,10 +266,10 @@ const Dashboard: React.FC<DashboardProps> = ({
                   </div>
                   <div className="flex items-center gap-3">
                       <span className="bg-slate-200 text-slate-600 text-[10px] md:text-xs font-bold px-2 py-0.5 rounded-full">{taskStats.pendingHealth.length}</span>
-                      {isHealthOpen ? <ChevronUp size={16} className="text-slate-400"/> : <ChevronDown size={16} className="text-slate-400"/>}
+                      {areTasksOpen ? <ChevronUp size={16} className="text-slate-400"/> : <ChevronDown size={16} className="text-slate-400"/>}
                   </div>
               </button>
-              {isHealthOpen && (
+              {areTasksOpen && (
                   <div className="p-3 md:p-4 bg-white border-t-2 border-slate-100 max-h-60 overflow-y-auto">
                       {taskStats.pendingHealth.length > 0 ? (
                           <div className="space-y-2">
@@ -312,7 +312,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                     <input 
                         type="date" 
                         value={viewDate} 
-                        onChange={e => setViewDate(e.target.value)}
+                        onChange={e => { if(viewDate !== e.target.value) setViewDate(e.target.value); }}
                         className="px-1 py-1.5 text-[10px] md:text-xs font-bold text-slate-700 bg-transparent border-none focus:ring-0 uppercase tracking-wider flex-1 text-center"
                     />
                     <button onClick={() => { const d = new Date(viewDate); d.setDate(d.getDate() + 1); setViewDate(d.toISOString().split('T')[0]); }} className="p-2 text-slate-400 hover:text-slate-700 transition-colors"><ChevronRight size={16}/></button>
@@ -320,7 +320,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                 <div className="relative w-full sm:flex-1 sm:max-w-xs shadow-sm">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
                     <input 
-                        type="text" placeholder="Search..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)}
+                        type="text" placeholder="Search..." value={searchTerm} onChange={e => { if(searchTerm !== e.target.value) setSearchTerm(e.target.value); }}
                         className="w-full pl-9 pr-3 py-2 bg-white border-2 border-slate-200 rounded-lg text-xs font-medium focus:border-slate-400 focus:outline-none transition-all"
                     />
                 </div>
@@ -477,4 +477,4 @@ const Dashboard: React.FC<DashboardProps> = ({
   );
 };
 
-export default Dashboard;
+export default React.memo(Dashboard);

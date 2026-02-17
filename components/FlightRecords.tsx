@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Animal, LogType, LogEntry } from '../types';
 import { Map as MapIcon, Plane, Thermometer, Wind, Activity, X, Maximize2, AlertOctagon, CloudSun } from 'lucide-react';
@@ -58,9 +59,9 @@ const parseGPX = (gpxContent: string): GPSStats | null => {
     };
 
     trkpts.forEach((pt) => {
-        const lat = parseFloat(pt.getAttribute('lat') || '0');
-        const lon = parseFloat(pt.getAttribute('lon') || '0');
-        const ele = parseFloat(pt.querySelector('ele')?.textContent || '0');
+        const lat = Number.parseFloat(pt.getAttribute('lat') || '0');
+        const lon = Number.parseFloat(pt.getAttribute('lon') || '0');
+        const ele = Number.parseFloat(pt.querySelector('ele')?.textContent || '0');
         const timeStr = pt.querySelector('time')?.textContent;
         const time = timeStr ? new Date(timeStr).getTime() : null;
 

@@ -4,11 +4,12 @@ import { Activity, Bug, CheckCircle2, XCircle, Play, AlertTriangle, ShieldCheck,
 import { formatWeightDisplay } from '../services/weightUtils';
 import { parseSmartCSV, parseCSVToAnimals } from '../services/csvService';
 import { diagnosticsService } from '../services/diagnosticsService';
-import { Animal, User, LogType, AnimalCategory } from '../types';
+import { Animal, User, LogType, AnimalCategory, Task } from '../types';
 
 interface DiagnosticOverlayProps {
   animals: Animal[];
   users: User[];
+  tasks: Task[];
 }
 
 interface TestResult {
@@ -21,7 +22,7 @@ interface TestResult {
   logs: string[];
 }
 
-const DiagnosticOverlay: React.FC<DiagnosticOverlayProps> = ({ animals, users }) => {
+const DiagnosticOverlay: React.FC<DiagnosticOverlayProps> = ({ animals, users, tasks }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
   const [results, setResults] = useState<TestResult[]>([]);
@@ -141,7 +142,8 @@ const DiagnosticOverlay: React.FC<DiagnosticOverlayProps> = ({ animals, users })
     // Simulate heavy CSV parsing loop
     const heavyCSV = `Date,Name,Weight,Notes\n${Array(100).fill("2024-01-01,StressTest,500,Repeated line for load").join('\n')}`;
     
-    for (let i = 0; i < ITERATIONS; i++) {
+    let i = 0;
+    while (i < ITERATIONS) {
         // 1. Math heavy operation
         const rand = Math.random() * 10000;
         formatWeightDisplay(rand, 'lbs_oz');
@@ -150,6 +152,7 @@ const DiagnosticOverlay: React.FC<DiagnosticOverlayProps> = ({ animals, users })
         parseCSVToAnimals(heavyCSV);
         
         if (i % 10 === 0) log(testId, `Cycle ${i}/${ITERATIONS} complete...`);
+        i++;
     }
     
     const end = performance.now();
@@ -165,15 +168,31 @@ const DiagnosticOverlay: React.FC<DiagnosticOverlayProps> = ({ animals, users })
   };
 
   const runStateAudit = async (testId: string) => {
-    log(testId, `Auditing Live State: ${animals.length} Records...`);
+    log(testId, `Auditing Live State: ${animals.length} Records, ${tasks.length} Tasks...`);
     
     if (animals.length === 0) {
         log(testId, "State is empty. Skipping deep audit.");
         return "No data to audit.";
     }
 
-    // Use shared diagnostics service for standardized checks
-    const issues = diagnosticsService.runDatabaseHealthCheck(animals, [], users);
+    // 1. Check for Duplicate Animal IDs
+    log(testId, "Checking for ID Collisions...");
+    const ids = new Set();
+    const duplicates = animals.filter(a => {
+        if (ids.has(a.id)) return true;
+        ids.add(a.id);
+        return false;
+    });
+    
+    if (duplicates.length > 0) {
+        log(testId, `CRITICAL: Found ${duplicates.length} duplicate Animal IDs.`, duplicates.map(a => a.name));
+        throw new Error(`State Integrity Failure: ${duplicates.length} Duplicate IDs`);
+    } else {
+        log(testId, "ID Uniqueness Verified.");
+    }
+
+    // 2. Run Diagnostics Service
+    const issues = diagnosticsService.runDatabaseHealthCheck(animals, tasks, users);
     
     let errors = 0;
     let warnings = 0;
@@ -213,14 +232,15 @@ const DiagnosticOverlay: React.FC<DiagnosticOverlayProps> = ({ animals, users })
         'state_01': runStateAudit
     };
 
-    for (const test of suite) {
+    let testIdx = 0;
+    while(testIdx < suite.length) {
+        const test = suite[testIdx];
         setResults(prev => prev.map(r => r.id === test.id ? { ...r, status: 'running' } : r));
         setActiveLogId(test.id); // Auto-show logs for running test
         
         try {
             const start = performance.now();
-            // Artificial delay for UX visibility
-            await new Promise(r => setTimeout(r, 500));
+            await new Promise(r => setTimeout(r, 500)); // UX delay
             
             const msg = await runners[test.id](test.id);
             const end = performance.now();
@@ -231,6 +251,7 @@ const DiagnosticOverlay: React.FC<DiagnosticOverlayProps> = ({ animals, users })
             log(test.id, `FATAL ERROR: ${e.message}`);
             setResults(prev => prev.map(r => r.id === test.id ? { ...r, status: 'fail', message: e.message } : r));
         }
+        testIdx++;
     }
     setIsRunning(false);
   };

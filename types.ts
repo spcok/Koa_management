@@ -1,79 +1,85 @@
 
-export type SortOption = 'custom' | 'alpha-asc' | 'alpha-desc';
+export type SortOption = 'alpha-asc' | 'alpha-desc' | 'custom';
+
+export enum UserRole {
+  ADMIN = 'Admin',
+  VOLUNTEER = 'Volunteer'
+}
 
 export enum AnimalCategory {
   OWLS = 'Owls',
   RAPTORS = 'Raptors',
   MAMMALS = 'Mammals',
-  EXOTICS = 'Exotics',
-}
-
-export enum ConservationStatus {
-  LC = 'Least Concern',
-  NT = 'Near Threatened',
-  VU = 'Vulnerable',
-  EN = 'Endangered',
-  CR = 'Critically Endangered',
-  EW = 'Extinct in the Wild',
-  EX = 'Extinct',
-  DD = 'Data Deficient',
-  NE = 'Not Evaluated',
-  NC = 'Not Checked'
-}
-
-export enum HazardRating {
-  HIGH = 'HIGH RISK',
-  MEDIUM = 'MEDIUM RISK',
-  LOW = 'LOW RISK',
-  NONE = 'NO RISK'
+  EXOTICS = 'Exotics'
 }
 
 export enum LogType {
   WEIGHT = 'Weight',
   FEED = 'Feed',
-  TRAINING = 'Training',
-  EVENT = 'Event',
   HEALTH = 'Health',
   FLIGHT = 'Flight',
-  TEMPERATURE = 'Temperature',
-  MAINTENANCE = 'Maintenance',
-  MISTING = 'Misting',
-  WATER = 'Water Check',
-  ADMIN = 'Admin',
-  GENERAL = 'General',
-  INCIDENT = 'Incident',
-  MOVEMENT = 'Movement',
   ENRICHMENT = 'Enrichment',
-  DRILL = 'Safety Drill',
-  WEATHERING = 'Weathering'
+  WEATHERING = 'Weathering',
+  TRAINING = 'Training',
+  TEMPERATURE = 'Temperature',
+  MISTING = 'Misting',
+  WATER = 'Water',
+  EGG = 'Egg',
+  GENERAL = 'General',
+  MOVEMENT = 'Movement',
+  EVENT = 'Event'
 }
 
 export enum HealthRecordType {
   OBSERVATION = 'Observation',
-  EXAMINATION = 'Examination',
-  VET_VISIT = 'Vet Visit',
   MEDICATION = 'Medication',
-  INCOMING = 'Incoming Animal',
-  QUARANTINE = 'Quarantine Check',
-  RELEASE = 'Release Check',
-  BEHAVIOUR = 'Behavioural',
-  OTHER = 'Other'
+  QUARANTINE = 'Quarantine',
+  RELEASE = 'Release'
 }
 
 export enum HealthCondition {
   HEALTHY = 'Healthy',
   MONITORING = 'Monitoring',
-  UNDER_TREATMENT = 'Under Treatment',
-  CRITICAL = 'Critical',
-  DECEASED = 'Deceased',
+  DECEASED = 'Deceased'
+}
+
+export enum HazardRating {
+  NONE = 'None',
+  LOW = 'Low',
+  MEDIUM = 'Medium',
+  HIGH = 'High'
+}
+
+export enum ConservationStatus {
+  LC = 'LC',
+  NT = 'NT',
+  VU = 'VU',
+  EN = 'EN',
+  CR = 'CR',
+  EW = 'EW',
+  EX = 'EX',
+  DD = 'DD',
+  NE = 'NE',
+  NC = 'NC'
+}
+
+export enum ShellQuality {
+  NORMAL = 'Normal',
+  THIN = 'Thin',
+  SOFT = 'Soft',
+  ROUGH = 'Rough'
+}
+
+export enum EggOutcome {
+  INCUBATOR = 'Incubator',
+  HATCHED = 'Hatched',
+  BROKEN = 'Broken',
+  INFERTILE = 'Infertile'
 }
 
 export enum IncidentType {
-  MISSING = 'Missing Animal',
-  DECEASED = 'Deceased',
   INJURY = 'Injury',
-  SECURITY = 'Security Breach',
-  EQUIPMENT = 'Equipment Failure',
+  SECURITY = 'Security',
   OTHER = 'Other'
 }
 
@@ -84,18 +90,13 @@ export enum IncidentSeverity {
   CRITICAL = 'Critical'
 }
 
-export enum UserRole {
-  ADMIN = 'Admin',
-  VOLUNTEER = 'Volunteer'
-}
-
 export interface UserPermissions {
   dashboard: boolean;
   dailyLog: boolean;
   tasks: boolean;
   medical: boolean;
   movements: boolean;
-  safety: boolean; 
+  safety: boolean;
   maintenance: boolean;
   settings: boolean;
   flightRecords: boolean;
@@ -105,6 +106,205 @@ export interface UserPermissions {
   holidayApprover: boolean;
   missingRecords: boolean;
   reports: boolean;
+  rounds: boolean;
+}
+
+export interface User {
+  id: string;
+  name: string;
+  initials: string;
+  role: UserRole | string;
+  jobPosition?: string;
+  pin: string;
+  active: boolean;
+  permissions?: UserPermissions;
+  signature?: string;
+}
+
+export interface LogEntry {
+  id: string;
+  date: string;
+  type: LogType;
+  value: string;
+  notes?: string;
+  timestamp: number;
+  userInitials: string;
+  attachmentUrl?: string;
+  
+  // Type specific
+  weightGrams?: number;
+  feedMethod?: string;
+  hasCast?: boolean;
+  
+  healthType?: HealthRecordType;
+  condition?: HealthCondition;
+  bcs?: number;
+  featherCondition?: string;
+  medicationName?: string;
+  medicationBatch?: string;
+  medicationDosage?: string;
+  medicationRoute?: string;
+  medicationFrequency?: string;
+  medicationEndDate?: string;
+  prescribedBy?: string;
+  causeOfDeath?: string;
+  disposalMethod?: string;
+
+  temperature?: number;
+  baskingTemp?: number;
+  coolTemp?: number;
+  
+  weatherDesc?: string;
+  windSpeed?: number;
+  flightDuration?: number;
+  flightQuality?: string;
+  gpsUrl?: string;
+  
+  movementType?: 'Acquisition' | 'Disposition' | 'Transfer';
+  movementSource?: string;
+  movementDestination?: string;
+  
+  weatheringStart?: string;
+  weatheringEnd?: string;
+  
+  eggCount?: number;
+  eggWeight?: number;
+  shellQuality?: ShellQuality;
+  eggOutcome?: EggOutcome;
+
+  // Event specific
+  eventType?: string;
+  eventStartTime?: string;
+  eventEndTime?: string;
+  eventDuration?: number; // minutes
+  eventAnimalIds?: string[];
+}
+
+export interface GlobalDocument {
+  id: string;
+  name: string;
+  category: 'Licensing' | 'Insurance' | 'Protocol' | 'Safety';
+  url: string;
+  uploadDate: string;
+  expiryDate?: string;
+  notes?: string;
+}
+
+export interface Animal {
+  id: string;
+  name: string;
+  species: string;
+  latinName?: string;
+  category: AnimalCategory;
+  dob: string;
+  isDobUnknown?: boolean;
+  sex?: 'Male' | 'Female' | 'Unknown';
+  location: string;
+  description?: string;
+  specialRequirements?: string;
+  imageUrl: string;
+  distributionMapUrl?: string;
+  
+  weightUnit: 'g' | 'oz' | 'lbs_oz';
+  summerWeight?: number;
+  winterWeight?: number;
+  flyingWeight?: number;
+  
+  ringNumber?: string;
+  microchip?: string;
+  hasNoId?: boolean;
+  
+  arrivalDate?: string;
+  origin?: string;
+  sire?: string;
+  dam?: string;
+  
+  isVenomous?: boolean;
+  hazardRating?: HazardRating;
+  redListStatus?: ConservationStatus;
+  
+  targetDayTemp?: number;
+  targetNightTemp?: number;
+  targetBaskingTemp?: number;
+  targetCoolTemp?: number;
+  targetHumidityMin?: number;
+  targetHumidityMax?: number;
+  mistingFrequency?: string;
+  waterType?: string;
+  
+  logs: LogEntry[];
+  documents: GlobalDocument[];
+  
+  archived?: boolean;
+  isQuarantine?: boolean;
+  quarantineStartDate?: string;
+  quarantineReason?: string;
+  order?: number;
+}
+
+export interface Task {
+  id: string;
+  title: string;
+  type: LogType;
+  animalId?: string;
+  dueDate: string;
+  completed: boolean;
+  recurring: boolean;
+  assignedTo?: string;
+  notes?: string;
+}
+
+export interface SiteLogEntry {
+  id: string;
+  date: string;
+  title: string;
+  description: string;
+  location: string;
+  priority: 'Low' | 'Medium' | 'High';
+  status: 'Pending' | 'In Progress' | 'Completed';
+  cost?: number;
+  loggedBy: string;
+  timestamp: number;
+}
+
+export interface Incident {
+  id: string;
+  date: string;
+  time: string;
+  type: IncidentType;
+  severity: IncidentSeverity;
+  description: string;
+  location: string;
+  status: string;
+  reportedBy: string;
+  timestamp: number;
+  actionsTaken?: string;
+  animalId?: string;
+}
+
+export interface FirstAidLogEntry {
+  id: string;
+  date: string;
+  time: string;
+  personName: string;
+  type: 'Injury' | 'Illness' | 'Near Miss';
+  description: string;
+  treatment: string;
+  treatedBy: string;
+  location: string;
+  outcome: 'Returned to Work' | 'Restricted Duties' | 'Sent Home' | 'GP Visit' | 'Hospital' | 'Ambulance Called' | 'Refused Treatment' | 'Monitoring' | 'None';
+  timestamp: number;
+}
+
+export interface TimeLogEntry {
+  id: string;
+  userId: string;
+  userName: string;
+  startTime: number;
+  date: string;
+  status: 'Active' | 'Completed';
+  endTime?: number;
+  durationMinutes?: number;
 }
 
 export interface HolidayRequest {
@@ -113,92 +313,10 @@ export interface HolidayRequest {
   userName: string;
   startDate: string;
   endDate: string;
-  status: 'Pending' | 'Approved' | 'Rejected';
   notes: string;
+  status: 'Pending' | 'Approved' | 'Rejected';
+  timestamp: number;
   approvedBy?: string;
-  timestamp: number;
-}
-
-export enum DocumentType {
-  LEGAL = 'Legal / CITES',
-  MEDICAL = 'Medical / Vet Report',
-  IDENTIFICATION = 'ID / Passport',
-  OTHER = 'Other',
-  INSTITUTIONAL = 'Institutional License'
-}
-
-export interface GlobalDocument {
-  id: string;
-  name: string;
-  url: string;
-  expiryDate?: string;
-  uploadDate: string;
-  category: 'Licensing' | 'Insurance' | 'Protocol' | 'Safety';
-  notes?: string;
-}
-
-export interface AuditLogEntry {
-  id: string;
-  timestamp: number;
-  userId: string;
-  userName: string;
-  action: string;
-  module: string;
-  details: string;
-  severity: 'Info' | 'Warning' | 'Critical';
-}
-
-export interface LocalBackupConfig {
-  enabled: boolean;
-  frequency: '6h' | 'daily' | 'weekly';
-  lastBackup?: string;
-  retentionCount: number;
-}
-
-export interface LocalBackupEntry {
-  id: string;
-  timestamp: number;
-  date: string;
-  data: any;
-  size: string;
-  officerInitials?: string;
-}
-
-export interface AnimalDocument {
-  id: string;
-  name: string;
-  type: DocumentType;
-  url: string;
-  uploadDate: string;
-  uploadedBy: string;
-  notes?: string;
-}
-
-export interface UserPreferences {
-  dashboardOrder?: string[];
-  darkMode?: boolean;
-}
-
-export interface SystemPreferences {
-  unitSystem: 'Metric' | 'Imperial';
-  tempUnit: 'C' | 'F';
-  dashboardDensity: 'Standard' | 'Compact';
-  brandColor: string;
-  sessionTimeoutMinutes: number;
-  autoPurgeDays: number;
-}
-
-export interface User {
-  id: string;
-  name: string;
-  jobPosition: string;
-  initials: string;
-  role: UserRole;
-  pin: string;
-  active: boolean;
-  signature?: string; 
-  preferences?: UserPreferences;
-  permissions: UserPermissions;
 }
 
 export interface Contact {
@@ -215,183 +333,39 @@ export interface OrganizationProfile {
   name: string;
   address: string;
   licenseNumber: string;
-  licenseExpiryDate?: string;
-  issuingAuthority?: string;
-  logoUrl: string;
   contactEmail: string;
   contactPhone: string;
-  adoptionUrl?: string;
-  websiteUrl?: string;
-  preferences?: SystemPreferences;
+  logoUrl: string;
+  websiteUrl: string;
+  adoptionUrl: string;
 }
 
-export interface Task {
-  id: string;
-  animalId?: string;
-  type: LogType;
-  subtype?: string;
-  title: string;
-  dueDate: string;
-  completed: boolean;
-  recurring: boolean;
-  frequencyDays?: number;
-  notes?: string;
-  assignedTo?: string;
+export interface SystemPreferences {
+  unitSystem: 'Metric' | 'Imperial';
+  tempUnit: 'C' | 'F';
+  dashboardDensity: 'Compact' | 'Standard' | 'Comfortable';
+  brandColor: string;
+  sessionTimeoutMinutes: number;
+  autoPurgeDays: number;
 }
 
-export interface Incident {
+export interface AuditLogEntry {
   id: string;
-  date: string;
-  time: string;
-  type: IncidentType;
-  animalId?: string;
-  description: string;
-  location: string;
-  severity: IncidentSeverity;
-  status: 'Open' | 'Resolved' | 'Closed';
-  reportedBy: string;
-  actionsTaken?: string;
   timestamp: number;
-}
-
-export interface FirstAidLogEntry {
-  id: string;
-  date: string;
-  time: string;
-  personName: string;
-  type: 'Injury' | 'Illness' | 'Near Miss';
-  description: string;
-  treatment: string;
-  treatedBy: string;
-  location: string;
-  outcome: 'Returned to Work' | 'Sent Home' | 'Hospital' | 'Ambulance Called' | 'None';
-  timestamp: number;
-}
-
-export interface TimeLogEntry {
-  id: string;
+  action: string;
   userId: string;
-  userName: string;
-  startTime: number;
-  endTime?: number;
-  durationMinutes?: number;
-  date: string;
-  status: 'Active' | 'Completed';
+  details: string;
 }
 
-export interface LogEntry {
+export interface LocalBackupConfig {
+  enabled: boolean;
+  frequency: 'daily' | 'weekly';
+  retentionCount: number;
+}
+
+export interface LocalBackupEntry {
   id: string;
-  date: string;
-  type: LogType;
-  value: string;
-  notes?: string;
   timestamp: number;
-  userInitials?: string;
-  attachmentUrl?: string;
-  weightGrams?: number;
-  feedMethod?: string;
-  healthType?: HealthRecordType;
-  condition?: HealthCondition;
-  bcs?: number;
-  featherCondition?: string;
-  medicationName?: string;
-  medicationBatch?: string;
-  medicationDosage?: string;
-  medicationRoute?: string;
-  medicationFrequency?: string;
-  medicationEndDate?: string;
-  prescribedBy?: string;
-  causeOfDeath?: string;
-  disposalMethod?: string;
-  postMortemResults?: string;
-  trainingGoal?: string;
-  trainingSteps?: string;
-  trainingFollowUp?: string;
-  flightDuration?: number;
-  flightQuality?: string;
-  gpsUrl?: string;
-  weatherDesc?: string;
-  windSpeed?: number;
-  eventName?: string;
-  eventLocation?: string;
-  eventPerformance?: string;
-  temperature?: number;
-  baskingTemp?: number;
-  coolTemp?: number;
-  movementType?: 'Acquisition' | 'Disposition' | 'Transfer';
-  movementSource?: string;
-  movementDestination?: string;
-  enrichmentType?: string;
-  enrichmentRating?: number;
-  drillType?: 'Fire' | 'Escape' | 'Intruder' | 'Other';
-  drillParticipants?: string;
-  drillDuration?: number;
-  weatheringStart?: string;
-  weatheringEnd?: string;
-  hasCast?: boolean;
-}
-
-export interface SiteLogEntry {
-  id: string;
-  date: string;
-  title: string;
-  description: string;
-  location: string;
-  status: 'Pending' | 'In Progress' | 'Completed';
-  priority: 'Low' | 'Medium' | 'High';
-  loggedBy: string;
-  cost?: number;
-  timestamp: number;
-}
-
-export interface Animal {
-  id: string;
-  name: string;
-  species: string;
-  latinName?: string;
-  category: AnimalCategory;
-  dob: string;
-  location: string;
-  description?: string;
-  specialRequirements?: string;
-  imageUrl: string;
-  distributionMapUrl?: string;
-  summerWeight?: number;
-  winterWeight?: number;
-  flyingWeight?: number;
-  weightUnit?: 'g' | 'oz' | 'lbs_oz';
-  ringNumber?: string;
-  logs: LogEntry[];
-  documents: AnimalDocument[];
-  targetDayTemp?: number;
-  targetNightTemp?: number;
-  targetBaskingTemp?: number;
-  targetCoolTemp?: number;
-  targetHumidityMin?: number;
-  targetHumidityMax?: number;
-  mistingFrequency?: string;
-  waterType?: string;
-  archived?: boolean;
-  archiveReason?: string;
-  order?: number;
-  isQuarantine?: boolean;
-  quarantineStartDate?: string;
-  quarantineDuration?: number;
-  quarantineReason?: string;
-  microchip?: string;
-  arrivalDate?: string;
-  origin?: string;
-  sire?: string;
-  dam?: string;
-  sex?: 'Male' | 'Female' | 'Unknown';
-  isVenomous?: boolean;
-  isHazardous?: boolean;
-  hazardRating?: HazardRating;
-  isDobUnknown?: boolean;
-  redListStatus?: ConservationStatus;
-  hasNoId?: boolean;
-}
-
-export interface SystemState {
-  animals: Animal[];
+  size: number;
+  data: string;
 }

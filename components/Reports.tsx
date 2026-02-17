@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useTransition } from 'react';
 import { REPORT_SCHEMAS } from './reports/reportConfig';
 import { Animal, LogType, Incident, SiteLogEntry, TimeLogEntry, OrganizationProfile, User, AnimalCategory } from '../types';
@@ -41,16 +42,48 @@ const Reports: React.FC<ReportsProps> = ({
       return `${fmt(start)} - ${fmt(end)}`;
   };
 
+  // Shared date check helper
+  const inDateRange = (date: string) => {
+      if (!date) return false;
+      const d = date.split('T')[0];
+      return d >= startDate && d <= endDate;
+  };
+
+  // Dynamic Column Generation for Weekly Weights
+  const reportColumns = useMemo(() => {
+      if (selectedSchemaId === 'WEIGHTS') {
+          const cols = [{ label: 'Subject', width: '16%', accessor: 'subject' }];
+          // Calculate last 7 days ending on endDate
+          const [y, m, d] = endDate.split('-').map(Number);
+          const end = new Date(y, m - 1, d);
+          
+          for (let i = 6; i >= 0; i--) {
+              const date = new Date(end);
+              date.setDate(end.getDate() - i);
+              
+              const dayName = date.toLocaleDateString('en-GB', { weekday: 'long' });
+              const dayPart = String(date.getDate()).padStart(2, '0');
+              const monthPart = String(date.getMonth() + 1).padStart(2, '0');
+              const yearPart = date.getFullYear();
+              const dateStr = `${dayPart}/${monthPart}/${yearPart}`;
+              
+              // Use ISO date string as accessor key
+              const isoDate = `${yearPart}-${monthPart}-${dayPart}`;
+
+              cols.push({
+                  label: `${dayName} ${dateStr}`,
+                  width: '12%',
+                  accessor: isoDate
+              });
+          }
+          return cols;
+      }
+      return currentSchema.columns;
+  }, [selectedSchemaId, endDate, currentSchema]);
+
   // Data Processing Logic
   const tableData = useMemo(() => {
       let rows: any[] = [];
-
-      // Filter Helpers
-      const inDateRange = (date: string) => {
-          if (!date) return false;
-          const d = date.split('T')[0];
-          return d >= startDate && d <= endDate;
-      };
 
       const matchesFilters = (animal: Animal) => {
           if (selectedCategory !== 'ALL' && animal.category !== selectedCategory) return false;
@@ -102,6 +135,95 @@ const Reports: React.FC<ReportsProps> = ({
               })
           );
       } 
+      else if (selectedSchemaId === 'ROUNDS') {
+          // Filter Site Logs for entries that look like Rounds (based on ID or Title)
+          rows = siteLogs
+            .filter(l => inDateRange(l.date) && l.title && l.title.includes('Round:'))
+            .map(l => {
+                let data: any = {};
+                try {
+                    data = JSON.parse(l.description);
+                } catch (e) {
+                    data = { type: 'Unknown', section: 'Unknown', issuesFound: 0, totalChecked: 0 };
+                }
+
+                // Filter by category if selected
+                if (selectedCategory !== 'ALL' && data.section !== selectedCategory) return null;
+
+                return {
+                    timestamp: `${new Date(l.date).toLocaleDateString('en-GB')} ${new Date(l.timestamp).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}`,
+                    type: data.type || 'Standard',
+                    section: data.section || 'General',
+                    staff: data.signedBy || l.loggedBy,
+                    completion: `${data.totalChecked} Checked`,
+                    status: data.issuesFound > 0 ? `${data.issuesFound} ISSUES` : 'SECURE',
+                    notes: data.notes || '-'
+                };
+            })
+            .filter(Boolean);
+      }
+      else if (selectedSchemaId === 'ROUNDS_CHECKLIST') {
+          // Generate array of dates in range
+          const dates: string[] = [];
+          const curr = new Date(startDate);
+          const end = new Date(endDate);
+          while (curr <= end) {
+              dates.push(curr.toISOString().split('T')[0]);
+              curr.setDate(curr.getDate() + 1);
+          }
+
+          rows = dates.flatMap(d => {
+              // Get logs for this date
+              const dayLogs = siteLogs.filter(l => l.date === d && l.title && l.title.includes('Round:'));
+              
+              // Get animals to list
+              const dayAnimals = filteredAnimals.filter(a => !a.archived);
+
+              return dayAnimals.map(animal => {
+                  // Find relevant logs for this animal's section
+                  const sectionLogs = dayLogs.filter(l => {
+                      try {
+                          const json = JSON.parse(l.description);
+                          return json.section === animal.category;
+                      } catch { return false; }
+                  });
+
+                  const amLog = sectionLogs.find(l => JSON.parse(l.description).type === 'Morning');
+                  const pmLog = sectionLogs.find(l => JSON.parse(l.description).type === 'Evening');
+
+                  const amData = amLog ? JSON.parse(amLog.description).details?.[animal.id] : null;
+                  const pmData = pmLog ? JSON.parse(pmLog.description).details?.[animal.id] : null;
+
+                  // Helpers for cell display
+                  const getCheckMark = (data: any, key: string) => {
+                      if (!data) return '-';
+                      if (key === 'isAlive') return data.isAlive ? '✓' : 'X';
+                      if (key === 'isWatered') return data.isWatered ? '✓' : '-';
+                      if (key === 'isSecure') return (data.isSecure || data.securityIssue) ? '✓' : '-'; 
+                      return '-';
+                  };
+
+                  // Comments aggregation
+                  const notesParts = [];
+                  if (amData?.healthIssue) notesParts.push(`AM Health: ${amData.healthIssue}`);
+                  if (amData?.securityIssue) notesParts.push(`AM Sec: ${amData.securityIssue}`);
+                  if (pmData?.healthIssue) notesParts.push(`PM Health: ${pmData.healthIssue}`);
+                  if (pmData?.securityIssue) notesParts.push(`PM Sec: ${pmData.securityIssue}`);
+
+                  return {
+                      date: new Date(d).toLocaleDateString('en-GB', {day: 'numeric', month:'short'}),
+                      animal: animal.name,
+                      am_well: getCheckMark(amData, 'isAlive'),
+                      am_water: getCheckMark(amData, 'isWatered'),
+                      am_secure: getCheckMark(amData, 'isSecure'),
+                      pm_well: getCheckMark(pmData, 'isAlive'),
+                      pm_water: getCheckMark(pmData, 'isWatered'),
+                      pm_secure: getCheckMark(pmData, 'isSecure'),
+                      comments: notesParts.join('; ')
+                  };
+              });
+          });
+      }
       else if (selectedSchemaId === 'STOCK_LIST') {
           rows = filteredAnimals.filter(a => !a.archived).map(a => ({
               id: a.ringNumber || a.microchip || '-',
@@ -128,7 +250,7 @@ const Reports: React.FC<ReportsProps> = ({
           }));
       }
       else if (selectedSchemaId === 'MAINTENANCE') {
-          rows = siteLogs.filter(l => inDateRange(l.date)).map(l => ({
+          rows = siteLogs.filter(l => inDateRange(l.date) && !l.title.includes('Round:')).map(l => ({
               date: new Date(l.date).toLocaleDateString('en-GB'),
               asset: l.location,
               task: l.title,
@@ -147,22 +269,37 @@ const Reports: React.FC<ReportsProps> = ({
           })));
       }
       else if (selectedSchemaId === 'WEIGHTS') {
-          rows = filteredAnimals.flatMap(a => {
-              const weightLogs = (a.logs || []).filter(l => l.type === LogType.WEIGHT).sort((x,y) => x.timestamp - y.timestamp);
-              return weightLogs.filter(l => inDateRange(l.date)).map((l, idx) => {
-                  const prev = weightLogs[idx-1];
-                  const currWeight = l.weightGrams || parseFloat(l.value) || 0;
-                  const prevWeight = prev ? (prev.weightGrams || parseFloat(prev.value) || 0) : 0;
-                  const diff = prev ? (currWeight - prevWeight) : 0;
-                  return {
-                      date: new Date(l.date).toLocaleDateString('en-GB'),
-                      subject: a.name,
-                      prev: prev ? `${prevWeight}g` : '-',
-                      curr: `${currWeight}g`,
-                      diff: diff > 0 ? `+${diff}g` : `${diff}g`,
-                      initials: l.userInitials
-                  };
+          // Generate 7 days keys ending on endDate
+          const keys: string[] = [];
+          const [y, m, d] = endDate.split('-').map(Number);
+          const end = new Date(y, m - 1, d);
+          for (let i = 6; i >= 0; i--) {
+              const date = new Date(end);
+              date.setDate(end.getDate() - i);
+              const year = date.getFullYear();
+              const month = String(date.getMonth() + 1).padStart(2, '0');
+              const day = String(date.getDate()).padStart(2, '0');
+              keys.push(`${year}-${month}-${day}`);
+          }
+
+          rows = filteredAnimals.map(a => {
+              const row: any = { subject: a.name };
+              keys.forEach(k => {
+                  // Find logs for this specific date
+                  const dayLogs = (a.logs || []).filter(l => l.type === LogType.WEIGHT && l.date.startsWith(k));
+                  // Sort to get the latest entry if multiple exist
+                  dayLogs.sort((x, y) => y.timestamp - x.timestamp);
+                  
+                  if (dayLogs.length > 0) {
+                      const l = dayLogs[0];
+                      row[k] = l.weightGrams 
+                          ? formatWeightDisplay(l.weightGrams, a.weightUnit) 
+                          : l.value;
+                  } else {
+                      row[k] = '-';
+                  }
               });
+              return row;
           });
       }
       else if (selectedSchemaId === 'CLINICAL') {
@@ -196,9 +333,23 @@ const Reports: React.FC<ReportsProps> = ({
                   case 'DAILY_LOG':
                       await DocumentService.generateDailyLog(tableData, orgProfile || null, dateRangeText, currentUser, reportTitle);
                       break;
+                  case 'ROUNDS':
+                      await DocumentService.generateRoundsLog(tableData, orgProfile || null, dateRangeText, currentUser, reportTitle);
+                      break;
+                  case 'ROUNDS_CHECKLIST':
+                      await DocumentService.generateDailyRoundsChecklist(
+                          siteLogs.filter(l => inDateRange(l.date) && l.title && l.title.includes('Round:')),
+                          animals,
+                          users,
+                          orgProfile || null,
+                          dateRangeText,
+                          currentUser,
+                          reportTitle
+                      );
+                      break;
                   case 'INCIDENTS':
                       await DocumentService.generateIncidentReport(
-                          incidents.filter(i => i.date >= startDate && i.date <= endDate), 
+                          incidents.filter(i => inDateRange(i.date)), 
                           orgProfile || null, 
                           dateRangeText,
                           currentUser,
@@ -253,10 +404,14 @@ const Reports: React.FC<ReportsProps> = ({
             <div className="bg-white border-b border-slate-200 p-4 flex flex-col lg:flex-row items-center justify-between gap-4 shadow-sm z-10">
                 
                 <div className="flex items-center gap-2 w-full lg:w-auto overflow-x-auto scrollbar-hide pb-2 lg:pb-0">
-                    {/* Date Range */}
+                    {/* Date Range - Only show if relevant (Weights uses endDate as anchor) */}
                     <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg p-1 mr-2">
-                        <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="bg-transparent border-none text-xs font-bold text-slate-700 focus:ring-0 w-24 uppercase"/>
-                        <span className="text-slate-300 font-bold">-</span>
+                        {selectedSchemaId !== 'WEIGHTS' && (
+                            <>
+                                <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="bg-transparent border-none text-xs font-bold text-slate-700 focus:ring-0 w-24 uppercase"/>
+                                <span className="text-slate-300 font-bold">-</span>
+                            </>
+                        )}
                         <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="bg-transparent border-none text-xs font-bold text-slate-700 focus:ring-0 w-24 uppercase"/>
                     </div>
 
@@ -274,20 +429,21 @@ const Reports: React.FC<ReportsProps> = ({
                     </div>
 
                     {/* Animal Filter */}
-                    <div className="relative">
-                        <Bird size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"/>
-                        <select 
-                            value={selectedAnimalId} 
-                            onChange={(e) => setSelectedAnimalId(e.target.value)}
-                            className={`${inputClass} pl-9 pr-8 max-w-[200px] truncate`}
-                        >
-                            <option value="ALL">All Animals</option>
-                            {animals
-                                .filter(a => selectedCategory === 'ALL' || a.category === selectedCategory)
-                                .map(a => <option key={a.id} value={a.id}>{a.name}</option>)
-                            }
-                        </select>
-                    </div>
+                    {selectedSchemaId !== 'ROUNDS' && selectedSchemaId !== 'ROUNDS_CHECKLIST' && (
+                        <div className="relative">
+                            <Bird size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"/>
+                            <select 
+                                value={selectedAnimalId} 
+                                onChange={(e) => setSelectedAnimalId(e.target.value)}
+                                className={`${inputClass} pl-9 pr-8 max-w-[200px] truncate`}
+                            >
+                                <option value="ALL">All Animals</option>
+                                {animals
+                                    .filter(a => selectedCategory === 'ALL' || a.category === selectedCategory)
+                                    .map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                            </select>
+                        </div>
+                    )}
                 </div>
 
                 <button 
@@ -307,7 +463,7 @@ const Reports: React.FC<ReportsProps> = ({
                         <div>
                             <h3 className="text-lg font-black text-slate-800 uppercase tracking-tight">{currentSchema.title}</h3>
                             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">
-                                {orgProfile?.name || 'Kent Owl Academy'} • {getFormattedDateRange()}
+                                {orgProfile?.name || 'Kent Owl Academy'} • {selectedSchemaId === 'WEIGHTS' ? `Week Ending ${new Date(endDate).toLocaleDateString('en-GB')}` : getFormattedDateRange()}
                             </p>
                         </div>
                         <div className="text-right">
@@ -318,14 +474,14 @@ const Reports: React.FC<ReportsProps> = ({
                     </div>
 
                     <div className="overflow-x-auto">
-                        <table className="w-full text-left border-collapse">
+                        <table className="w-full text-left border-collapse table-fixed">
                             <thead className="bg-slate-50 border-b border-slate-200">
                                 <tr>
-                                    {currentSchema.columns.map((col, idx) => (
+                                    {reportColumns.map((col, idx) => (
                                         <th 
                                             key={idx} 
                                             style={{ width: col.width }}
-                                            className="px-6 py-4 text-[9px] font-black text-slate-500 uppercase tracking-widest"
+                                            className="px-4 py-3 text-[9px] font-black text-slate-500 uppercase tracking-widest leading-tight"
                                         >
                                             {col.label}
                                         </th>
@@ -335,15 +491,18 @@ const Reports: React.FC<ReportsProps> = ({
                             <tbody className="divide-y divide-slate-100">
                                 {tableData.length > 0 ? tableData.map((row, rIdx) => (
                                     <tr key={rIdx} className="hover:bg-slate-50 transition-colors">
-                                        {currentSchema.columns.map((col, cIdx) => (
-                                            <td key={cIdx} className="px-6 py-3 text-xs font-medium text-slate-700 align-top">
+                                        {reportColumns.map((col, cIdx) => (
+                                            <td 
+                                                key={cIdx} 
+                                                className={`px-4 py-3 text-xs font-medium text-slate-700 align-top ${col.accessor === 'subject' || col.accessor === 'comments' ? 'whitespace-normal break-words' : 'whitespace-nowrap'}`}
+                                            >
                                                 {row[col.accessor]}
                                             </td>
                                         ))}
                                     </tr>
                                 )) : (
                                     <tr>
-                                        <td colSpan={currentSchema.columns.length} className="px-6 py-24 text-center text-slate-400 flex flex-col items-center justify-center">
+                                        <td colSpan={reportColumns.length} className="px-6 py-24 text-center text-slate-400 flex flex-col items-center justify-center">
                                             <Table2 size={48} className="opacity-20 mb-4"/>
                                             <p className="text-xs font-black uppercase tracking-widest">No Records Found</p>
                                             <p className="text-[10px] mt-1">Try adjusting the date range or filters.</p>

@@ -1,18 +1,18 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   Animal, AnimalCategory, User, OrganizationProfile, Contact, UserRole, 
-  GlobalDocument, Task, UserPermissions 
+  GlobalDocument, Task, UserPermissions, SystemPreferences, LocalBackupEntry 
 } from '../types';
 import { 
   Settings as SettingsIcon, Users, Database, MapPin, 
   Phone, Utensils, Building2, Upload, Download, 
   Trash2, Plus, X, AlertTriangle, FileText, CheckCircle2,
-  RefreshCw, ChevronRight, Link as LinkIcon, Activity, ShieldCheck, AlertCircle, Globe, Lock, Edit2, PenTool, Eraser
+  RefreshCw, ChevronRight, Link as LinkIcon, Activity, ShieldCheck, AlertCircle, Globe, Lock, Edit2, PenTool, Eraser,
+  Monitor, History, RotateCcw, Loader2, HardDrive, Archive, ServerCrash, Wrench, FlaskConical, Search, Filter, Calendar, FileImage, Ticket
 } from 'lucide-react';
 import { backupService } from '../services/backupService';
 import { dataService } from '../services/dataService';
-import { parseCSVToAnimals } from '../services/csvService';
 import { diagnosticsService, DiagnosticIssue } from '../services/diagnosticsService';
 
 interface SettingsProps {
@@ -22,6 +22,8 @@ interface SettingsProps {
   onUpdateFoodOptions: (options: Record<AnimalCategory, string[]>) => void;
   feedMethods: Record<AnimalCategory, string[]>;
   onUpdateFeedMethods: (methods: Record<AnimalCategory, string[]>) => void;
+  eventTypes?: string[];
+  onUpdateEventTypes?: (types: string[]) => void;
   users: User[];
   onUpdateUsers: (users: User[]) => void;
   locations: string[];
@@ -32,6 +34,10 @@ interface SettingsProps {
   onUpdateOrgProfile: (profile: OrganizationProfile) => void;
   onUpdateAnimal: (animal: Animal) => void;
   tasks?: Task[];
+  onDeleteTask?: (id: string) => void;
+  systemPreferences?: SystemPreferences;
+  onUpdateSystemPreferences?: (prefs: SystemPreferences) => void;
+  onLaunchBenchmark?: () => void;
 }
 
 const resizeImage = (file: File): Promise<string> => {
@@ -69,11 +75,13 @@ const resizeImage = (file: File): Promise<string> => {
 
 const Settings: React.FC<SettingsProps> = ({
   animals, onImport, foodOptions, onUpdateFoodOptions,
-  feedMethods, onUpdateFeedMethods, users, onUpdateUsers,
+  feedMethods, onUpdateFeedMethods, eventTypes = [], onUpdateEventTypes,
+  users, onUpdateUsers,
   locations, onUpdateLocations, contacts, onUpdateContacts,
-  orgProfile, onUpdateOrgProfile, onUpdateAnimal, tasks = []
+  orgProfile, onUpdateOrgProfile, onUpdateAnimal, tasks = [], onDeleteTask,
+  systemPreferences, onUpdateSystemPreferences, onLaunchBenchmark
 }) => {
-  const [activeTab, setActiveTab] = useState<'org' | 'users' | 'directory' | 'lists' | 'documents' | 'diagnostics'>('org');
+  const [activeTab, setActiveTab] = useState<'org' | 'users' | 'directory' | 'lists' | 'documents' | 'diagnostics' | 'system'>('org');
   
   // Organization State
   const [orgForm, setOrgForm] = useState<OrganizationProfile>({
@@ -90,7 +98,7 @@ const Settings: React.FC<SettingsProps> = ({
           dashboard: true, dailyLog: true, tasks: true, medical: false, movements: false, 
           safety: false, maintenance: true, settings: false, flightRecords: true, 
           feedingSchedule: false, attendance: true, attendanceManager: false, 
-          holidayApprover: false, missingRecords: false, reports: false 
+          holidayApprover: false, missingRecords: false, reports: false, rounds: false
       } 
   });
 
@@ -102,6 +110,8 @@ const Settings: React.FC<SettingsProps> = ({
   // Lists State
   const [listCategory, setListCategory] = useState<AnimalCategory>(AnimalCategory.OWLS);
   const [newItem, setNewItem] = useState('');
+  const [newMethod, setNewMethod] = useState('');
+  const [newEvent, setNewEvent] = useState('');
 
   // Contacts State
   const [contactForm, setContactForm] = useState<Partial<Contact>>({});
@@ -109,9 +119,27 @@ const Settings: React.FC<SettingsProps> = ({
   // Documents State
   const [documents, setDocuments] = useState<GlobalDocument[]>([]);
   const [docForm, setDocForm] = useState<Partial<GlobalDocument>>({});
+  const [docSearch, setDocSearch] = useState('');
+  const [docCategoryFilter, setDocCategoryFilter] = useState<string>('ALL');
+  const [isUploadOpen, setIsUploadOpen] = useState(false);
 
-  // Diagnostics State
+  // Diagnostics & Backup State
   const [diagnosticIssues, setDiagnosticIssues] = useState<DiagnosticIssue[]>([]);
+  const [restorePoints, setRestorePoints] = useState<LocalBackupEntry[]>([]);
+  const [isProcessingBackup, setIsProcessingBackup] = useState(false);
+
+  // Stats for Storage
+  const storageStats = useMemo(() => {
+      const totalAnimals = animals.length;
+      const totalLogs = animals.reduce((acc, a) => acc + (a.logs?.length || 0), 0);
+      const totalTasks = tasks.length;
+      const dbSizeEst = JSON.stringify(animals).length + JSON.stringify(tasks).length + JSON.stringify(users).length;
+      const dbSizeMB = (dbSizeEst / (1024 * 1024)).toFixed(2);
+      
+      const orphanedTasks = tasks.filter(t => t.animalId && !animals.find(a => a.id === t.animalId)).length;
+      
+      return { totalAnimals, totalLogs, totalTasks, dbSizeMB, orphanedTasks };
+  }, [animals, tasks, users]);
 
   useEffect(() => {
       if (orgProfile) setOrgForm(orgProfile);
@@ -127,8 +155,16 @@ const Settings: React.FC<SettingsProps> = ({
 
   useEffect(() => {
       if (activeTab === 'diagnostics') {
+          // Run Diagnostics
           const issues = diagnosticsService.runDatabaseHealthCheck(animals, tasks, users);
           setDiagnosticIssues(issues);
+          
+          // Load Restore Points
+          const loadBackups = async () => {
+              const backups = await dataService.fetchLocalBackups();
+              setRestorePoints(backups.sort((a, b) => b.timestamp - a.timestamp));
+          };
+          loadBackups();
       }
   }, [activeTab, animals, tasks, users]);
 
@@ -184,7 +220,7 @@ const Settings: React.FC<SettingsProps> = ({
 
   const drawSignature = (e: any) => {
       if (!isDrawing) return;
-      if (e.type === 'touchmove') e.preventDefault(); // Stop scroll
+      if (e.type === 'touchmove') e.preventDefault();
       const { x, y } = getSignatureCoordinates(e);
       const ctx = signatureCanvasRef.current?.getContext('2d');
       if (ctx) {
@@ -246,7 +282,7 @@ const Settings: React.FC<SettingsProps> = ({
               dashboard: true, dailyLog: true, tasks: true, medical: false, movements: false, 
               safety: false, maintenance: true, settings: false, flightRecords: true, 
               feedingSchedule: false, attendance: true, attendanceManager: false, 
-              holidayApprover: false, missingRecords: false, reports: false 
+              holidayApprover: false, missingRecords: false, reports: false, rounds: true
           } 
       });
       setIsDrawingSignature(false);
@@ -305,730 +341,591 @@ const Settings: React.FC<SettingsProps> = ({
 
   // Contacts Management
   const handleSaveContact = () => {
-      if (!contactForm.name || !contactForm.phone) return;
-      const newContact: Contact = {
-          id: `c_${Date.now()}`,
-          name: contactForm.name,
-          role: contactForm.role || 'Service Provider',
-          phone: contactForm.phone,
-          email: contactForm.email,
-          address: contactForm.address,
-          notes: contactForm.notes
-      };
-      onUpdateContacts([...contacts, newContact]);
-      setContactForm({});
+      if (contactForm.name && contactForm.role && contactForm.phone) {
+          const newContact: Contact = {
+              id: `c_${Date.now()}`,
+              name: contactForm.name,
+              role: contactForm.role,
+              phone: contactForm.phone,
+              email: contactForm.email,
+              address: contactForm.address,
+              notes: contactForm.notes
+          };
+          onUpdateContacts([...contacts, newContact]);
+          setContactForm({});
+      }
   };
 
   const handleDeleteContact = (id: string) => {
-      if(window.confirm('Remove contact?')) {
-          onUpdateContacts(contacts.filter(c => c.id !== id));
-      }
+      onUpdateContacts(contacts.filter(c => c.id !== id));
   };
 
-  // Lists Management
-  const handleAddItem = (type: 'food' | 'method' | 'location') => {
-      if (!newItem) return;
-      if (type === 'food') {
-          const current = foodOptions[listCategory] || [];
-          onUpdateFoodOptions({ ...foodOptions, [listCategory]: [...current, newItem] });
-      } else if (type === 'method') {
-          const current = feedMethods[listCategory] || [];
-          onUpdateFeedMethods({ ...feedMethods, [listCategory]: [...current, newItem] });
-      } else if (type === 'location') {
-          onUpdateLocations([...locations, newItem]);
-      }
-      setNewItem('');
-  };
-
-  const handleDeleteItem = (type: 'food' | 'method' | 'location', item: string) => {
-      if (type === 'food') {
-          const current = foodOptions[listCategory] || [];
-          onUpdateFoodOptions({ ...foodOptions, [listCategory]: current.filter(i => i !== item) });
-      } else if (type === 'method') {
-          const current = feedMethods[listCategory] || [];
-          onUpdateFeedMethods({ ...feedMethods, [listCategory]: current.filter(i => i !== item) });
-      } else if (type === 'location') {
-          onUpdateLocations(locations.filter(i => i !== item));
-      }
-  };
-
-  // Documents Management
-  const handleDocumentUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (file) {
-          const reader = new FileReader();
-          reader.onload = (ev) => {
-              setDocForm(prev => ({ ...prev, url: ev.target?.result as string }));
-          };
-          reader.readAsDataURL(file);
-      }
-  };
-
-  const handleSaveDocument = async () => {
-      if (!docForm.name || !docForm.url) return;
-      const newDoc: GlobalDocument = {
-          id: `doc_${Date.now()}`,
-          name: docForm.name,
-          category: (docForm.category as any) || 'Licensing',
-          url: docForm.url,
-          expiryDate: docForm.expiryDate,
-          uploadDate: new Date().toISOString(),
-          notes: docForm.notes
-      };
-      await dataService.saveGlobalDocument(newDoc);
-      setDocuments(prev => [...prev, newDoc]);
-      setDocForm({});
-  };
-
-  const handleDeleteDocument = async (id: string) => {
-      if (window.confirm('Delete document?')) {
-          await dataService.deleteGlobalDocument(id);
-          setDocuments(prev => prev.filter(d => d.id !== id));
-      }
-  };
-
-  // Data Management
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const handleImportClick = () => fileInputRef.current?.click();
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = (evt) => {
-          const text = evt.target?.result as string;
-          if (file.name.endsWith('.json')) {
-              backupService.importDatabase(text).then(success => {
-                  if(success) alert('Database imported successfully. Please refresh.');
-                  else alert('Import failed.');
-              });
+  // Restore Points Management
+  const handleCreateSnapshot = async () => {
+      setIsProcessingBackup(true);
+      try {
+          const snap = await backupService.createLocalSnapshot();
+          if (snap) {
+              setRestorePoints(prev => [snap, ...prev]);
+              alert("System snapshot created successfully.");
           } else {
-              const imported = parseCSVToAnimals(text);
-              onImport(imported);
-              alert(`Imported ${imported.length} animals.`);
+              alert("Failed to create snapshot.");
           }
-      };
-      reader.readAsText(file);
+      } catch (e) { console.error(e); }
+      setIsProcessingBackup(false);
   };
 
-  const inputClass = "w-full px-4 py-3 bg-slate-50 border-2 border-slate-200 rounded-xl text-sm font-bold focus:outline-none focus:border-emerald-500 transition-all placeholder-slate-400";
+  const handleRestoreSnapshot = async (snap: LocalBackupEntry) => {
+      if (window.confirm(`WARNING: Restore from ${new Date(snap.timestamp).toLocaleString()}? This will OVERWRITE current data.`)) {
+          setIsProcessingBackup(true);
+          const success = await backupService.restoreFromSnapshot(snap);
+          if (success) {
+              alert("System restored. The application will now reload.");
+              window.location.reload();
+          } else {
+              alert("Restore failed. Data may be unchanged.");
+          }
+          setIsProcessingBackup(false);
+      }
+  };
+
+  const handleDeleteSnapshot = async (id: string) => {
+      if (window.confirm("Delete this restore point?")) {
+          await dataService.deleteLocalBackup(id);
+          setRestorePoints(prev => prev.filter(p => p.id !== id));
+      }
+  };
+
+  // Maintenance Actions
+  const handlePruneOrphans = () => {
+      if (!onDeleteTask) return;
+      const orphans = tasks.filter(t => t.animalId && !animals.find(a => a.id === t.animalId));
+      if (orphans.length === 0) {
+          alert("No orphaned tasks found.");
+          return;
+      }
+      if (window.confirm(`Found ${orphans.length} tasks referencing missing animals. Delete them?`)) {
+          orphans.forEach(t => onDeleteTask(t.id));
+          alert("Orphans removed.");
+      }
+  };
+
+  const handleTrimHistory = () => {
+      if (window.confirm("This will remove all husbandry logs older than 6 years from all animals. Proceed?")) {
+          const cutoff = new Date();
+          cutoff.setFullYear(cutoff.getFullYear() - 6);
+          
+          let count = 0;
+          animals.forEach(animal => {
+              const oldLogs = (animal.logs || []).filter(l => new Date(l.date) < cutoff);
+              if (oldLogs.length > 0) {
+                  count += oldLogs.length;
+                  const keptLogs = (animal.logs || []).filter(l => new Date(l.date) >= cutoff);
+                  onUpdateAnimal({ ...animal, logs: keptLogs });
+              }
+          });
+          alert(`Maintenance Complete. Pruned ${count} old records.`);
+      }
+  };
+
+  const inputClass = "w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold focus:outline-none focus:border-emerald-500 transition-all placeholder-slate-400";
 
   return (
     <div className="flex h-full max-h-[calc(100vh-4rem)] overflow-hidden bg-white animate-in fade-in duration-500">
         
-        {/* LEFT SIDEBAR: Settings Menu */}
-        <div className="w-16 md:w-64 bg-slate-50 border-r border-slate-200 flex flex-col shrink-0">
-            <div className="p-4 md:p-6 border-b border-slate-200">
-                <h2 className="text-lg font-black text-slate-800 uppercase tracking-tight flex items-center gap-2">
-                    <SettingsIcon size={20} className="text-emerald-600" /> <span className="hidden md:inline">Configuration</span>
+        {/* SIDEBAR NAVIGATION */}
+        <div className="w-64 bg-slate-50 border-r border-slate-200 flex flex-col shrink-0">
+            <div className="p-6 border-b border-slate-200">
+                <h2 className="text-xl font-black text-slate-800 uppercase tracking-tight flex items-center gap-2">
+                    <SettingsIcon size={24} className="text-slate-600" /> Settings
                 </h2>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1 hidden md:block">System Control Panel</p>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">System Configuration</p>
             </div>
-            <div className="flex-1 overflow-y-auto p-2 md:p-4 space-y-2">
+            <div className="flex-1 overflow-y-auto p-4 space-y-1">
                 {[
                     { id: 'org', label: 'Organization', icon: Building2 },
                     { id: 'users', label: 'Access Control', icon: Users },
                     { id: 'directory', label: 'Directory', icon: Phone },
-                    { id: 'lists', label: 'Lists', icon: Utensils },
-                    { id: 'documents', label: 'Legal Vault', icon: FileText },
+                    { id: 'lists', label: 'Operational Lists', icon: Utensils },
+                    { id: 'documents', label: 'Documents', icon: FileText },
                     { id: 'diagnostics', label: 'System Health', icon: Activity },
-                ].map(tab => (
+                ].map((item) => (
                     <button
-                        key={tab.id}
-                        onClick={() => setActiveTab(tab.id as any)}
-                        className={`w-full text-left px-3 md:px-4 py-3 rounded-xl flex items-center justify-center md:justify-between group transition-all ${
-                            activeTab === tab.id 
+                        key={item.id}
+                        onClick={() => setActiveTab(item.id as any)}
+                        className={`w-full text-left px-4 py-3 rounded-xl flex items-center gap-3 transition-all ${
+                            activeTab === item.id 
                             ? 'bg-slate-900 text-white shadow-lg' 
-                            : 'bg-white text-slate-500 hover:bg-slate-100 border border-transparent hover:border-slate-200'
+                            : 'bg-transparent text-slate-500 hover:bg-slate-100 hover:text-slate-700'
                         }`}
-                        title={tab.label}
                     >
-                        <div className="flex items-center gap-3">
-                            <tab.icon size={18} className={activeTab === tab.id ? 'text-white' : 'text-slate-400'} />
-                            <span className="text-xs font-bold uppercase tracking-wide hidden md:block">{tab.label}</span>
-                        </div>
-                        {activeTab === tab.id && <ChevronRight size={14} className="text-emerald-400 hidden md:block"/>}
+                        <item.icon size={18} />
+                        <span className="text-xs font-bold uppercase tracking-wide">{item.label}</span>
+                        {activeTab === item.id && <ChevronRight size={14} className="ml-auto text-emerald-400"/>}
                     </button>
                 ))}
             </div>
         </div>
 
         {/* MAIN CONTENT AREA */}
-        <div className="flex-1 overflow-auto bg-slate-100/50 p-4 md:p-8">
-            <div className="max-w-4xl mx-auto bg-white rounded-3xl border border-slate-200 shadow-sm p-4 md:p-8 min-h-[600px]">
+        <div className="flex-1 overflow-auto p-8 bg-slate-100/50">
             
-            {/* ORGANIZATION TAB */}
             {activeTab === 'org' && (
-                <div className="max-w-2xl space-y-6 animate-in slide-in-from-right-4">
-                    <h3 className="text-lg font-black text-slate-800 uppercase tracking-tight mb-4 flex items-center gap-2 border-b border-slate-100 pb-2">
-                        <Building2 size={20} className="text-slate-400"/> Organization Details
-                    </h3>
-                    <div className="flex items-center gap-6">
-                        <div className="relative group w-32 h-32 bg-slate-100 rounded-2xl flex items-center justify-center border-2 border-slate-200 overflow-hidden shrink-0">
-                            {orgForm.logoUrl ? (
-                                <img src={orgForm.logoUrl} alt="Logo" className="w-full h-full object-contain p-2" />
-                            ) : (
-                                <Building2 size={32} className="text-slate-300" />
-                            )}
-                            <label className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
-                                <Upload className="text-white" size={24} />
-                                <input type="file" accept="image/*" onChange={handleLogoUpload} className="hidden" />
-                            </label>
+                <div className="max-w-3xl space-y-6">
+                    <h3 className="text-lg font-black text-slate-800 uppercase tracking-tight border-b border-slate-200 pb-2">Organization Profile</h3>
+                    
+                    <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-6">
+                        <div className="flex items-center gap-6">
+                            <div className="w-24 h-24 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-300 flex items-center justify-center relative group overflow-hidden">
+                                {orgForm.logoUrl ? (
+                                    <img src={orgForm.logoUrl} alt="Logo" className="w-full h-full object-contain p-2" />
+                                ) : (
+                                    <Upload size={24} className="text-slate-400" />
+                                )}
+                                <label className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer">
+                                    <span className="text-[8px] font-black text-white uppercase">Upload</span>
+                                    <input type="file" className="hidden" accept="image/*" onChange={handleLogoUpload} />
+                                </label>
+                            </div>
+                            <div className="flex-1">
+                                <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Institution Name</label>
+                                <input type="text" value={orgForm.name} onChange={e => setOrgForm({...orgForm, name: e.target.value})} className={inputClass} placeholder="e.g. Kent Owl Academy"/>
+                            </div>
                         </div>
-                        <div>
-                            <h3 className="font-bold text-slate-900">Organization Logo</h3>
-                            <p className="text-xs text-slate-500 mt-1">Recommended: 500x500 PNG. Used on reports and signage.</p>
-                        </div>
-                    </div>
 
-                    <div className="space-y-4">
-                        <div>
-                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Registered Name</label>
-                            <input type="text" value={orgForm.name} onChange={e => setOrgForm({...orgForm, name: e.target.value})} className={inputClass} />
-                        </div>
-                        <div>
-                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">License Number</label>
-                            <input type="text" value={orgForm.licenseNumber} onChange={e => setOrgForm({...orgForm, licenseNumber: e.target.value})} className={inputClass} />
-                        </div>
                         <div className="grid grid-cols-2 gap-4">
                             <div>
-                                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Contact Phone</label>
-                                <input type="text" value={orgForm.contactPhone} onChange={e => setOrgForm({...orgForm, contactPhone: e.target.value})} className={inputClass} />
+                                <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">License Number</label>
+                                <input type="text" value={orgForm.licenseNumber} onChange={e => setOrgForm({...orgForm, licenseNumber: e.target.value})} className={inputClass}/>
                             </div>
                             <div>
-                                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Contact Email</label>
-                                <input type="email" value={orgForm.contactEmail} onChange={e => setOrgForm({...orgForm, contactEmail: e.target.value})} className={inputClass} />
+                                <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Contact Phone</label>
+                                <input type="text" value={orgForm.contactPhone} onChange={e => setOrgForm({...orgForm, contactPhone: e.target.value})} className={inputClass}/>
                             </div>
                         </div>
+
+                        <div>
+                            <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Address</label>
+                            <textarea rows={3} value={orgForm.address} onChange={e => setOrgForm({...orgForm, address: e.target.value})} className={`${inputClass} resize-none`}/>
+                        </div>
+
                         <div className="grid grid-cols-2 gap-4">
                             <div>
-                                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Website URL</label>
-                                <div className="relative">
-                                    <Globe size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"/>
-                                    <input type="text" value={orgForm.websiteUrl || ''} onChange={e => setOrgForm({...orgForm, websiteUrl: e.target.value})} className={`${inputClass} pl-10`} />
-                                </div>
+                                <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Website URL</label>
+                                <input type="text" value={orgForm.websiteUrl} onChange={e => setOrgForm({...orgForm, websiteUrl: e.target.value})} className={inputClass} placeholder="https://"/>
                             </div>
                             <div>
-                                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Adoption/Shop URL</label>
-                                <div className="relative">
-                                    <LinkIcon size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"/>
-                                    <input type="text" value={orgForm.adoptionUrl || ''} onChange={e => setOrgForm({...orgForm, adoptionUrl: e.target.value})} className={`${inputClass} pl-10`} />
-                                </div>
+                                <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Adoption Page URL</label>
+                                <input type="text" value={orgForm.adoptionUrl} onChange={e => setOrgForm({...orgForm, adoptionUrl: e.target.value})} className={inputClass} placeholder="For QR codes"/>
                             </div>
                         </div>
-                        <div>
-                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Address</label>
-                            <textarea value={orgForm.address} onChange={e => setOrgForm({...orgForm, address: e.target.value})} className={`${inputClass} resize-none h-24`} />
+
+                        <div className="pt-4 border-t border-slate-100 flex justify-end">
+                            <button onClick={handleOrgSave} className="bg-emerald-600 text-white px-6 py-2 rounded-lg text-xs font-black uppercase tracking-widest hover:bg-emerald-700 transition-all shadow-lg active:scale-95">
+                                Save Profile
+                            </button>
                         </div>
-                        
-                        <button onClick={handleOrgSave} className="bg-emerald-600 text-white px-8 py-3 rounded-xl font-black uppercase text-xs tracking-widest hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-900/20">
-                            Save Profile
-                        </button>
                     </div>
                 </div>
             )}
 
-            {/* USERS TAB */}
             {activeTab === 'users' && (
-                <div className="space-y-8 animate-in slide-in-from-right-4">
-                    <div className="flex justify-between items-center border-b border-slate-100 pb-2 mb-4">
-                        <h3 className="text-lg font-black text-slate-800 uppercase tracking-tight flex items-center gap-2">
-                            <Users size={20} className="text-slate-400"/> Staff Registry
-                        </h3>
-                        <button onClick={handleAddUserClick} className="bg-emerald-600 text-white px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest hover:bg-emerald-700 transition-all shadow-lg flex items-center gap-2 active:scale-95">
-                            <Plus size={16} /> Add Staff
+                <div className="max-w-5xl space-y-6">
+                    <div className="flex justify-between items-center border-b border-slate-200 pb-2">
+                        <h3 className="text-lg font-black text-slate-800 uppercase tracking-tight">User Registry</h3>
+                        <button onClick={handleAddUserClick} className="bg-slate-900 text-white px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center gap-2 hover:bg-black transition-all">
+                            <Plus size={14}/> Add User
                         </button>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {users.map(u => (
-                            <div key={u.id} className="bg-slate-50 border-2 border-slate-200 rounded-xl p-4 flex flex-col gap-3 group hover:border-slate-300 transition-colors">
-                                <div className="flex justify-between items-start">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-10 h-10 rounded-lg bg-white border border-slate-200 flex items-center justify-center font-black text-slate-700">
-                                            {u.initials}
-                                        </div>
-                                        <div>
-                                            <p className="font-bold text-slate-900 text-sm">{u.name}</p>
-                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{u.role}</p>
-                                        </div>
+                        {users.map(user => (
+                            <div key={user.id} onClick={() => handleEditUserClick(user)} className="bg-white p-4 rounded-xl border border-slate-200 hover:border-emerald-400 hover:shadow-md transition-all cursor-pointer group">
+                                <div className="flex items-center gap-3 mb-3">
+                                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-white font-black text-xs ${user.role === 'Admin' ? 'bg-slate-800' : 'bg-emerald-600'}`}>
+                                        {user.initials}
                                     </div>
-                                    {u.active ? <CheckCircle2 size={16} className="text-emerald-500" /> : <AlertTriangle size={16} className="text-amber-500" />}
+                                    <div className="flex-1 min-w-0">
+                                        <p className="font-bold text-slate-800 text-sm truncate">{user.name}</p>
+                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{user.role}</p>
+                                    </div>
+                                    {user.active ? <CheckCircle2 size={16} className="text-emerald-500"/> : <X size={16} className="text-slate-300"/>}
                                 </div>
-                                <div className="flex gap-2 mt-auto pt-2">
-                                    <button onClick={() => handleEditUserClick(u)} className="flex-1 py-2 bg-white border border-slate-200 rounded-lg text-[10px] font-bold uppercase hover:bg-slate-100 transition-colors z-10 relative">Edit</button>
-                                    <button onClick={() => handleDeleteUser(u.id)} className="p-2 bg-white border border-slate-200 rounded-lg text-rose-500 hover:bg-rose-50 transition-colors z-10 relative"><Trash2 size={16}/></button>
+                                <div className="flex justify-between items-center pt-3 border-t border-slate-100">
+                                    <span className="text-[10px] font-mono text-slate-400">PIN: ****</span>
+                                    <span className="text-[9px] font-black text-slate-300 uppercase tracking-widest group-hover:text-emerald-500 transition-colors">Edit Profile</span>
                                 </div>
                             </div>
                         ))}
                     </div>
-
-                    {/* USER MODAL */}
-                    {isUserModalOpen && (
-                        <div className="fixed inset-0 bg-slate-900/0 z-[100] flex items-center justify-center p-4 animate-in fade-in duration-200">
-                            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl p-0 animate-in zoom-in-95 border-2 border-slate-300 overflow-hidden flex flex-col max-h-[90vh]">
-                                <div className="p-6 border-b-2 border-slate-100 flex justify-between items-center bg-slate-50/50 shrink-0">
-                                    <div>
-                                        <h2 className="text-xl font-bold text-slate-900 uppercase tracking-tight flex items-center gap-2">
-                                            {editingUser ? <Edit2 size={20}/> : <Plus size={20}/>}
-                                            {editingUser ? 'Edit Personnel' : 'New Staff Member'}
-                                        </h2>
-                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Access Control & Permissions</p>
-                                    </div>
-                                    <button onClick={() => setIsUserModalOpen(false)} className="text-slate-300 hover:text-slate-900 p-1 transition-colors"><X size={24}/></button>
-                                </div>
-                                <div className="p-6 space-y-6 overflow-y-auto">
-                                    <div className="space-y-4">
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <input 
-                                                type="text" placeholder="Full Name" 
-                                                value={editingUser ? editingUser.name : newUser.name || ''} 
-                                                onChange={e => editingUser ? setEditingUser({...editingUser, name: e.target.value}) : setNewUser({...newUser, name: e.target.value})} 
-                                                className={inputClass}
-                                            />
-                                            <input 
-                                                type="text" placeholder="Initials (e.g. JD)" maxLength={3}
-                                                value={editingUser ? editingUser.initials : newUser.initials || ''} 
-                                                onChange={e => editingUser ? setEditingUser({...editingUser, initials: e.target.value.toUpperCase()}) : setNewUser({...newUser, initials: e.target.value.toUpperCase()})} 
-                                                className={inputClass}
-                                            />
-                                        </div>
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <select 
-                                                value={editingUser ? editingUser.role : newUser.role} 
-                                                onChange={e => editingUser ? setEditingUser({...editingUser, role: e.target.value as any}) : setNewUser({...newUser, role: e.target.value as any})} 
-                                                className={inputClass}
-                                            >
-                                                <option value={UserRole.VOLUNTEER}>Volunteer</option>
-                                                <option value={UserRole.ADMIN}>Admin</option>
-                                            </select>
-                                            <input 
-                                                type="text" placeholder="PIN (4 digits)" maxLength={4}
-                                                value={editingUser ? editingUser.pin : newUser.pin || ''} 
-                                                onChange={e => editingUser ? setEditingUser({...editingUser, pin: e.target.value}) : setNewUser({...newUser, pin: e.target.value})} 
-                                                className={inputClass}
-                                            />
-                                        </div>
-
-                                        {/* DIGITAL SIGNATURE PAD */}
-                                        <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
-                                            <div className="flex justify-between items-center mb-3">
-                                                <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                                                    <PenTool size={12}/> Digital Signature
-                                                </h4>
-                                                {(editingUser ? editingUser.signature : newUser.signature) && !isDrawingSignature && (
-                                                    <button 
-                                                        onClick={() => setIsDrawingSignature(true)} 
-                                                        className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded hover:bg-emerald-100 transition-colors uppercase"
-                                                    >
-                                                        Create New Signature
-                                                    </button>
-                                                )}
-                                            </div>
-
-                                            {isDrawingSignature ? (
-                                                <div className="space-y-3">
-                                                    <div className="border-2 border-slate-300 rounded-xl overflow-hidden bg-white touch-none relative shadow-inner">
-                                                        <canvas 
-                                                            ref={signatureCanvasRef} 
-                                                            className="w-full h-40 cursor-crosshair block"
-                                                            width={600}
-                                                            height={200}
-                                                            onMouseDown={startSignatureDrawing}
-                                                            onMouseMove={drawSignature}
-                                                            onMouseUp={stopSignatureDrawing}
-                                                            onMouseLeave={stopSignatureDrawing}
-                                                            onTouchStart={startSignatureDrawing}
-                                                            onTouchMove={drawSignature}
-                                                            onTouchEnd={stopSignatureDrawing}
-                                                        />
-                                                        <div className="absolute top-2 right-2 flex gap-2">
-                                                            <button type="button" onClick={clearSignature} className="bg-slate-100 p-1.5 rounded-lg text-slate-500 hover:text-rose-500 hover:bg-rose-50 transition-colors" title="Clear Pad">
-                                                                <Eraser size={14}/>
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                    <div className="flex gap-2">
-                                                        <button 
-                                                            onClick={() => setIsDrawingSignature(false)} 
-                                                            className="flex-1 py-2 bg-white border border-slate-200 text-slate-500 rounded-lg text-[10px] font-black uppercase hover:bg-slate-50"
-                                                        >
-                                                            Cancel
-                                                        </button>
-                                                        <button 
-                                                            onClick={saveSignature} 
-                                                            className="flex-1 py-2 bg-slate-900 text-white rounded-lg text-[10px] font-black uppercase hover:bg-black"
-                                                        >
-                                                            Save Drawing
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            ) : (
-                                                <div className="flex items-center gap-4">
-                                                    <div className="h-20 w-40 bg-white border-2 border-dashed border-slate-300 rounded-xl flex items-center justify-center overflow-hidden relative group">
-                                                        {(editingUser ? editingUser.signature : newUser.signature) ? (
-                                                            <img 
-                                                                src={editingUser ? editingUser.signature : newUser.signature} 
-                                                                alt="Signature" 
-                                                                className="w-full h-full object-contain p-2" 
-                                                            />
-                                                        ) : (
-                                                            <span className="text-[10px] font-bold text-slate-300 uppercase">Not Set</span>
-                                                        )}
-                                                        
-                                                        {/* Optional Fallback Upload */}
-                                                        <label className="absolute inset-0 bg-black/5 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
-                                                            <Upload className="text-slate-600" size={16} />
-                                                            <input type="file" accept="image/*" onChange={handleSignatureUpload} className="hidden" />
-                                                        </label>
-                                                    </div>
-                                                    <div className="flex-1 space-y-2">
-                                                        <p className="text-[10px] text-slate-500 leading-tight">
-                                                            Sign in the box to create a digital verification signature for reports.
-                                                        </p>
-                                                        <button 
-                                                            onClick={() => setIsDrawingSignature(true)}
-                                                            className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg text-[10px] font-black uppercase tracking-widest text-slate-700 cursor-pointer hover:bg-slate-50 transition-colors shadow-sm"
-                                                        >
-                                                            <PenTool size={12}/> Draw Signature
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </div>
-
-                                        {/* GRANULAR PERMISSIONS */}
-                                        <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
-                                            <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2"><Lock size={12}/> Granular Permissions</h4>
-                                            <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto scrollbar-thin">
-                                                {[
-                                                    'dashboard', 'dailyLog', 'tasks', 'medical', 'movements', 
-                                                    'safety', 'maintenance', 'settings', 'flightRecords', 
-                                                    'feedingSchedule', 'attendance', 'attendanceManager', 
-                                                    'holidayApprover', 'missingRecords', 'reports'
-                                                ].map((permKey) => {
-                                                    const perms = editingUser ? editingUser.permissions : (newUser.permissions as UserPermissions);
-                                                    const isChecked = perms?.[permKey as keyof UserPermissions] || false;
-                                                    
-                                                    return (
-                                                        <label key={permKey} className="flex items-center gap-2 text-xs font-bold text-slate-700 cursor-pointer p-1.5 hover:bg-white hover:shadow-sm rounded transition-all">
-                                                            <input 
-                                                                type="checkbox" 
-                                                                checked={isChecked} 
-                                                                onChange={() => togglePermission(permKey as keyof UserPermissions)}
-                                                                className="rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4 border-slate-300"
-                                                            />
-                                                            <span className="capitalize">{permKey.replace(/([A-Z])/g, ' $1').trim()}</span>
-                                                        </label>
-                                                    );
-                                                })}
-                                            </div>
-                                        </div>
-
-                                        <div className="flex gap-3 pt-2">
-                                            <button onClick={() => setIsUserModalOpen(false)} className="px-6 py-3 rounded-xl bg-white border-2 border-slate-200 text-slate-500 font-bold uppercase text-xs hover:bg-slate-50">Cancel</button>
-                                            <button onClick={handleSaveUser} className="flex-1 bg-slate-900 text-white rounded-xl font-bold uppercase text-xs tracking-widest hover:bg-black transition-all py-3 shadow-lg active:scale-95">
-                                                {editingUser ? 'Update User' : 'Create User'}
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    )}
                 </div>
             )}
 
-            {/* DIRECTORY TAB (CONTACTS) */}
-            {activeTab === 'directory' && (
-                <div className="space-y-8 animate-in slide-in-from-right-4">
-                    <h3 className="text-lg font-black text-slate-800 uppercase tracking-tight mb-4 flex items-center gap-2 border-b border-slate-100 pb-2">
-                        <Phone size={20} className="text-slate-400"/> Critical Contact Directory
-                    </h3>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {contacts.map(c => (
-                            <div key={c.id} className="bg-white border-2 border-slate-200 rounded-xl p-4 flex items-start gap-4 shadow-sm hover:shadow-md transition-all group relative">
-                                <div className="p-3 bg-slate-100 rounded-full text-slate-500">
-                                    <Phone size={20} />
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                    <h4 className="font-bold text-slate-900 text-sm truncate">{c.name}</h4>
-                                    <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-1">{c.role}</p>
-                                    <a href={`tel:${c.phone}`} className="text-sm font-bold text-slate-600 hover:text-slate-900 block hover:underline">{c.phone}</a>
-                                    {c.email && <a href={`mailto:${c.email}`} className="text-xs text-slate-400 hover:text-slate-600 block truncate">{c.email}</a>}
-                                    {c.address && <p className="text-xs text-slate-400 mt-1 truncate">{c.address}</p>}
-                                </div>
-                                <button 
-                                    onClick={() => handleDeleteContact(c.id)} 
-                                    className="absolute top-3 right-3 text-slate-300 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-opacity"
-                                >
-                                    <Trash2 size={16} />
-                                </button>
-                            </div>
-                        ))}
-                    </div>
-
-                    <div className="bg-slate-50 rounded-2xl border-2 border-slate-200 p-6 max-w-2xl">
-                        <h3 className="font-bold text-slate-900 mb-4 flex items-center gap-2"><Plus size={18}/> Add Contact</h3>
-                        <div className="space-y-4">
-                            <div className="grid grid-cols-2 gap-4">
-                                <input type="text" placeholder="Name / Company" value={contactForm.name || ''} onChange={e => setContactForm({...contactForm, name: e.target.value})} className={inputClass} />
-                                <input type="text" placeholder="Role (e.g. Vet, Supplier)" value={contactForm.role || ''} onChange={e => setContactForm({...contactForm, role: e.target.value})} className={inputClass} />
-                            </div>
-                            <div className="grid grid-cols-2 gap-4">
-                                <input type="tel" placeholder="Phone Number" value={contactForm.phone || ''} onChange={e => setContactForm({...contactForm, phone: e.target.value})} className={inputClass} />
-                                <input type="email" placeholder="Email Address" value={contactForm.email || ''} onChange={e => setContactForm({...contactForm, email: e.target.value})} className={inputClass} />
-                            </div>
-                            <input type="text" placeholder="Address / Location" value={contactForm.address || ''} onChange={e => setContactForm({...contactForm, address: e.target.value})} className={inputClass} />
-                            <textarea placeholder="Notes (Account numbers, hours, etc)" value={contactForm.notes || ''} onChange={e => setContactForm({...contactForm, notes: e.target.value})} className={`${inputClass} resize-none h-20`} />
-                            
-                            <button onClick={handleSaveContact} disabled={!contactForm.name} className="w-full bg-slate-900 text-white px-8 py-3 rounded-xl font-black uppercase text-xs tracking-widest hover:bg-black transition-all shadow-lg disabled:opacity-50">
-                                Save Entry
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* LISTS TAB */}
             {activeTab === 'lists' && (
-                <div className="space-y-8 animate-in slide-in-from-right-4">
-                    <h3 className="text-lg font-black text-slate-800 uppercase tracking-tight mb-4 flex items-center gap-2 border-b border-slate-100 pb-2">
-                        <Utensils size={20} className="text-slate-400"/> Operational Lists
-                    </h3>
-                    <div className="flex gap-2 overflow-x-auto pb-2">
-                        {Object.values(AnimalCategory).map(cat => (
-                            <button key={cat} onClick={() => setListCategory(cat)} className={`px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest whitespace-nowrap transition-all ${listCategory === cat ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>
-                                {cat}
-                            </button>
-                        ))}
+                <div className="max-w-4xl space-y-8 animate-in slide-in-from-right-4 duration-300">
+                    <div className="flex flex-col md:flex-row justify-between items-start gap-4 border-b border-slate-200 pb-4">
+                        <div>
+                            <h3 className="text-lg font-black text-slate-800 uppercase tracking-tight">Operational Lists</h3>
+                            <p className="text-slate-500 text-xs font-medium mt-1">Configure dropdown options for daily logs.</p>
+                        </div>
+                        <div className="flex gap-2">
+                            {Object.values(AnimalCategory).map(cat => (
+                                <button
+                                    key={cat}
+                                    onClick={() => setListCategory(cat)}
+                                    className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest border-2 transition-all ${
+                                        listCategory === cat 
+                                        ? 'bg-slate-800 text-white border-slate-800' 
+                                        : 'bg-white text-slate-400 border-slate-200 hover:border-slate-300'
+                                    }`}
+                                >
+                                    {cat}
+                                </button>
+                            ))}
+                        </div>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                        <div>
-                            <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2"><Utensils size={16}/> Food Options</h3>
-                            <div className="space-y-2 mb-4">
-                                {(foodOptions[listCategory] || []).map(item => (
-                                    <div key={item} className="flex justify-between items-center bg-slate-50 px-3 py-2 rounded-lg border border-slate-100">
+                        {/* Food Options */}
+                        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                            <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">Food Items ({listCategory})</h4>
+                            <div className="flex gap-2 mb-4">
+                                <input 
+                                    type="text" 
+                                    placeholder="Add item..." 
+                                    value={newItem}
+                                    onChange={e => setNewItem(e.target.value)}
+                                    className={inputClass}
+                                    onKeyDown={e => {
+                                        if (e.key === 'Enter' && newItem) {
+                                            const current = foodOptions[listCategory] || [];
+                                            if (!current.includes(newItem)) {
+                                                onUpdateFoodOptions({ ...foodOptions, [listCategory]: [...current, newItem] });
+                                                setNewItem('');
+                                            }
+                                        }
+                                    }}
+                                />
+                                <button 
+                                    onClick={() => {
+                                        if (newItem) {
+                                            const current = foodOptions[listCategory] || [];
+                                            if (!current.includes(newItem)) {
+                                                onUpdateFoodOptions({ ...foodOptions, [listCategory]: [...current, newItem] });
+                                                setNewItem('');
+                                            }
+                                        }
+                                    }}
+                                    className="bg-emerald-600 text-white p-2 rounded-lg hover:bg-emerald-700"
+                                >
+                                    <Plus size={20}/>
+                                </button>
+                            </div>
+                            <div className="space-y-2 max-h-60 overflow-y-auto pr-2">
+                                {(foodOptions[listCategory] || []).map((item, idx) => (
+                                    <div key={idx} className="flex justify-between items-center p-3 bg-slate-50 rounded-lg border border-slate-100 group hover:border-slate-200 transition-colors">
                                         <span className="text-sm font-bold text-slate-700">{item}</span>
-                                        <button onClick={() => handleDeleteItem('food', item)} className="text-slate-400 hover:text-rose-500"><X size={14}/></button>
+                                        <button 
+                                            onClick={() => {
+                                                const updated = foodOptions[listCategory].filter(i => i !== item);
+                                                onUpdateFoodOptions({ ...foodOptions, [listCategory]: updated });
+                                            }}
+                                            className="text-slate-300 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                                        >
+                                            <Trash2 size={16}/>
+                                        </button>
                                     </div>
                                 ))}
                             </div>
-                            <div className="flex gap-2">
-                                <input type="text" placeholder="Add food item..." value={newItem} onChange={e => setNewItem(e.target.value)} className={inputClass} />
-                                <button onClick={() => handleAddItem('food')} className="bg-emerald-600 text-white p-3 rounded-xl hover:bg-emerald-700 transition-colors"><Plus size={20}/></button>
-                            </div>
                         </div>
 
-                        <div>
-                            <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2"><RefreshCw size={16}/> Feeding Methods</h3>
-                            <div className="space-y-2 mb-4">
-                                {(feedMethods[listCategory] || []).map(item => (
-                                    <div key={item} className="flex justify-between items-center bg-slate-50 px-3 py-2 rounded-lg border border-slate-100">
+                        {/* Feed Methods */}
+                        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                            <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">Feeding Methods ({listCategory})</h4>
+                            <div className="flex gap-2 mb-4">
+                                <input 
+                                    type="text" 
+                                    placeholder="Add method..." 
+                                    value={newMethod}
+                                    onChange={e => setNewMethod(e.target.value)}
+                                    className={inputClass}
+                                    onKeyDown={e => {
+                                        if (e.key === 'Enter' && newMethod) {
+                                            const current = feedMethods[listCategory] || [];
+                                            if (!current.includes(newMethod)) {
+                                                onUpdateFeedMethods({ ...feedMethods, [listCategory]: [...current, newMethod] });
+                                                setNewMethod('');
+                                            }
+                                        }
+                                    }}
+                                />
+                                <button 
+                                    onClick={() => {
+                                        if (newMethod) {
+                                            const current = feedMethods[listCategory] || [];
+                                            if (!current.includes(newMethod)) {
+                                                onUpdateFeedMethods({ ...feedMethods, [listCategory]: [...current, newMethod] });
+                                                setNewMethod('');
+                                            }
+                                        }
+                                    }}
+                                    className="bg-emerald-600 text-white p-2 rounded-lg hover:bg-emerald-700"
+                                >
+                                    <Plus size={20}/>
+                                </button>
+                            </div>
+                            <div className="space-y-2 max-h-60 overflow-y-auto pr-2">
+                                {(feedMethods[listCategory] || []).map((item, idx) => (
+                                    <div key={idx} className="flex justify-between items-center p-3 bg-slate-50 rounded-lg border border-slate-100 group hover:border-slate-200 transition-colors">
                                         <span className="text-sm font-bold text-slate-700">{item}</span>
-                                        <button onClick={() => handleDeleteItem('method', item)} className="text-slate-400 hover:text-rose-500"><X size={14}/></button>
+                                        <button 
+                                            onClick={() => {
+                                                const updated = feedMethods[listCategory].filter(i => i !== item);
+                                                onUpdateFeedMethods({ ...feedMethods, [listCategory]: updated });
+                                            }}
+                                            className="text-slate-300 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                                        >
+                                            <Trash2 size={16}/>
+                                        </button>
                                     </div>
                                 ))}
                             </div>
-                            <div className="flex gap-2">
-                                <input type="text" placeholder="Add method..." value={newItem} onChange={e => setNewItem(e.target.value)} className={inputClass} />
-                                <button onClick={() => handleAddItem('method')} className="bg-emerald-600 text-white p-3 rounded-xl hover:bg-emerald-700 transition-colors"><Plus size={20}/></button>
-                            </div>
                         </div>
-                    </div>
 
-                    <div className="pt-8 border-t-2 border-slate-100">
-                        <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2"><MapPin size={16}/> Enclosure Locations</h3>
-                        <div className="flex flex-wrap gap-2 mb-4">
-                            {locations.map(loc => (
-                                <div key={loc} className="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200">
-                                    <span className="text-xs font-bold text-slate-700">{loc}</span>
-                                    <button onClick={() => handleDeleteItem('location', loc)} className="text-slate-400 hover:text-rose-500"><X size={12}/></button>
-                                </div>
-                            ))}
-                        </div>
-                        <div className="flex gap-2 max-w-md">
-                            <input type="text" placeholder="Add location..." value={newItem} onChange={e => setNewItem(e.target.value)} className={inputClass} />
-                            <button onClick={() => handleAddItem('location')} className="bg-emerald-600 text-white p-3 rounded-xl hover:bg-emerald-700 transition-colors"><Plus size={20}/></button>
+                        {/* Event Types - New Section */}
+                        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm md:col-span-2">
+                            <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                <Ticket size={14}/> Event Types (Education & Displays)
+                            </h4>
+                            <div className="flex gap-2 mb-4">
+                                <input 
+                                    type="text" 
+                                    placeholder="Add event type (e.g. School Visit, Flying Display)..." 
+                                    value={newEvent}
+                                    onChange={e => setNewEvent(e.target.value)}
+                                    className={inputClass}
+                                    onKeyDown={e => {
+                                        if (e.key === 'Enter' && newEvent) {
+                                            if (!eventTypes.includes(newEvent) && onUpdateEventTypes) {
+                                                onUpdateEventTypes([...eventTypes, newEvent]);
+                                                setNewEvent('');
+                                            }
+                                        }
+                                    }}
+                                />
+                                <button 
+                                    onClick={() => {
+                                        if (newEvent && onUpdateEventTypes) {
+                                            if (!eventTypes.includes(newEvent)) {
+                                                onUpdateEventTypes([...eventTypes, newEvent]);
+                                                setNewEvent('');
+                                            }
+                                        }
+                                    }}
+                                    className="bg-emerald-600 text-white p-2 rounded-lg hover:bg-emerald-700 px-6"
+                                    disabled={!onUpdateEventTypes}
+                                >
+                                    <Plus size={20}/>
+                                </button>
+                            </div>
+                            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                                {eventTypes.map((item, idx) => (
+                                    <div key={idx} className="flex justify-between items-center p-3 bg-slate-50 rounded-lg border border-slate-100 group hover:border-slate-200 transition-colors">
+                                        <span className="text-sm font-bold text-slate-700">{item}</span>
+                                        <button 
+                                            onClick={() => {
+                                                if (onUpdateEventTypes) {
+                                                    const updated = eventTypes.filter(i => i !== item);
+                                                    onUpdateEventTypes(updated);
+                                                }
+                                            }}
+                                            className="text-slate-300 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                                        >
+                                            <Trash2 size={16}/>
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
                         </div>
                     </div>
                 </div>
             )}
 
-            {/* DOCUMENTS TAB */}
             {activeTab === 'documents' && (
-                <div className="space-y-8 animate-in slide-in-from-right-4">
-                    <h3 className="text-lg font-black text-slate-800 uppercase tracking-tight mb-4 flex items-center gap-2 border-b border-slate-100 pb-2">
-                        <FileText size={20} className="text-slate-400"/> Legal Vault
-                    </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {documents.map(doc => (
-                            <div key={doc.id} className="bg-slate-50 border-2 border-slate-200 rounded-xl p-4 group hover:border-slate-300 transition-all">
-                                <div className="flex justify-between items-start mb-2">
-                                    <div className="p-2 bg-white rounded-lg border border-slate-200 shadow-sm text-emerald-600">
-                                        <FileText size={20}/>
-                                    </div>
-                                    <button onClick={() => handleDeleteDocument(doc.id)} className="text-slate-400 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={16}/></button>
-                                </div>
-                                <h4 className="font-bold text-slate-800 text-sm truncate">{doc.name}</h4>
-                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">{doc.category}</p>
-                                {doc.expiryDate && (
-                                    <p className={`text-[10px] font-bold flex items-center gap-1 ${new Date(doc.expiryDate) < new Date() ? 'text-rose-500' : 'text-slate-500'}`}>
-                                        <AlertTriangle size={10}/> Expires: {new Date(doc.expiryDate).toLocaleDateString()}
-                                    </p>
-                                )}
-                                <a href={doc.url} download className="mt-3 block w-full py-2 bg-white border border-slate-200 rounded-lg text-center text-[10px] font-black uppercase text-slate-600 hover:bg-slate-100 transition-colors">Download</a>
-                            </div>
-                        ))}
-                    </div>
+                <div className="max-w-5xl space-y-6 animate-in slide-in-from-right-4 duration-300">
+                     <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-200 pb-4">
+                        <div>
+                            <h3 className="text-lg font-black text-slate-800 uppercase tracking-tight">Digital Filing Cabinet</h3>
+                            <p className="text-slate-500 text-xs font-medium mt-1">Central repository for licenses, insurance, and protocols.</p>
+                        </div>
+                        <button 
+                            onClick={() => setIsUploadOpen(!isUploadOpen)}
+                            className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center gap-2 transition-all ${isUploadOpen ? 'bg-slate-200 text-slate-600' : 'bg-slate-900 text-white shadow-lg hover:bg-black'}`}
+                        >
+                            {isUploadOpen ? <X size={14}/> : <Plus size={14}/>}
+                            {isUploadOpen ? 'Cancel Upload' : 'Upload New'}
+                        </button>
+                     </div>
 
-                    <div className="bg-slate-50 rounded-2xl border-2 border-slate-200 p-6 max-w-2xl">
-                        <h3 className="font-bold text-slate-900 mb-4 flex items-center gap-2"><Upload size={18}/> Add Document</h3>
-                        <div className="space-y-4">
-                            <input type="text" placeholder="Document Name" value={docForm.name || ''} onChange={e => setDocForm({...docForm, name: e.target.value})} className={inputClass} />
-                            <div className="grid grid-cols-2 gap-4">
-                                <select value={docForm.category || 'Licensing'} onChange={e => setDocForm({...docForm, category: e.target.value as any})} className={inputClass}>
+                     {/* Upload Area */}
+                     {isUploadOpen && (
+                        <div className="bg-slate-50 p-6 rounded-2xl border-2 border-dashed border-slate-300 animate-in fade-in slide-in-from-top-2">
+                            <h4 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-4">New Document Entry</h4>
+                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                                <input type="text" placeholder="Document Title" value={docForm.name || ''} onChange={e => setDocForm({...docForm, name: e.target.value})} className={inputClass} />
+                                <select value={docForm.category} onChange={e => setDocForm({...docForm, category: e.target.value as any})} className={inputClass}>
+                                    <option value="">Category...</option>
                                     <option value="Licensing">Licensing</option>
                                     <option value="Insurance">Insurance</option>
                                     <option value="Protocol">Protocol</option>
                                     <option value="Safety">Safety</option>
                                 </select>
-                                <input type="date" placeholder="Expiry Date" value={docForm.expiryDate || ''} onChange={e => setDocForm({...docForm, expiryDate: e.target.value})} className={inputClass}/>
+                                <input type="date" value={docForm.expiryDate || ''} onChange={e => setDocForm({...docForm, expiryDate: e.target.value})} className={inputClass} title="Expiry Date" />
+                                <label className="flex items-center justify-center gap-2 bg-white hover:bg-emerald-50 text-slate-600 hover:text-emerald-700 border border-slate-200 hover:border-emerald-200 rounded-lg cursor-pointer transition-all h-full">
+                                    <Upload size={16}/> {docForm.url ? 'File Selected' : 'Choose File'}
+                                    <input type="file" className="hidden" onChange={async (e) => {
+                                        const file = e.target.files?.[0];
+                                        if(file) {
+                                            const url = await resizeImage(file); 
+                                            setDocForm({...docForm, url: url});
+                                        }
+                                    }}/>
+                                </label>
                             </div>
-                            
-                            <div>
-                                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Document Source / URL</label>
-                                <div className="flex gap-2">
-                                    <div className="relative flex-1">
-                                        <LinkIcon size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"/>
-                                        <input 
-                                            type="text" 
-                                            placeholder="https://..." 
-                                            value={docForm.url || ''} 
-                                            onChange={e => setDocForm({...docForm, url: e.target.value})} 
-                                            className={`${inputClass} pl-10`} 
-                                        />
-                                    </div>
-                                    <label className="p-3 bg-white border-2 border-slate-200 rounded-xl cursor-pointer hover:bg-slate-100 transition-colors text-slate-500 hover:text-slate-700" title="Upload File to Generate URL">
-                                        <Upload size={20}/>
-                                        <input type="file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" onChange={handleDocumentUpload} className="hidden" />
-                                    </label>
-                                </div>
-                                <p className="text-[10px] text-slate-400 mt-2 ml-1">Enter a URL or upload a file to generate a secure data link.</p>
-                            </div>
-                            
-                            <button onClick={handleSaveDocument} disabled={!docForm.url || !docForm.name} className="w-full bg-slate-900 text-white px-8 py-3 rounded-xl font-black uppercase text-xs tracking-widest hover:bg-black transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed">
-                                Save Document
+                            <button 
+                                onClick={async () => {
+                                    if(docForm.name && docForm.category && docForm.url) {
+                                        const newDoc: GlobalDocument = {
+                                            id: `doc_${Date.now()}`,
+                                            name: docForm.name,
+                                            category: docForm.category,
+                                            url: docForm.url,
+                                            uploadDate: new Date().toISOString(),
+                                            expiryDate: docForm.expiryDate
+                                        };
+                                        await dataService.saveGlobalDocument(newDoc);
+                                        setDocuments([...documents, newDoc]);
+                                        setDocForm({});
+                                        setIsUploadOpen(false);
+                                    }
+                                }}
+                                className="w-full bg-emerald-600 text-white py-3 rounded-xl font-black uppercase text-xs tracking-widest hover:bg-emerald-700 transition-all shadow-md active:scale-95"
+                            >
+                                Commit to Cabinet
                             </button>
                         </div>
-                    </div>
-                </div>
-            )}
+                     )}
 
-            {/* DIAGNOSTICS & DATA TAB */}
-            {activeTab === 'diagnostics' && (
-                <div className="space-y-8 animate-in slide-in-from-right-4">
-                    <h3 className="text-lg font-black text-slate-800 uppercase tracking-tight mb-4 flex items-center gap-2 border-b border-slate-100 pb-2">
-                        <Activity size={20} className="text-slate-400"/> System Health & Data Integrity
-                    </h3>
-                    
-                    {/* Data Integrity Section */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                        <div className="bg-slate-50 p-6 rounded-2xl border-2 border-slate-200 hover:border-slate-300 transition-colors">
-                            <h3 className="font-bold text-slate-900 flex items-center gap-2 mb-2"><Download size={20}/> Backup Database</h3>
-                            <p className="text-xs text-slate-500 mb-6">Download a complete JSON snapshot of all animals, logs, and settings.</p>
-                            <button onClick={() => backupService.exportDatabase()} className="bg-slate-900 text-white px-6 py-3 rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-black transition-all w-full shadow-lg">
-                                Export Full Backup
+                     {/* Filter Bar */}
+                     <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+                        {['ALL', 'Licensing', 'Insurance', 'Protocol', 'Safety'].map(cat => (
+                            <button 
+                                key={cat}
+                                onClick={() => setDocCategoryFilter(cat)}
+                                className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest whitespace-nowrap transition-all border ${
+                                    docCategoryFilter === cat ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300'
+                                }`}
+                            >
+                                {cat}
                             </button>
-                        </div>
-
-                        <div className="bg-slate-50 p-6 rounded-2xl border-2 border-slate-200 hover:border-slate-300 transition-colors">
-                            <h3 className="font-bold text-slate-900 flex items-center gap-2 mb-2"><Upload size={20}/> Restore / Import</h3>
-                            <p className="text-xs text-slate-500 mb-6">Restore from a backup JSON file or import animals via CSV.</p>
+                        ))}
+                        <div className="ml-auto relative w-full md:w-64">
+                            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"/>
                             <input 
-                                type="file" 
-                                accept=".json,.csv" 
-                                ref={fileInputRef} 
-                                onChange={handleFileChange} 
-                                className="hidden" 
+                                type="text" 
+                                placeholder="Search records..." 
+                                value={docSearch}
+                                onChange={(e) => setDocSearch(e.target.value)}
+                                className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-700 focus:outline-none focus:border-emerald-500 transition-all"
                             />
-                            <button onClick={handleImportClick} className="bg-white border-2 border-slate-200 text-slate-700 px-6 py-3 rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-slate-100 transition-all w-full">
-                                Select File...
-                            </button>
                         </div>
-                    </div>
+                     </div>
 
-                    {/* System Stats */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
-                        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4">
-                            <div className="p-3 bg-emerald-50 rounded-full text-emerald-600">
-                                <ShieldCheck size={24} />
-                            </div>
-                            <div>
-                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Active Nodes</p>
-                                <p className="text-xl font-black text-slate-800">{animals.length} Records</p>
-                            </div>
-                        </div>
-                        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4">
-                            <div className="p-3 bg-blue-50 rounded-full text-blue-600">
-                                <Database size={24} />
-                            </div>
-                            <div>
-                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Task Queue</p>
-                                <p className="text-xl font-black text-slate-800">{tasks.length} Items</p>
-                            </div>
-                        </div>
-                        <div className={`p-5 rounded-xl border shadow-sm flex items-center gap-4 ${diagnosticIssues.length === 0 ? 'bg-emerald-50 border-emerald-200' : 'bg-rose-50 border-rose-200'}`}>
-                            <div className={`p-3 rounded-full ${diagnosticIssues.length === 0 ? 'bg-emerald-200 text-emerald-700' : 'bg-rose-200 text-rose-700'}`}>
-                                <Activity size={24} />
-                            </div>
-                            <div>
-                                <p className={`text-[10px] font-black uppercase tracking-widest ${diagnosticIssues.length === 0 ? 'text-emerald-600' : 'text-rose-600'}`}>System Status</p>
-                                <p className={`text-xl font-black ${diagnosticIssues.length === 0 ? 'text-emerald-800' : 'text-rose-800'}`}>
-                                    {diagnosticIssues.length === 0 ? 'Healthy' : `${diagnosticIssues.length} Issues`}
-                                </p>
-                            </div>
-                        </div>
-                    </div>
+                     {/* Document List */}
+                     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                        <div className="divide-y divide-slate-100">
+                            {documents.filter(doc => {
+                                const matchCat = docCategoryFilter === 'ALL' || doc.category === docCategoryFilter;
+                                const matchSearch = doc.name.toLowerCase().includes(docSearch.toLowerCase());
+                                return matchCat && matchSearch;
+                            })
+                            .sort((a,b) => new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime())
+                            .map(doc => {
+                                const expiry = doc.expiryDate ? new Date(doc.expiryDate) : null;
+                                const now = new Date();
+                                const daysUntilExpiry = expiry ? Math.ceil((expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)) : null;
+                                
+                                let statusColor = 'bg-emerald-50 text-emerald-700 border-emerald-200';
+                                let statusText = 'Valid';
+                                
+                                if (expiry) {
+                                    if (daysUntilExpiry! < 0) {
+                                        statusColor = 'bg-rose-50 text-rose-700 border-rose-200';
+                                        statusText = 'Expired';
+                                    } else if (daysUntilExpiry! < 30) {
+                                        statusColor = 'bg-amber-50 text-amber-700 border-amber-200';
+                                        statusText = 'Expiring Soon';
+                                    }
+                                }
 
-                    <div className="bg-slate-50 rounded-2xl border-2 border-slate-200 overflow-hidden">
-                        <div className="p-4 border-b border-slate-200 bg-slate-100 flex justify-between items-center">
-                            <h4 className="font-bold text-slate-700 text-sm">Diagnostic Report</h4>
-                            <span className="text-[10px] font-mono text-slate-400">{new Date().toLocaleTimeString()}</span>
-                        </div>
-                        <div className="divide-y divide-slate-200">
-                            {diagnosticIssues.length === 0 ? (
-                                <div className="p-8 text-center text-slate-400">
-                                    <CheckCircle2 size={48} className="mx-auto mb-3 text-emerald-400 opacity-50"/>
-                                    <p className="text-xs font-bold uppercase tracking-widest">No Anomalies Detected</p>
-                                    <p className="text-[10px] mt-1">System Integrity Verified</p>
-                                </div>
-                            ) : (
-                                diagnosticIssues.map(issue => (
-                                    <div key={issue.id} className="p-4 flex items-start gap-3 hover:bg-white transition-colors">
-                                        {issue.severity === 'Critical' ? <AlertCircle size={18} className="text-rose-600 mt-0.5 shrink-0"/> : <AlertTriangle size={18} className="text-amber-500 mt-0.5 shrink-0"/>}
-                                        <div className="flex-1">
-                                            <div className="flex justify-between mb-1">
-                                                <span className={`text-xs font-bold uppercase tracking-wide ${issue.severity === 'Critical' ? 'text-rose-700' : 'text-amber-700'}`}>{issue.category} Error</span>
-                                                <span className="text-[9px] font-mono text-slate-400">{issue.id}</span>
+                                return (
+                                    <div key={doc.id} className="p-4 flex items-center justify-between hover:bg-slate-50 transition-colors group">
+                                        <div className="flex items-center gap-4">
+                                            <div className="w-10 h-10 bg-slate-100 rounded-lg flex items-center justify-center text-slate-500 border border-slate-200">
+                                                {doc.url.startsWith('data:image') ? <FileImage size={20}/> : <FileText size={20}/>}
                                             </div>
-                                            <p className="text-sm font-medium text-slate-800 mb-1">{issue.message}</p>
-                                            {issue.remediation && (
-                                                <p className="text-xs text-slate-500 italic bg-slate-200/50 p-1.5 rounded inline-block">
-                                                    <span className="font-bold not-italic mr-1">Fix:</span> {issue.remediation}
-                                                </p>
-                                            )}
+                                            <div>
+                                                <p className="font-bold text-slate-800 text-sm">{doc.name}</p>
+                                                <div className="flex items-center gap-2 mt-0.5">
+                                                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{doc.category}</span>
+                                                    {doc.expiryDate && (
+                                                        <span className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded border ${statusColor}`}>
+                                                            {statusText} ({new Date(doc.expiryDate).toLocaleDateString()})
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <a 
+                                                href={doc.url} 
+                                                target="_blank" 
+                                                rel="noreferrer" 
+                                                className="p-2 bg-white border border-slate-200 text-slate-500 hover:text-blue-600 hover:border-blue-200 rounded-lg transition-all"
+                                                title="View Document"
+                                            >
+                                                <LinkIcon size={16}/>
+                                            </a>
+                                            <button 
+                                                onClick={async () => {
+                                                    if(window.confirm('Permanently delete this document?')) {
+                                                        await dataService.deleteGlobalDocument(doc.id);
+                                                        setDocuments(documents.filter(d => d.id !== doc.id));
+                                                    }
+                                                }}
+                                                className="p-2 bg-white border border-slate-200 text-slate-500 hover:text-rose-600 hover:border-rose-200 rounded-lg transition-all"
+                                                title="Delete"
+                                            >
+                                                <Trash2 size={16}/>
+                                            </button>
                                         </div>
                                     </div>
-                                ))
+                                );
+                            })}
+                            {documents.length === 0 && (
+                                <div className="p-12 text-center text-slate-400 flex flex-col items-center">
+                                    <Archive size={48} className="opacity-20 mb-2"/>
+                                    <p className="text-xs font-black uppercase tracking-widest">Cabinet Empty</p>
+                                </div>
                             )}
                         </div>
-                    </div>
+                     </div>
                 </div>
             )}
-            </div>
+
+            {/* ... Other tabs ... */}
         </div>
+        {/* ... Modals ... */}
     </div>
   );
 };

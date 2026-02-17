@@ -1,4 +1,5 @@
 import { dataService } from './dataService';
+import { LocalBackupEntry } from '../types';
 
 export const backupService = {
   generateFullBackup: async () => {
@@ -79,5 +80,32 @@ export const backupService = {
       console.error('Import failed', e);
       return false;
     }
+  },
+
+  // --- INTERNAL RESTORE POINTS ---
+  
+  createLocalSnapshot: async (): Promise<LocalBackupEntry | null> => {
+    try {
+      const fullData = await backupService.generateFullBackup();
+      const jsonString = JSON.stringify(fullData);
+      
+      const snapshot: LocalBackupEntry = {
+        id: `snap_${Date.now()}`,
+        timestamp: Date.now(),
+        size: jsonString.length,
+        data: jsonString
+      };
+
+      await dataService.saveLocalBackup(snapshot);
+      return snapshot;
+    } catch (e) {
+      console.error("Snapshot creation failed", e);
+      return null;
+    }
+  },
+
+  restoreFromSnapshot: async (snapshot: LocalBackupEntry): Promise<boolean> => {
+    if (!snapshot.data) return false;
+    return await backupService.importDatabase(snapshot.data);
   }
 };
