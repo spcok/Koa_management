@@ -1,35 +1,36 @@
 
 import React, { useState, Suspense } from 'react';
-import { UserRole, UserPermissions, Animal } from './types.ts';
-import Layout from './components/Layout.tsx';
-import Dashboard from './components/Dashboard.tsx';
-import DailyLog from './components/DailyLog.tsx';
-import Tasks from './components/Tasks.tsx';
-import FlightRecords from './components/FlightRecords.tsx';
-import Schedule from './components/Schedule.tsx';
-import WeatherView from './components/WeatherView.tsx';
-import Movements from './components/Movements.tsx';
-import SafetyDrills from './components/SafetyDrills.tsx';
-import Incidents from './components/Incidents.tsx';
-import FirstAid from './components/FirstAid.tsx';
-import Health from './components/Health.tsx';
-import SiteMaintenance from './components/SiteMaintenance.tsx';
-import MissingRecords from './components/MissingRecords.tsx';
-import Settings from './components/Settings.tsx';
-import LoginScreen from './components/LoginScreen.tsx';
-import AnimalProfile from './components/AnimalProfile.tsx';
-import TimeSheets from './components/TimeSheets.tsx';
-import HelpCenter from './components/HelpCenter.tsx';
-import Reports from './components/Reports.tsx';
-import HolidayRegistry from './components/HolidayRegistry.tsx';
-import DailyRounds from './components/DailyRounds.tsx';
-import DiagnosticOverlay from './components/DiagnosticOverlay.tsx';
-import React19Playground from './components/React19Playground.tsx';
-import { useAppData } from './hooks/useAppData.ts';
+import { UserRole, UserPermissions, Animal } from './types';
+import Layout from './components/Layout';
+import Dashboard from './components/Dashboard';
+import DailyLog from './components/DailyLog';
+import Tasks from './components/Tasks';
+import FlightRecords from './components/FlightRecords';
+import Schedule from './components/Schedule';
+import WeatherView from './components/WeatherView';
+import Movements from './components/Movements';
+import SafetyDrills from './components/SafetyDrills';
+import Incidents from './components/Incidents';
+import FirstAid from './components/FirstAid';
+import Health from './components/Health';
+import SiteMaintenance from './components/SiteMaintenance';
+import MissingRecords from './components/MissingRecords';
+import Settings from './components/Settings';
+import LoginScreen from './components/LoginScreen';
+import AnimalProfile from './components/AnimalProfile';
+import TimeSheets from './components/TimeSheets';
+import HelpCenter from './components/HelpCenter';
+import Reports from './components/Reports';
+import HolidayRegistry from './components/HolidayRegistry';
+import DailyRounds from './components/DailyRounds';
+import DiagnosticOverlay from './components/DiagnosticOverlay';
+import React19Playground from './components/React19Playground';
+import { useAppData } from './hooks/useAppData';
 import { Loader2 } from 'lucide-react';
-import { AppProvider } from './components/AppProvider.tsx';
+import { AppProvider } from './components/AppProvider';
 
-// Inner component to consume context
+// AppContent is the main UI component that consumes the context.
+// It only renders after AppProvider has successfully fetched all data.
 const AppContent: React.FC = () => {
   const {
     currentUser, animals, tasks, users,
@@ -49,7 +50,7 @@ const AppContent: React.FC = () => {
 
   const [view, setView] = useState<string>('dashboard');
   const [selectedAnimal, setSelectedAnimal] = useState<Animal | null>(null);
-  const [activeCategory, setActiveCategory] = useState<any>('Owls'); // Default
+  const [activeCategory, setActiveCategory] = useState<any>('Owls');
   const [viewDate, setViewDate] = useState(new Date().toISOString().split('T')[0]);
   const [fontScale, setFontScale] = useState(100);
 
@@ -64,7 +65,7 @@ const AppContent: React.FC = () => {
   const p: UserPermissions = { 
     dashboard: true, dailyLog: true, tasks: true, medical: isAdmin, movements: isAdmin, 
     safety: isAdmin, maintenance: true, settings: isAdmin, flightRecords: true, 
-    feedingSchedule: isAdmin, attendance: isAdmin, attendanceManager: isAdmin, 
+    feedingSchedule: isAdmin, attendance: true, attendanceManager: isAdmin, 
     holidayApprover: isAdmin, missingRecords: isAdmin, reports: isAdmin, rounds: true,
     ...(currentUser.permissions || {}) 
   };
@@ -75,7 +76,7 @@ const AppContent: React.FC = () => {
         {view === 'dashboard' && p.dashboard && <Dashboard animals={animals} userRole={currentUser.role} onSelectAnimal={selectAnimalAndNavigate} onAddAnimal={addAnimal} onUpdateAnimal={updateAnimal} onReorderAnimals={reorderAnimals} foodOptions={foodOptions} feedMethods={feedMethods} locations={locations} sortOption={sortOption} setSortOption={setSortOption} isOrderLocked={isOrderLocked} onToggleLock={toggleOrderLock} tasks={tasks} onUpdateTask={updateTask} activeTab={activeCategory} setActiveTab={setActiveCategory} viewDate={viewDate} setViewDate={setViewDate} />}
         {view === 'timesheets' && p.attendance && <TimeSheets timeLogs={timeLogs} currentUser={currentUser} users={users} onDeleteLog={deleteTimeLog} />}
         {view === 'holidays' && <HolidayRegistry requests={holidayRequests} currentUser={currentUser} onAddRequest={addHoliday} onUpdateRequest={updateHoliday} onDeleteRequest={deleteHoliday} />}
-        {view === 'animal_profile' && selectedAnimal && <AnimalProfile animal={selectedAnimal} allAnimals={animals} onBack={() => setView('dashboard')} onUpdateAnimal={updateAnimal} onDeleteAnimal={deleteAnimal} foodOptions={foodOptions} feedMethods={feedMethods} eventTypes={eventTypes} orgProfile={orgProfile} locations={locations} isAdmin={p.settings} onAddTask={addTask} />}
+        {view === 'animal_profile' && selectedAnimal && <AnimalProfile animal={selectedAnimal} allAnimals={animals} onBack={() => setView('dashboard')} onUpdateAnimal={updateAnimal} onDeleteAnimal={() => { deleteAnimal(selectedAnimal.id); setView('dashboard'); }} foodOptions={foodOptions} feedMethods={feedMethods} eventTypes={eventTypes} orgProfile={orgProfile} locations={locations} isAdmin={p.settings} onAddTask={addTask} />}
         {view === 'daily' && p.dailyLog && <DailyLog animals={animals} onUpdateAnimal={updateAnimal} foodOptions={foodOptions} feedMethods={feedMethods} eventTypes={eventTypes} sortOption={sortOption} setSortOption={setSortOption} currentUser={currentUser} activeCategory={activeCategory} setActiveCategory={setActiveCategory} viewDate={viewDate} setViewDate={setViewDate} />}
         {view === 'rounds' && p.rounds && <DailyRounds animals={animals} currentUser={currentUser} onAddSiteLog={addSiteLog} onAddIncident={addIncident} />}
         {view === 'tasks' && p.tasks && <Tasks tasks={tasks} animals={animals} onAddTask={addTask} onUpdateTask={updateTask} onDeleteTask={deleteTask} users={users} currentUser={currentUser} onAddSiteLog={addSiteLog} onUpdateAnimal={updateAnimal} />}
@@ -101,6 +102,10 @@ const AppContent: React.FC = () => {
   );
 };
 
+/**
+ * The main App component wraps the application with a Suspense boundary
+ * to handle asynchronous data fetching in the AppProvider.
+ */
 const App: React.FC = () => {
   return (
     <Suspense fallback={

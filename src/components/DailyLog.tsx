@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo, useOptimistic, use } from 'react';
+import React, { useState, useOptimistic, use } from 'react';
 import { Animal, AnimalCategory, LogType, LogEntry, User, SortOption } from '../types';
 import { ClipboardList, Check, Droplets, ChevronLeft, ChevronRight, Plus, Thermometer, Scale, Utensils, ArrowRight } from 'lucide-react';
 import { formatWeightDisplay } from '../services/weightUtils';
@@ -12,7 +12,6 @@ interface DailyLogProps {
   foodOptions: Record<AnimalCategory, string[]>;
   feedMethods: Record<AnimalCategory, string[]>;
   eventTypes?: string[];
-  customOrder?: string[];
   sortOption: SortOption;
   setSortOption: (option: SortOption) => void;
   currentUser?: User | null;
@@ -26,60 +25,38 @@ const DailyLog: React.FC<DailyLogProps> = ({
     animals, onUpdateAnimal, foodOptions, feedMethods, eventTypes = [], sortOption, setSortOption, 
     currentUser, activeCategory, setActiveCategory, viewDate, setViewDate 
 }) => {
-  // Use Context for potential deep updates, although props are passed for animals
-  const context = use(AppContext); 
-
+  
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedAnimalId, setSelectedAnimalId] = useState<string | null>(null);
   const [logType, setLogType] = useState<LogType>(LogType.WEIGHT);
   const [editingLog, setEditingLog] = useState<LogEntry | undefined>(undefined);
 
-  // OPTIMISTIC UI: Manage optimistic animals state
   const [optimisticAnimals, setOptimisticAnimals] = useOptimistic(
     animals,
-    (state: Animal[], newLog: { animalId: string, log: LogEntry }) => {
+    (state: Animal[], newLogAction: { animalId: string, log: LogEntry }) => {
         return state.map(animal => {
-            if (animal.id === newLog.animalId) {
-                return { ...animal, logs: [newLog.log, ...(animal.logs || [])] };
+            if (animal.id === newLogAction.animalId) {
+                // Add or replace log
+                const newLogs = [newLogAction.log, ...(animal.logs || []).filter(l => l.id !== newLogAction.log.id)];
+                return { ...animal, logs: newLogs };
             }
             return animal;
         });
     }
   );
 
-  const dailyLogsMap = useMemo(() => {
-      const map = new Map<string, Record<LogType, LogEntry | undefined>>();
-      for (const animal of optimisticAnimals) {
-          if (animal.category !== activeCategory || animal.archived) continue;
-          
-          const logs: Record<string, LogEntry | undefined> = {};
-          const animalLogs = animal.logs || [];
-          
-          for (const log of animalLogs) {
-              if (log.date.startsWith(viewDate)) {
-                  if (!logs[log.type]) logs[log.type] = log;
-              }
-          }
-          map.set(animal.id, logs as any);
-      }
-      return map;
-  }, [optimisticAnimals, viewDate, activeCategory]);
+  // Directly compute derived data in the render body for React 19
+  const filteredAndSortedAnimals = [...optimisticAnimals]
+    .filter(a => a.category === activeCategory && !a.archived)
+    .sort((a, b) => {
+        if (sortOption === 'alpha-asc') return a.name.localeCompare(b.name);
+        if (sortOption === 'alpha-desc') return b.name.localeCompare(a.name);
+        if (sortOption === 'custom') return (a.order ?? 0) - (b.order ?? 0);
+        return 0;
+    });
 
-  const filteredAnimals = useMemo(() => {
-    let result = [...optimisticAnimals].filter(a => a.category === activeCategory && !a.archived);
-    if (sortOption === 'alpha-asc') {
-        result.sort((a, b) => a.name.localeCompare(b.name));
-    } else if (sortOption === 'alpha-desc') {
-        result.sort((a, b) => b.name.localeCompare(a.name));
-    } else if (sortOption === 'custom') {
-        result.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-    }
-    return result;
-  }, [optimisticAnimals, activeCategory, sortOption]);
-
-  const getTodayLog = (animalId: string, type: LogType): LogEntry | undefined => {
-    const logs = dailyLogsMap.get(animalId);
-    return logs ? logs[type] : undefined;
+  const getTodayLog = (animal: Animal, type: LogType): LogEntry | undefined => {
+    return (animal.logs || []).find(log => log.date.startsWith(viewDate) && log.type === type);
   };
 
   const handleCellClick = (animalId: string, type: LogType, existingLog?: LogEntry) => {
@@ -89,31 +66,25 @@ const DailyLog: React.FC<DailyLogProps> = ({
     setModalOpen(true);
   };
 
-  const handleQuickCheck = async (animal: Animal, type: LogType, existingLog?: LogEntry) => {
+  const handleQuickCheck = (animal: Animal, type: LogType) => {
+      const existingLog = getTodayLog(animal, type);
       if (existingLog) return; 
 
       const now = new Date();
       const timeStr = now.toTimeString().slice(0, 5);
-      const dateTime = `${viewDate}T${timeStr}:00`;
-
-      let descriptiveValue = 'Completed';
-      if (type === LogType.MISTING) descriptiveValue = 'Completed - Misting';
-      if (type === LogType.WATER) descriptiveValue = 'Completed - Waters';
-
       const newEntry: LogEntry = {
-          id: `${type.toLowerCase().replace(/\s/g, '_')}_${Date.now()}`,
-          date: dateTime,
+          id: `${type.toLowerCase()}_${Date.now()}`,
+          date: `${viewDate}T${timeStr}:00`,
           type: type,
-          value: descriptiveValue,
-          notes: '',
+          value: `Completed - ${type}`,
           userInitials: currentUser?.initials || '??',
           timestamp: Date.now()
       };
 
-      // Trigger optimistic update
+      // Optimistically update UI
       setOptimisticAnimals({ animalId: animal.id, log: newEntry });
       
-      // Actual update
+      // Persist change
       onUpdateAnimal({
           ...animal,
           logs: [newEntry, ...(animal.logs || [])]
@@ -130,34 +101,6 @@ const DailyLog: React.FC<DailyLogProps> = ({
   const showTemp = isExotic || activeCategory === AnimalCategory.MAMMALS;
   const cellPadding = isExotic ? "px-2 md:px-4 py-3" : "px-5 py-4";
   const headerFontSize = isExotic ? "text-[9px]" : "text-[10px]";
-
-  const InteractiveCell = ({ 
-    animalId, 
-    type, 
-    log, 
-    children, 
-    className = "" 
-  }: { 
-    animalId: string, 
-    type: LogType, 
-    log?: LogEntry, 
-    children?: React.ReactNode,
-    className?: string
-  }) => (
-    <td className={`${cellPadding} ${className}`}>
-        <button
-            onClick={() => handleCellClick(animalId, type, log)} 
-            className={`w-full flex items-center justify-between min-h-[2.5rem] px-2 -mx-2 rounded-xl border-2 border-transparent hover:border-emerald-200 hover:bg-emerald-50/50 transition-all text-left ${!log ? 'border-dashed border-slate-200' : ''}`}
-        >
-            <div className="flex-1 min-w-0">
-                {children}
-            </div>
-            <div className={`shrink-0 ml-1 transition-all ${log ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
-                {log ? <Check size={14} className="text-emerald-500" /> : <Plus size={14} className="text-emerald-400" />}
-            </div>
-        </button>
-    </td>
-  );
 
   return (
     <div className="p-4 md:p-8 space-y-6 animate-in fade-in duration-500 max-w-[1600px] mx-auto">
@@ -189,7 +132,7 @@ const DailyLog: React.FC<DailyLogProps> = ({
 
       <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
         {Object.values(AnimalCategory).map((cat) => (
-            <button key={cat} onClick={() => setActiveCategory(cat)} className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all border-2 ${activeCategory === cat ? 'bg-slate-900 text-white border-slate-900 shadow-md' : 'bg-white border-slate-200 text-slate-400 hover:border-slate-300 hover:text-slate-600'}`}>{cat}</button>
+            <button key={cat} type="button" onClick={() => setActiveCategory(cat)} className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all border-2 ${activeCategory === cat ? 'bg-slate-900 text-white border-slate-900 shadow-md' : 'bg-white border-slate-200 text-slate-400 hover:border-slate-300 hover:text-slate-600'}`}>{cat}</button>
         ))}
       </div>
 
@@ -208,12 +151,12 @@ const DailyLog: React.FC<DailyLogProps> = ({
                         </tr>
                     </thead>
                     <tbody className="text-sm">
-                        {filteredAnimals.map(animal => {
-                            const weightLog = getTodayLog(animal.id, LogType.WEIGHT);
-                            const feedLog = getTodayLog(animal.id, LogType.FEED);
-                            const tempLog = getTodayLog(animal.id, LogType.TEMPERATURE);
-                            const mistLog = getTodayLog(animal.id, LogType.MISTING);
-                            const waterLog = getTodayLog(animal.id, LogType.WATER);
+                        {filteredAndSortedAnimals.map(animal => {
+                            const weightLog = getTodayLog(animal, LogType.WEIGHT);
+                            const feedLog = getTodayLog(animal, LogType.FEED);
+                            const tempLog = getTodayLog(animal, LogType.TEMPERATURE);
+                            const mistLog = getTodayLog(animal, LogType.MISTING);
+                            const waterLog = getTodayLog(animal, LogType.WATER);
                             
                             return (
                                 <tr key={animal.id} className="bg-white hover:bg-slate-50/50 transition-all group border-l-4 border-l-transparent hover:border-l-emerald-500 relative z-0 hover:z-10">
@@ -228,67 +171,39 @@ const DailyLog: React.FC<DailyLogProps> = ({
                                         </div>
                                     </td>
                                     
-                                    <InteractiveCell animalId={animal.id} type={isExotic ? LogType.TEMPERATURE : LogType.WEIGHT} log={isExotic ? tempLog : weightLog} className="border-b border-slate-100">
-                                        {isExotic ? (
-                                            tempLog ? (
-                                                <span className="font-black text-slate-800 flex items-center gap-1 text-[10px] sm:text-xs">
-                                                    <Thermometer size={12} className="text-rose-500 shrink-0"/> {tempLog.baskingTemp}°/{tempLog.coolTemp}°
-                                                </span>
-                                            ) : (
-                                                <span className="text-slate-300 font-bold uppercase text-[9px] sm:text-[10px] tracking-tight sm:tracking-widest">Gradient</span>
-                                            )
-                                        ) : (
-                                            weightLog ? (
-                                                <span className="font-black text-slate-800 flex items-center gap-2">
-                                                    <Scale size={14} className="text-blue-500"/> 
-                                                    {weightLog.weightGrams !== undefined 
-                                                        ? formatWeightDisplay(weightLog.weightGrams, animal.weightUnit) 
-                                                        : weightLog.value}
-                                                </span>
-                                            ) : (
-                                                <span className="text-slate-300 font-bold uppercase text-[10px] tracking-widest">Weight</span>
-                                            )
-                                        )}
-                                    </InteractiveCell>
+                                    <td className={`${cellPadding} border-b border-slate-100`}>
+                                        <button type="button" onClick={() => handleCellClick(animal.id, isExotic ? LogType.TEMPERATURE : LogType.WEIGHT, isExotic ? tempLog : weightLog)} className={`w-full flex items-center justify-between min-h-[2.5rem] px-2 -mx-2 rounded-xl border-2 border-transparent hover:border-emerald-200 hover:bg-emerald-50/50 transition-all text-left ${!(isExotic ? tempLog : weightLog) ? 'border-dashed border-slate-200' : ''}`}>
+                                            <div className="flex-1 min-w-0">
+                                            {isExotic ? (tempLog ? (<span className="font-black text-slate-800 flex items-center gap-1 text-[10px] sm:text-xs"><Thermometer size={12} className="text-rose-500 shrink-0"/> {tempLog.baskingTemp}°/{tempLog.coolTemp}°</span>) : (<span className="text-slate-300 font-bold uppercase text-[9px] sm:text-[10px] tracking-tight sm:tracking-widest">Gradient</span>)) : (weightLog ? (<span className="font-black text-slate-800 flex items-center gap-2"><Scale size={14} className="text-blue-500"/> {weightLog.weightGrams !== undefined ? formatWeightDisplay(weightLog.weightGrams, animal.weightUnit) : weightLog.value}</span>) : (<span className="text-slate-300 font-bold uppercase text-[10px] tracking-widest">Weight</span>))}
+                                            </div>
+                                            <div className={`shrink-0 ml-1 transition-all ${isExotic ? (tempLog ? 'opacity-100' : 'opacity-0 group-hover:opacity-100') : (weightLog ? 'opacity-100' : 'opacity-0 group-hover:opacity-100')}`}>{(isExotic ? tempLog : weightLog) ? <Check size={14} className="text-emerald-500" /> : <Plus size={14} className="text-emerald-400" />}</div>
+                                        </button>
+                                    </td>
 
                                     {showTemp && !isExotic && (
-                                        <InteractiveCell animalId={animal.id} type={LogType.TEMPERATURE} log={tempLog} className="border-b border-slate-100">
-                                            {tempLog ? (
-                                                <span className="font-black text-slate-800 flex items-center gap-2">
-                                                    <Thermometer size={14} className="text-rose-500"/> {tempLog.temperature}°C
-                                                </span>
-                                            ) : (
-                                                <span className="text-slate-300 font-bold uppercase text-[10px] tracking-widest">Temp</span>
-                                            )}
-                                        </InteractiveCell>
+                                        <td className={`${cellPadding} border-b border-slate-100`}>
+                                            <button type="button" onClick={() => handleCellClick(animal.id, LogType.TEMPERATURE, tempLog)} className={`w-full flex items-center justify-between min-h-[2.5rem] px-2 -mx-2 rounded-xl border-2 border-transparent hover:border-emerald-200 hover:bg-emerald-50/50 transition-all text-left ${!tempLog ? 'border-dashed border-slate-200' : ''}`}>
+                                                <div className="flex-1 min-w-0">{tempLog ? (<span className="font-black text-slate-800 flex items-center gap-2"><Thermometer size={14} className="text-rose-500"/> {tempLog.temperature}°C</span>) : (<span className="text-slate-300 font-bold uppercase text-[10px] tracking-widest">Temp</span>)}</div>
+                                                <div className={`shrink-0 ml-1 transition-all ${tempLog ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>{tempLog ? <Check size={14} className="text-emerald-500" /> : <Plus size={14} className="text-emerald-400" />}</div>
+                                            </button>
+                                        </td>
                                     )}
 
-                                    <InteractiveCell animalId={animal.id} type={LogType.FEED} log={feedLog} className="border-b border-slate-100">
-                                        {feedLog ? (
-                                            <div className="flex flex-col min-w-0">
-                                                <span className="font-black text-emerald-700 text-[9px] sm:text-[11px] uppercase tracking-tighter sm:tracking-tight flex items-center gap-1 truncate">
-                                                    <Utensils size={10} className="shrink-0"/> {feedLog.value}
-                                                </span>
-                                            </div>
-                                        ) : (
-                                            <span className="text-slate-300 font-bold uppercase text-[9px] sm:text-[10px] tracking-tight sm:tracking-widest">Intake</span>
-                                        )}
-                                    </InteractiveCell>
+                                    <td className={`${cellPadding} border-b border-slate-100`}>
+                                        <button type="button" onClick={() => handleCellClick(animal.id, LogType.FEED, feedLog)} className={`w-full flex items-center justify-between min-h-[2.5rem] px-2 -mx-2 rounded-xl border-2 border-transparent hover:border-emerald-200 hover:bg-emerald-50/50 transition-all text-left ${!feedLog ? 'border-dashed border-slate-200' : ''}`}>
+                                            <div className="flex-1 min-w-0">{feedLog ? (<div className="flex flex-col min-w-0"><span className="font-black text-emerald-700 text-[9px] sm:text-[11px] uppercase tracking-tighter sm:tracking-tight flex items-center gap-1 truncate"><Utensils size={10} className="shrink-0"/> {feedLog.value}</span></div>) : (<span className="text-slate-300 font-bold uppercase text-[9px] sm:text-[10px] tracking-tight sm:tracking-widest">Intake</span>)}</div>
+                                            <div className={`shrink-0 ml-1 transition-all ${feedLog ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>{feedLog ? <Check size={14} className="text-emerald-500" /> : <Plus size={14} className="text-emerald-400" />}</div>
+                                        </button>
+                                    </td>
 
                                     {isExotic && (
                                         <td className={`${cellPadding} text-center border-b border-slate-100`}>
                                             <div className="flex justify-center gap-2 sm:gap-4">
-                                                <button 
-                                                    className="relative group/check" 
-                                                    onClick={() => handleQuickCheck(animal, LogType.MISTING, mistLog)}
-                                                >
+                                                <button type="button" className="relative group/check" onClick={() => handleQuickCheck(animal, LogType.MISTING)}>
                                                     <Droplets size={isExotic ? 18 : 22} className={`transition-all duration-300 cursor-pointer ${mistLog ? 'text-emerald-500 scale-110' : 'text-slate-200 hover:text-emerald-300'}`} />
                                                     <span className="absolute -top-6 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-[8px] font-black px-1.5 py-0.5 rounded opacity-0 group-hover/check:opacity-100 pointer-events-none uppercase tracking-widest z-20">MIST</span>
                                                 </button>
-                                                <button 
-                                                    className="relative group/check" 
-                                                    onClick={() => handleQuickCheck(animal, LogType.WATER, waterLog)}
-                                                >
+                                                <button type="button" className="relative group/check" onClick={() => handleQuickCheck(animal, LogType.WATER)}>
                                                     <Check size={18} className={`transition-all duration-300 cursor-pointer ${waterLog ? 'text-blue-500 scale-110' : 'text-slate-200 hover:text-blue-300'}`} />
                                                     <span className="absolute -top-6 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-[8px] font-black px-1.5 py-0.5 rounded opacity-0 group-hover/check:opacity-100 pointer-events-none uppercase tracking-widest z-20">WATER</span>
                                                 </button>

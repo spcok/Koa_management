@@ -1,5 +1,5 @@
 
-import { GoogleGenAI, GenerateContentResponse, Type } from "@google/genai";
+import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
 import { Animal, LogType, AnimalCategory, ConservationStatus } from "../types";
 
 let aiInstance: GoogleGenAI | null = null;
@@ -11,7 +11,6 @@ const getAi = () => {
   return aiInstance;
 };
 
-// ... (Existing Helpers like normalizeIUCNStatus, withRetry etc. remain unchanged) ...
 const normalizeIUCNStatus = (input: string): ConservationStatus => {
   const s = input.trim().toUpperCase();
   if (s === 'LC' || s.includes('LEAST CONCERN')) return ConservationStatus.LC;
@@ -25,7 +24,7 @@ const normalizeIUCNStatus = (input: string): ConservationStatus => {
   return ConservationStatus.NE;
 };
 
-async function withRetry<T>(fn: () => Promise<T>, retries = 3, delay = 2000): Promise<T> {
+async function withRetry<T>(fn: () => Promise<T>, retries = 3, delay = 1000): Promise<T> {
   try {
     return await fn();
   } catch (error: any) {
@@ -33,7 +32,6 @@ async function withRetry<T>(fn: () => Promise<T>, retries = 3, delay = 2000): Pr
     const isServiceUnavailable = error.message?.includes('503') || error.status === 503 || error.status === 'UNAVAILABLE';
     
     if (retries > 0 && (isRateLimited || isServiceUnavailable)) {
-      console.warn(`Gemini API issue (${error.status || 'transient'}). Retrying in ${delay}ms...`);
       await new Promise(resolve => setTimeout(resolve, delay));
       return withRetry<T>(fn, retries - 1, delay * 2);
     }
@@ -41,7 +39,15 @@ async function withRetry<T>(fn: () => Promise<T>, retries = 3, delay = 2000): Pr
   }
 }
 
-// ... (Existing fetchers like getLatinName, getConservationStatus) ...
+// Helper to aggregate stream responses
+async function aggregateStream(stream: AsyncGenerator<GenerateContentResponse>): Promise<string> {
+    let fullText = '';
+    for await (const chunk of stream) {
+        if (chunk.text) fullText += chunk.text;
+    }
+    return fullText;
+}
+
 export const getLatinName = async (species: string): Promise<string | null> => {
   if (!species.trim()) return null;
   const ai = getAi();
@@ -101,23 +107,23 @@ export const generateSignageContent = async (species: string): Promise<any> => {
 export const analyzeFlightWeather = async (hourlyData: any[]): Promise<string> => {
   const ai = getAi();
   try {
-    const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
+    const stream = await ai.models.generateContentStream({
       model: 'gemini-3-flash-preview',
       contents: `You are a professional Falconer and Safety Officer. Review this 24h weather data: ${JSON.stringify(hourlyData.slice(0, 24))}.
       Provide a "Flight Safety Briefing" for today. Identify: 1. SAFETY INDEX (1-10). 2. OPERATIONAL WINDOWS. 3. HAZARDS. 4. VERDICT. Format with clear bold headers and bullet points.`,
-    }));
-    return response.text || "Flight analysis engine unavailable.";
+    });
+    return await aggregateStream(stream);
   } catch (error) { return "Weather analysis engine is currently offline."; }
 };
 
 export const generateSectionSummary = async (category: AnimalCategory, animals: Animal[]): Promise<string> => {
   const ai = getAi();
   try {
-    const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
+    const stream = await ai.models.generateContentStream({
       model: 'gemini-3-flash-preview',
       contents: `Provide a professional operational status report for the ${category} section.`,
-    }));
-    return response.text || "Summary unavailable.";
+    });
+    return await aggregateStream(stream);
   } catch (error) { return "Summary unavailable."; }
 };
 
@@ -125,31 +131,30 @@ export const analyzeHealthHistory = async (animal: Animal): Promise<string> => {
   const ai = getAi();
   const healthLogs = (animal.logs || []).filter(l => l.type === LogType.HEALTH || l.type === LogType.WEIGHT).slice(0, 15);
   try {
-    const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
+    const stream = await ai.models.generateContentStream({
       model: 'gemini-3-flash-preview',
-      contents: `Analyze history for "${animal.name}" (${animal.species}): ${JSON.stringify(healthLogs)}.`,
-    }));
-    return response.text || "Analysis unavailable.";
+      contents: `Analyze health history for "${animal.name}" (${animal.species}): ${JSON.stringify(healthLogs)}. Synthesize findings into a brief clinical summary. Note trends, anomalies, and potential areas for monitoring. Use Markdown.`,
+    });
+    return await aggregateStream(stream);
   } catch (error) { return "Analysis unavailable."; }
 };
 
 export const analyzeCollectionHealth = async (animals: Animal[]): Promise<string> => {
   const ai = getAi();
-  const context = animals.filter(a => !a.archived).map(a => ({ name: a.name, species: a.species }));
+  const context = animals.filter(a => !a.archived).map(a => ({ name: a.name, species: a.species, lastWeight: a.logs.find(l=>l.type===LogType.WEIGHT)?.value }));
   try {
-    const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
+    const stream = await ai.models.generateContentStream({
       model: 'gemini-3-flash-preview',
-      contents: `Review collection health: ${JSON.stringify(context)}. Provide a Morning Briefing.`,
-    }));
-    return response.text || "Audit failed.";
+      contents: `Review this collection data: ${JSON.stringify(context)}. Provide a concise "Morning Veterinary Briefing". Highlight any animals requiring monitoring, note recent weight changes, and suggest any prophylactic actions for the day. Use Markdown.`,
+    });
+    return await aggregateStream(stream);
   } catch (error) { return "Audit failed."; }
 };
 
-// Updated to support streaming internally although returning promise for now for compatibility
 export const generateSpeciesCard = async (species: string): Promise<{ text: string, mapImage?: string }> => {
   const ai = getAi();
   try {
-    const responseStream = await ai.models.generateContentStream({
+    const stream = await ai.models.generateContentStream({
       model: 'gemini-3-flash-preview',
       contents: `Generate a comprehensive "Species Intelligence Dossier" for "${species}".
       Include sections for:
@@ -161,11 +166,7 @@ export const generateSpeciesCard = async (species: string): Promise<{ text: stri
       Format as clean Markdown. Do not include images.`,
     });
     
-    let fullText = '';
-    for await (const chunk of responseStream) {
-        if (chunk.text) fullText += chunk.text;
-    }
-    
+    const fullText = await aggregateStream(stream);
     return { text: fullText || "Synthesis failed." };
   } catch (error) { 
     return { text: `### **${species} (Offline)**\n\nAI service unavailable.` }; 
@@ -175,11 +176,11 @@ export const generateSpeciesCard = async (species: string): Promise<{ text: stri
 export const generateExoticSummary = async (species: string): Promise<string> => {
   const ai = getAi();
   try {
-    const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
+    const stream = await ai.models.generateContentStream({
       model: 'gemini-3-flash-preview',
-      contents: `3-sentence zoo registry summary for "${species}".`,
+      contents: `Create a 3-sentence, engaging zoo registry summary for "${species}".`,
       config: { temperature: 0.7 }
-    }));
-    return response.text?.trim() || "";
+    });
+    return (await aggregateStream(stream)).trim();
   } catch (error) { return ""; }
 };

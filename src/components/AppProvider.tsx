@@ -1,5 +1,5 @@
 
-import React, { useState, use, useEffect, useMemo, useOptimistic, useCallback } from 'react';
+import React, { useState, use, useEffect } from 'react';
 import { AppContext } from '../context/AppContext';
 import { dataService } from '../services/dataService';
 import { 
@@ -56,12 +56,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [activeShift, setActiveShift] = useState<TimeLogEntry | null>(null);
-
-  // --- OPTIMISTIC UPDATES ---
-  // We can wrap key states with useOptimistic if we want granular control in the provider,
-  // but typically components use it locally. Here we manage the source of truth.
-
-  // --- ACTIONS ---
   
   useEffect(() => {
     if (currentUser && timeLogs.length > 0) {
@@ -70,138 +64,140 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [currentUser, timeLogs]);
 
-  const login = useCallback((user: User) => setCurrentUser(user), []);
-  const logout = useCallback(() => { setCurrentUser(null); setActiveShift(null); }, []);
+  // --- ACTIONS ---
+  
+  const login = (user: User) => setCurrentUser(user);
+  const logout = () => { setCurrentUser(null); setActiveShift(null); };
 
-  const setSortOption = useCallback((opt: SortOption) => {
+  const setSortOption = (opt: SortOption) => {
     setSortOptionState(opt);
     dataService.saveSettingsKey('dashboard_sort', opt);
-  }, []);
+  };
 
-  const toggleOrderLock = useCallback((locked: boolean) => {
+  const toggleOrderLock = (locked: boolean) => {
     setIsOrderLocked(locked);
     dataService.saveSettingsKey('dashboard_locked', locked);
-  }, []);
+  };
 
   // Animal Actions
-  const updateAnimal = useCallback(async (animal: Animal) => {
+  const updateAnimal = async (animal: Animal) => {
     setAnimals(prev => prev.map(a => a.id === animal.id ? animal : a));
     try { await dataService.saveAnimal(animal); } catch (e) { console.error(e); }
-  }, []);
+  };
 
-  const addAnimal = useCallback(async (animal: Animal) => {
+  const addAnimal = async (animal: Animal) => {
     setAnimals(prev => [...prev, animal]);
     try { await dataService.saveAnimal(animal); } catch (e) { console.error(e); }
-  }, []);
+  };
 
-  const deleteAnimal = useCallback(async (id: string) => {
+  const deleteAnimal = async (id: string) => {
     setAnimals(prev => prev.filter(a => a.id !== id));
     try { await dataService.deleteAnimal(id); } catch (e) { console.error(e); }
-  }, []);
+  };
 
-  const reorderAnimals = useCallback((reordered: Animal[]) => {
+  const reorderAnimals = (reordered: Animal[]) => {
     setAnimals(prev => {
         const map = new Map(reordered.map(a => [a.id, a]));
         return prev.map(a => map.has(a.id) ? map.get(a.id)! : a);
     });
     dataService.saveAnimalsBulk(reordered);
-  }, []);
+  };
 
   // Task Actions
-  const addTask = useCallback(async (task: Task) => {
+  const addTask = async (task: Task) => {
     setTasks(prev => [...prev, task]);
     await dataService.saveTasks([task]);
-  }, []);
+  };
 
-  const updateTask = useCallback(async (task: Task) => {
+  const updateTask = async (task: Task) => {
     setTasks(prev => prev.map(t => t.id === task.id ? task : t));
     await dataService.saveTasks([task]);
-  }, []);
+  };
 
-  const deleteTask = useCallback(async (id: string) => {
+  const deleteTask = async (id: string) => {
     setTasks(prev => prev.filter(t => t.id !== id));
     await dataService.deleteTask(id);
-  }, []);
+  };
 
   // Logs & Incidents
-  const addSiteLog = useCallback(async (log: SiteLogEntry) => {
+  const addSiteLog = async (log: SiteLogEntry) => {
     setSiteLogs(prev => [...prev, log]);
     await dataService.saveSiteLog(log);
-  }, []);
+  };
 
-  const deleteSiteLog = useCallback(async (id: string) => {
+  const deleteSiteLog = async (id: string) => {
     setSiteLogs(prev => prev.filter(l => l.id !== id));
     await dataService.deleteSiteLog(id);
-  }, []);
+  };
 
-  const addIncident = useCallback(async (inc: Incident) => {
+  const addIncident = async (inc: Incident) => {
     setIncidents(prev => [...prev, inc]);
     await dataService.saveIncident(inc);
-  }, []);
+  };
 
-  const updateIncident = useCallback(async (inc: Incident) => {
+  const updateIncident = async (inc: Incident) => {
     setIncidents(prev => prev.map(i => i.id === inc.id ? inc : i));
     await dataService.saveIncident(inc);
-  }, []);
+  };
 
-  const deleteIncident = useCallback(async (id: string) => {
+  const deleteIncident = async (id: string) => {
     setIncidents(prev => prev.filter(i => i.id !== id));
     await dataService.deleteIncident(id);
-  }, []);
+  };
 
-  const addFirstAid = useCallback(async (log: FirstAidLogEntry) => {
+  const addFirstAid = async (log: FirstAidLogEntry) => {
     setFirstAidLogs(prev => [...prev, log]);
     await dataService.saveFirstAidLog(log);
-  }, []);
+  };
 
-  const deleteFirstAid = useCallback(async (id: string) => {
+  const deleteFirstAid = async (id: string) => {
     setFirstAidLogs(prev => prev.filter(l => l.id !== id));
     await dataService.deleteFirstAidLog(id);
-  }, []);
+  };
 
   // System & Users
-  const updateUsers = useCallback(async (u: User[]) => {
+  const updateUsers = async (u: User[]) => {
     setUsers(u);
     await dataService.saveUsers(u);
-  }, []);
+  };
 
-  const updateFoodOptions = useCallback(async (opts: Record<AnimalCategory, string[]>) => {
+  const updateFoodOptions = async (opts: Record<AnimalCategory, string[]>) => {
     setFoodOptions(opts);
     await dataService.saveFoodOptions(opts);
-  }, []);
+  };
 
-  const updateFeedMethods = useCallback(async (methods: Record<AnimalCategory, string[]>) => {
+  const updateFeedMethods = async (methods: Record<AnimalCategory, string[]>) => {
     setFeedMethods(methods);
     await dataService.saveFeedMethods(methods);
-  }, []);
+  };
 
-  const updateEventTypes = useCallback(async (types: string[]) => {
+  const updateEventTypes = async (types: string[]) => {
     setEventTypes(types);
     await dataService.saveEventTypes(types);
-  }, []);
+  };
 
-  const updateLocations = useCallback(async (locs: string[]) => {
+  const updateLocations = async (locs: string[]) => {
     setLocations(locs);
     await dataService.saveLocations(locs);
-  }, []);
+  };
 
-  const updateContacts = useCallback(async (cons: Contact[]) => {
+  const updateContacts = async (cons: Contact[]) => {
     setContacts(cons);
     await dataService.saveContacts(cons);
-  }, []);
+  };
 
-  const updateOrgProfile = useCallback(async (p: OrganizationProfile) => {
+  const updateOrgProfile = async (p: OrganizationProfile) => {
     setOrgProfile(p);
     await dataService.saveOrgProfile(p);
-  }, []);
+  };
 
-  const updateSystemPreferences = useCallback(async (p: SystemPreferences) => {
+  const updateSystemPreferences = async (p: SystemPreferences) => {
     setSystemPreferences(p);
     await dataService.saveSystemPreferences(p);
-  }, []);
+  };
 
   // Time & Holidays
-  const clockIn = useCallback(async () => {
+  const clockIn = async () => {
     if (!currentUser || activeShift) return;
     const newShift: TimeLogEntry = { 
         id: `shift_${Date.now()}`, 
@@ -214,9 +210,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setActiveShift(newShift);
     setTimeLogs(prev => [newShift, ...prev]);
     await dataService.saveTimeLog(newShift);
-  }, [currentUser, activeShift]);
+  };
 
-  const clockOut = useCallback(async () => {
+  const clockOut = async () => {
     if (!currentUser || !activeShift) return;
     const now = Date.now();
     const diffMins = Math.floor((now - activeShift.startTime) / 60000);
@@ -224,34 +220,35 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setActiveShift(null);
     setTimeLogs(prev => prev.map(l => l.id === activeShift.id ? completed : l));
     await dataService.saveTimeLog(completed);
-  }, [currentUser, activeShift]);
+  };
 
-  const deleteTimeLog = useCallback(async (id: string) => {
+  const deleteTimeLog = async (id: string) => {
     setTimeLogs(prev => prev.filter(l => l.id !== id));
     await dataService.deleteTimeLog(id);
-  }, []);
+  };
 
-  const addHoliday = useCallback(async (req: HolidayRequest) => {
+  const addHoliday = async (req: HolidayRequest) => {
     setHolidayRequests(prev => [req, ...prev]);
     await dataService.saveHolidayRequest(req);
-  }, []);
+  };
 
-  const updateHoliday = useCallback(async (req: HolidayRequest) => {
+  const updateHoliday = async (req: HolidayRequest) => {
     setHolidayRequests(prev => prev.map(r => r.id === req.id ? req : r));
     await dataService.saveHolidayRequest(req);
-  }, []);
+  };
 
-  const deleteHoliday = useCallback(async (id: string) => {
+  const deleteHoliday = async (id: string) => {
     setHolidayRequests(prev => prev.filter(r => r.id !== id));
     await dataService.deleteHolidayRequest(id);
-  }, []);
+  };
 
-  const importAnimals = useCallback(async (imported: Animal[]) => {
+  const importAnimals = async (imported: Animal[]) => {
     setAnimals(imported);
     await dataService.importAnimals(imported);
-  }, []);
+  };
 
-  const value = useMemo(() => ({
+  // The context value is memoized automatically by React 19 compiler
+  const value = {
     currentUser, users, animals, tasks, siteLogs, incidents, firstAidLogs,
     timeLogs, holidayRequests, foodOptions, feedMethods, eventTypes, locations,
     contacts, orgProfile, systemPreferences, sortOption, isOrderLocked, activeShift,
@@ -262,15 +259,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     updateUsers, updateFoodOptions, updateFeedMethods, updateEventTypes,
     updateLocations, updateContacts, updateOrgProfile, updateSystemPreferences,
     addHoliday, updateHoliday, deleteHoliday, deleteTimeLog, importAnimals
-  }), [
-    currentUser, users, animals, tasks, siteLogs, incidents, firstAidLogs,
-    timeLogs, holidayRequests, foodOptions, feedMethods, eventTypes, locations,
-    contacts, orgProfile, systemPreferences, sortOption, isOrderLocked, activeShift
-  ]);
+  };
 
   return (
-    <AppContext value={value}>
+    <AppContext.Provider value={value}>
       {children}
-    </AppContext>
+    </AppContext.Provider>
   );
 };
