@@ -1,17 +1,15 @@
-
 import React, { useState, use, useEffect, useCallback } from 'react';
 import { AppContext } from '../context/AppContext';
 import { dataService } from '../services/dataService';
 import { 
   Animal, AnimalCategory, Task, User, SiteLogEntry, Incident, 
-  FirstAidLogEntry, OrganizationProfile, Contact, SortOption, TimeLogEntry, 
-  HolidayRequest, SystemPreferences 
+  FirstAidLogEntry, OrganisationProfile, Contact, SortOption, TimeLogEntry, 
+  HolidayRequest, SystemPreferences, LogType 
 } from '../types';
 import { DEFAULT_FOOD_OPTIONS, DEFAULT_FEED_METHODS, DEFAULT_SYSTEM_PREFERENCES, DEFAULT_EVENT_TYPES } from '../constants';
-import { batchGetSpeciesData } from '../services/geminiService';
+import { getFullWeather } from '../services/weatherService';
 
 // --- Resource Loading ---
-// Initiate fetch immediately upon module load to prevent waterfalls. This is the "Resource".
 const initialDataPromise = Promise.all([
   dataService.fetchAnimals(),       // 0
   dataService.fetchTasks(),         // 1
@@ -30,38 +28,40 @@ const initialDataPromise = Promise.all([
   dataService.fetchSettingsKey('dashboard_locked', true),       // 14
   dataService.fetchSystemPreferences(), // 15
   dataService.fetchEventTypes()     // 16
-]);
+]).catch(err => {
+    console.error("Critical Data Fetch Failure:", err);
+    return Array(17).fill(null); // Fallback to avoid breaking .use()
+});
 
 const upsert = <T extends { id: string }>(items: T[], item: T): T[] => {
-    const index = items.findIndex((i) => i.id === item.id);
+    const safeItems = items || [];
+    const index = safeItems.findIndex((i) => i.id === item.id);
     if (index > -1) {
-        const newItems = [...items];
+        const newItems = [...safeItems];
         newItems[index] = item;
         return newItems;
     }
-    return [item, ...items];
+    return [item, ...safeItems];
 };
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // --- DATA FETCHING (SUSPENSE) ---
-  // `use(Promise)` will suspend the component tree until the promise resolves.
   const initialData = use(initialDataPromise);
 
-  // --- STATE MANAGEMENT ---
-  const [animals, setAnimals] = useState<Animal[]>(initialData[0]);
-  const [tasks, setTasks] = useState<Task[]>(initialData[1]);
-  const [users, setUsers] = useState<User[]>(initialData[2]);
-  const [siteLogs, setSiteLogs] = useState<SiteLogEntry[]>(initialData[3]);
-  const [incidents, setIncidents] = useState<Incident[]>(initialData[4]);
-  const [firstAidLogs, setFirstAidLogs] = useState<FirstAidLogEntry[]>(initialData[5]);
+  // Robust initialization with guarded fallbacks
+  const [animals, setAnimals] = useState<Animal[]>(initialData[0] || []);
+  const [tasks, setTasks] = useState<Task[]>(initialData[1] || []);
+  const [users, setUsers] = useState<User[]>(initialData[2] || []);
+  const [siteLogs, setSiteLogs] = useState<SiteLogEntry[]>(initialData[3] || []);
+  const [incidents, setIncidents] = useState<Incident[]>(initialData[4] || []);
+  const [firstAidLogs, setFirstAidLogs] = useState<FirstAidLogEntry[]>(initialData[5] || []);
   const [foodOptions, setFoodOptions] = useState(initialData[6] || DEFAULT_FOOD_OPTIONS);
   const [feedMethods, setFeedMethods] = useState(initialData[7] || DEFAULT_FEED_METHODS);
-  const [locations, setLocations] = useState(initialData[8]);
-  const [contacts, setContacts] = useState(initialData[9]);
-  const [orgProfile, setOrgProfile] = useState<OrganizationProfile | null>(initialData[10]);
-  const [timeLogs, setTimeLogs] = useState<TimeLogEntry[]>(initialData[11]);
-  const [holidayRequests, setHolidayRequests] = useState<HolidayRequest[]>(initialData[12]);
-  const [sortOption, setSortOptionState] = useState<SortOption>(initialData[13] as SortOption);
+  const [locations, setLocations] = useState(initialData[8] || []);
+  const [contacts, setContacts] = useState(initialData[9] || []);
+  const [orgProfile, setOrgProfile] = useState<OrganisationProfile | null>(initialData[10] || null);
+  const [timeLogs, setTimeLogs] = useState<TimeLogEntry[]>(initialData[11] || []);
+  const [holidayRequests, setHolidayRequests] = useState<HolidayRequest[]>(initialData[12] || []);
+  const [sortOption, setSortOptionState] = useState<SortOption>(initialData[13] as SortOption || 'alpha-asc');
   const [isOrderLocked, setIsOrderLocked] = useState<boolean>(!!initialData[14]);
   const [systemPreferences, setSystemPreferences] = useState(initialData[15] || DEFAULT_SYSTEM_PREFERENCES);
   const [eventTypes, setEventTypes] = useState(initialData[16] || DEFAULT_EVENT_TYPES);
@@ -69,9 +69,55 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [activeShift, setActiveShift] = useState<TimeLogEntry | null>(null);
 
-  // --- DERIVED STATE & SIDE EFFECTS ---
+  // Weather Sync (ZLA Compliance)
   useEffect(() => {
-    if (currentUser && timeLogs.length > 0) {
+    const todayStr = new Date().toISOString().split('T')[0];
+    const checkWeatherSync = async () => {
+        const owls = (animals || []).filter(a => a.category === AnimalCategory.OWLS);
+        if (owls.length === 0) return;
+
+        const lastSync = await dataService.fetchSettingsKey('owl_weather_sync_date', '');
+        if (lastSync === todayStr) return;
+
+        const weather = await getFullWeather();
+        if (!weather) return;
+
+        const targetTimePrefix = `${todayStr}T13:00`;
+        const slot = weather.hourly.find(h => h.time.startsWith(targetTimePrefix));
+        
+        if (slot) {
+            const updatedOwls = owls.map(owl => {
+                const alreadyLogged = (owl.logs || []).some(l => l.date.startsWith(targetTimePrefix) && l.type === LogType.TEMPERATURE);
+                if (alreadyLogged) return owl;
+                return {
+                    ...owl,
+                    logs: [{
+                        id: `weather_sync_${Date.now()}_${owl.id}`,
+                        date: `${targetTimePrefix}:00`,
+                        type: LogType.TEMPERATURE,
+                        value: `${slot.temp}°C`,
+                        temperature: slot.temp,
+                        weatherDesc: slot.description,
+                        notes: `Statutory 13:00 Telemetry Sync`,
+                        userInitials: 'SYS',
+                        timestamp: Date.now()
+                    }, ...(owl.logs || [])]
+                };
+            });
+            setAnimals(prev => {
+                const map = new Map(updatedOwls.map(o => [o.id, o]));
+                return prev.map(a => map.get(a.id) || a);
+            });
+            await dataService.saveAnimalsBulk(updatedOwls);
+            await dataService.saveSettingsKey('owl_weather_sync_date', todayStr);
+        }
+    };
+    const timer = setTimeout(checkWeatherSync, 10000);
+    return () => clearTimeout(timer);
+  }, [animals]);
+
+  useEffect(() => {
+    if (currentUser && (timeLogs || []).length > 0) {
       const active = timeLogs.find(l => l.userId === currentUser.id && l.status === 'Active');
       setActiveShift(active || null);
     } else {
@@ -79,10 +125,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [currentUser, timeLogs]);
 
-  // --- ACTIONS & MUTATIONS ---
-  
   const login = (user: User) => setCurrentUser(user);
-  const logout = () => setCurrentUser(null);
+  const logout = () => {
+    setCurrentUser(null);
+    setActiveShift(null);
+  };
 
   const setSortOption = (opt: SortOption) => {
     setSortOptionState(opt);
@@ -95,25 +142,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateAnimal = useCallback(async (animal: Animal) => {
-    setAnimals(prev => prev.map(a => a.id === animal.id ? animal : a));
+    setAnimals(prev => (prev || []).map(a => a.id === animal.id ? animal : a));
     await dataService.saveAnimal(animal);
   }, []);
 
   const addAnimal = useCallback(async (animal: Animal) => {
-    setAnimals(prev => [...prev, animal]);
+    setAnimals(prev => [...(prev || []), animal]);
     await dataService.saveAnimal(animal);
   }, []);
 
   const deleteAnimal = useCallback(async (id: string) => {
-    setAnimals(prev => prev.filter(a => a.id !== id));
+    setAnimals(prev => (prev || []).filter(a => a.id !== id));
     await dataService.deleteAnimal(id);
   }, []);
   
   const reorderAnimals = useCallback(async (reordered: Animal[]) => {
-    const updatedWithOrder = reordered.map((a, idx) => ({ ...a, order: idx }));
+    const updatedWithOrder = (reordered || []).map((a, idx) => ({ ...a, order: idx }));
     setAnimals(prev => {
         const map = new Map(updatedWithOrder.map(a => [a.id, a]));
-        return prev.map(a => map.get(a.id) || a);
+        return (prev || []).map(a => map.get(a.id) || a);
     });
     await dataService.saveAnimalsBulk(updatedWithOrder);
   }, []);
@@ -124,17 +171,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, []);
 
   const addTasks = useCallback(async (newTasks: Task[]) => {
-    setTasks(prev => [...prev, ...newTasks]);
+    setTasks(prev => [...(prev || []), ...newTasks]);
     await dataService.saveTasks(newTasks);
   }, []);
 
   const updateTask = useCallback(async (task: Task) => {
-    setTasks(prev => prev.map(t => t.id === task.id ? task : t));
+    setTasks(prev => (prev || []).map(t => t.id === task.id ? task : t));
     await dataService.saveTasks([task]);
   }, []);
 
   const deleteTask = useCallback(async (id: string) => {
-    setTasks(prev => prev.filter(t => t.id !== id));
+    setTasks(prev => (prev || []).filter(t => t.id !== id));
     await dataService.deleteTask(id);
   }, []);
 
@@ -144,7 +191,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, []);
 
   const deleteSiteLog = useCallback(async (id: string) => {
-    setSiteLogs(prev => prev.filter(l => l.id !== id));
+    setSiteLogs(prev => (prev || []).filter(l => l.id !== id));
     await dataService.deleteSiteLog(id);
   }, []);
 
@@ -154,12 +201,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, []);
   
   const updateIncident = useCallback(async (inc: Incident) => {
-    setIncidents(prev => prev.map(i => i.id === inc.id ? inc : i));
+    setIncidents(prev => (prev || []).map(i => i.id === inc.id ? inc : i));
     await dataService.saveIncident(inc);
   }, []);
 
   const deleteIncident = useCallback(async (id: string) => {
-    setIncidents(prev => prev.filter(i => i.id !== id));
+    setIncidents(prev => (prev || []).filter(i => i.id !== id));
     await dataService.deleteIncident(id);
   }, []);
 
@@ -169,7 +216,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, []);
 
   const deleteFirstAid = useCallback(async (id: string) => {
-    setFirstAidLogs(prev => prev.filter(l => l.id !== id));
+    setFirstAidLogs(prev => (prev || []).filter(l => l.id !== id));
     await dataService.deleteFirstAidLog(id);
   }, []);
 
@@ -203,7 +250,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     await dataService.saveContacts(cons);
   }, []);
 
-  const updateOrgProfile = useCallback(async (p: OrganizationProfile) => {
+  const updateOrgProfile = useCallback(async (p: OrganisationProfile) => {
     setOrgProfile(p);
     await dataService.saveOrgProfile(p);
   }, []);
@@ -220,7 +267,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         startTime: Date.now(), date: new Date().toISOString().split('T')[0], status: 'Active' 
     };
     setActiveShift(newShift);
-    setTimeLogs(prev => [newShift, ...prev]);
+    setTimeLogs(prev => [newShift, ...(prev || [])]);
     await dataService.saveTimeLog(newShift);
   }, [currentUser, activeShift]);
 
@@ -230,27 +277,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const diffMins = Math.floor((now - activeShift.startTime) / 60000);
     const completed: TimeLogEntry = { ...activeShift, endTime: now, durationMinutes: diffMins, status: 'Completed' };
     setActiveShift(null);
-    setTimeLogs(prev => prev.map(l => l.id === activeShift.id ? completed : l));
+    setTimeLogs(prev => (prev || []).map(l => l.id === activeShift.id ? completed : l));
     await dataService.saveTimeLog(completed);
   }, [currentUser, activeShift]);
 
   const deleteTimeLog = useCallback(async (id: string) => {
-    setTimeLogs(prev => prev.filter(l => l.id !== id));
+    setTimeLogs(prev => (prev || []).filter(l => l.id !== id));
     await dataService.deleteTimeLog(id);
   }, []);
 
   const addHoliday = useCallback(async (req: HolidayRequest) => {
-    setHolidayRequests(prev => [req, ...prev]);
+    setHolidayRequests(prev => [req, ...(prev || [])]);
     await dataService.saveHolidayRequest(req);
   }, []);
 
   const updateHoliday = useCallback(async (req: HolidayRequest) => {
-    setHolidayRequests(prev => prev.map(r => r.id === req.id ? req : r));
+    setHolidayRequests(prev => (prev || []).map(r => r.id === req.id ? req : r));
     await dataService.saveHolidayRequest(req);
   }, []);
 
   const deleteHoliday = useCallback(async (id: string) => {
-    setHolidayRequests(prev => prev.filter(r => r.id !== id));
+    setHolidayRequests(prev => (prev || []).filter(r => r.id !== id));
     await dataService.deleteHolidayRequest(id);
   }, []);
 
@@ -259,7 +306,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     await dataService.importAnimals(imported);
   }, []);
 
-  // --- CONTEXT VALUE ---
   const contextValue = {
     currentUser, users, animals, tasks, siteLogs, incidents, firstAidLogs, timeLogs,
     holidayRequests, foodOptions, feedMethods, eventTypes, locations, contacts,

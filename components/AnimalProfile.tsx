@@ -1,617 +1,405 @@
 
-import React, { useState, useMemo, useEffect } from 'react';
-import { Animal, LogType, LogEntry, AnimalCategory, HealthCondition, Incident, OrganizationProfile, HazardRating, ConservationStatus, Task, ShellQuality } from '../types';
-import { 
-  ArrowLeft, Utensils, Scale, Edit2, Trash2, 
-  Plus, Globe, 
-  Loader2, Zap, Stethoscope, Plane, Activity, Sparkles, Image as ImageIcon, Egg, Heart, Calendar, Info,
-  Skull, AlertTriangle, AlignLeft, Sun, Moon, Droplets
-} from 'lucide-react';
-import { ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid, ComposedChart, Area, Line } from 'recharts';
-import { generateSpeciesCard } from '../services/geminiService';
+import React, { useState, useMemo } from 'react';
+import { Animal, LogType, LogEntry, AnimalCategory, HazardRating } from '../types';
+import { ChevronLeft, Scale, Utensils, Activity, FileText, Printer, Edit, Trash2, Thermometer, Wind, AlertTriangle, Plus, Search, Filter, Stethoscope } from 'lucide-react';
 import { formatWeightDisplay } from '../services/weightUtils';
 import AddEntryModal from './AddEntryModal';
-import AnimalFormModal from './AnimalFormModal';
-import MedicalRecordModal from './MedicalRecordModal';
 import SignGenerator from './SignGenerator';
-import ReactMarkdown from 'react-markdown';
+import { useAppData } from '../hooks/useAppData';
+import AnimalFormModal from './AnimalFormModal';
 import { IUCNBadge } from './IUCNBadge';
-
-const DetailItem = ({ label, value, italic = false, mono = false, color = 'text-slate-700' }: { label: string, value?: string | number, italic?: boolean, mono?: boolean, color?: string }) => (
-    <div>
-        <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{label}</h4>
-        <p className={`text-sm font-bold ${color} ${italic ? 'italic' : ''} ${mono ? 'font-mono' : ''}`}>{value || '-'}</p>
-    </div>
-);
 
 interface AnimalProfileProps {
   animal: Animal;
-  allAnimals?: Animal[];
   onBack: () => void;
-  onUpdateAnimal: (updatedAnimal: Animal) => void;
-  onDeleteAnimal: () => void;
-  foodOptions: Record<AnimalCategory, string[]>;
-  feedMethods: Record<AnimalCategory, string[]>;
-  eventTypes?: string[];
-  onAddIncident?: (incident: Incident) => void; 
-  onAddTask?: (task: Task) => void;
-  orgProfile?: OrganizationProfile | null;
-  locations?: string[];
-  isAdmin: boolean;
 }
 
-const AnimalProfile: React.FC<AnimalProfileProps> = ({ 
-  animal, allAnimals = [], onBack, onUpdateAnimal, onDeleteAnimal, foodOptions, feedMethods, 
-  eventTypes = [], isAdmin, locations, onAddIncident, orgProfile, onAddTask
-}) => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'husbandry' | 'medical' | 'repro' | 'intelligence'>('overview');
-  const [husbandryFilter, setHusbandryFilter] = useState<LogType | 'ALL'>('ALL');
+const AnimalProfile: React.FC<AnimalProfileProps> = ({ animal, onBack }) => {
+  const { updateAnimal, deleteAnimal, orgProfile, foodOptions, feedMethods, eventTypes, animals, locations } = useAppData();
   
-  const [isEditing, setIsEditing] = useState(false);
-  const [isAddLogOpen, setIsAddLogOpen] = useState(false);
-  const [isMedicalModalOpen, setIsMedicalModalOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<'Overview' | 'Husbandry Logs' | 'Medical Records' | 'Species Info'>('Overview');
+  const [logFilter, setLogFilter] = useState<LogType | 'ALL'>('ALL');
+  
   const [isSignGeneratorOpen, setIsSignGeneratorOpen] = useState(false);
-  const [logFormType, setLogFormType] = useState<LogType>(LogType.FEED);
-  const [editingLog, setEditingLog] = useState<LogEntry | undefined>(undefined);
-  const [speciesCardData, setSpeciesCardData] = useState<{text: string, mapImage?: string} | null>(null);
-  const [isGeneratingSpecies, setIsGeneratingSpecies] = useState(false);
+  const [isAddEntryOpen, setIsAddEntryOpen] = useState(false);
+  const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
+  const [entryType, setEntryType] = useState<LogType>(LogType.GENERAL);
 
-  const sortedLogs = useMemo(() => [...(animal.logs || [])].sort((a, b) => b.timestamp - a.timestamp), [animal.logs]);
-
-  const husbandryLogs = useMemo(() => {
-      let logs = sortedLogs.filter(l => l.type !== LogType.HEALTH && l.type !== LogType.EGG);
-      if (husbandryFilter !== 'ALL') {
-          logs = logs.filter(l => l.type === husbandryFilter);
+  const handleDelete = () => {
+      if (window.confirm(`Are you sure you want to delete ${animal.name}? This cannot be undone.`)) {
+          deleteAnimal(animal.id);
+          onBack();
       }
-      return logs;
-  }, [sortedLogs, husbandryFilter]);
+  };
 
-  const medicalLogs = useMemo(() => sortedLogs.filter(l => l.type === LogType.HEALTH), [sortedLogs]);
-  const reproLogs = useMemo(() => sortedLogs.filter(l => l.type === LogType.EGG), [sortedLogs]);
+  const age = useMemo(() => {
+      if (!animal.dob) return 'Unknown';
+      const diff = Date.now() - new Date(animal.dob).getTime();
+      const years = Math.floor(diff / (1000 * 60 * 60 * 24 * 365.25));
+      return `${years} years`;
+  }, [animal.dob]);
 
-  // Chart Data: Weight + BCS
-  const chartData = useMemo(() => {
-    const dataPoints: { date: string, timestamp: number, weight?: number, bcs?: number }[] = [];
-    [...sortedLogs].reverse().forEach(l => {
-        if (l.type === LogType.WEIGHT || l.type === LogType.HEALTH) {
-            const dateStr = new Date(l.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-            const point = {
-                date: dateStr,
-                timestamp: l.timestamp,
-                weight: l.type === LogType.WEIGHT ? (l.weightGrams || Number.parseFloat(l.value)) : undefined,
-                bcs: l.bcs
-            };
-            if (point.weight || point.bcs) {
-                dataPoints.push(point);
-            }
-        }
-    });
-    return dataPoints.slice(-30);
+  const sortedLogs = useMemo(() => {
+      return [...(animal.logs || [])].sort((a, b) => b.timestamp - a.timestamp);
+  }, [animal.logs]);
+
+  const latestWeight = useMemo(() => sortedLogs.find(l => l.type === LogType.WEIGHT), [sortedLogs]);
+  const lastFeed = useMemo(() => sortedLogs.find(l => l.type === LogType.FEED), [sortedLogs]);
+
+  const filteredLogs = useMemo(() => {
+      if (logFilter === 'ALL') return sortedLogs;
+      return sortedLogs.filter(l => l.type === logFilter);
+  }, [sortedLogs, logFilter]);
+
+  const medicalLogs = useMemo(() => {
+      return sortedLogs.filter(l => l.type === LogType.HEALTH);
   }, [sortedLogs]);
 
-  const handleGenerateIntelligence = async () => {
-      if (isGeneratingSpecies) return;
-      setIsGeneratingSpecies(true);
-      try {
-          const data = await generateSpeciesCard(animal.species);
-          setSpeciesCardData(data);
-      } catch (e) {
-          console.error("Dossier generation error", e);
-      } finally {
-          setIsGeneratingSpecies(false);
-      }
-  };
+  const TabButton = ({ name, label }: { name: typeof activeTab, label: string }) => (
+      <button 
+        onClick={() => setActiveTab(name)}
+        className={`px-4 py-3 text-sm font-bold border-b-2 transition-all ${activeTab === name ? 'border-emerald-500 text-emerald-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+      >
+          {label}
+      </button>
+  );
 
-  const getAge = (subject: Animal) => {
-      if (subject.isDobUnknown || !subject.dob) return 'Unknown';
-      const diff = Date.now() - new Date(subject.dob).getTime();
-      if (isNaN(diff)) return 'Unknown';
-      const years = Math.floor(diff / (1000 * 60 * 60 * 24 * 365.25));
-      const months = Math.floor((diff % (1000 * 60 * 60 * 24 * 365.25)) / (1000 * 60 * 60 * 24 * 30.44));
-      if (years > 0) return `${years} years`;
-      return `${months} months`;
-  };
-
-  const latestWeightLog = useMemo(() => sortedLogs.find(l => l.type === LogType.WEIGHT), [sortedLogs]);
-
-  const isHazardous = animal.hazardRating === HazardRating.HIGH || animal.hazardRating === HazardRating.MEDIUM || animal.isVenomous;
-  const isBird = animal.category === AnimalCategory.OWLS || animal.category === AnimalCategory.RAPTORS;
-
-  const getRedListColor = (status?: ConservationStatus) => {
-      switch(status) {
-          case ConservationStatus.CR:
-          case ConservationStatus.EN:
-          case ConservationStatus.EW:
-          case ConservationStatus.EX: return 'bg-rose-600 text-white';
-          case ConservationStatus.VU: return 'bg-amber-50 text-white';
-          case ConservationStatus.NT: return 'bg-yellow-400 text-slate-900';
-          case ConservationStatus.LC: return 'bg-emerald-600 text-white';
-          default: return 'bg-slate-300 text-slate-700';
-      }
-  };
-
-  const getRedListAbbreviation = (status?: ConservationStatus) => {
-      if (!status) return 'NE';
-      const mapping: Record<string, string> = {
-          [ConservationStatus.LC]: 'LC',
-          [ConservationStatus.NT]: 'NT',
-          [ConservationStatus.VU]: 'VU',
-          [ConservationStatus.EN]: 'EN',
-          [ConservationStatus.CR]: 'CR',
-          [ConservationStatus.EW]: 'EW',
-          [ConservationStatus.EX]: 'EX',
-          [ConservationStatus.DD]: 'DD',
-          [ConservationStatus.NE]: 'NE',
-          [ConservationStatus.NC]: 'NC',
-      };
-      return mapping[status] || 'NE';
-  };
-
-  const bannerColorClass = useMemo(() => {
-      if (animal.isVenomous) return 'bg-rose-700 border-rose-500';
-      if (animal.hazardRating === HazardRating.HIGH) return 'bg-rose-600 border-rose-400';
-      if (animal.hazardRating === HazardRating.MEDIUM) return 'bg-amber-600 border-amber-400';
-      return 'bg-slate-800 border-slate-600';
-  }, [animal.hazardRating, animal.isVenomous]);
-
-  const accentColorClass = useMemo(() => {
-    if (animal.isVenomous) return 'border-l-rose-600';
-    if (animal.hazardRating === HazardRating.HIGH) return 'border-l-rose-500';
-    if (animal.hazardRating === HazardRating.MEDIUM) return 'border-l-amber-500';
-    return 'border-l-emerald-500';
-  }, [animal.hazardRating, animal.isVenomous]);
-
-  const hasSpecialRequirements = useMemo(() => {
-    return animal.specialRequirements && animal.specialRequirements.trim().length > 0;
-  }, [animal.specialRequirements]);
-
-  const handleEditLog = (log: LogEntry) => {
-    setEditingLog(log);
-    setLogFormType(log.type);
-    setIsAddLogOpen(true);
-  };
-
-  const handleDeleteLog = (logId: string) => {
-    const updatedLogs = (animal.logs || []).filter(l => l.id !== logId);
-    onUpdateAnimal({ ...animal, logs: updatedLogs });
-  };
-
-  const handleSaveMedicalRecord = (healthLog: LogEntry, animalId: string, isDeceased: boolean) => {
-      onUpdateAnimal({ 
-          ...animal, 
-          logs: [healthLog, ...(animal.logs || [])], 
-          archived: isDeceased 
-      });
-  };
-
-  const clutchStats = useMemo(() => {
-      const currentYear = new Date().getFullYear();
-      const seasonEggs = reproLogs.filter(l => new Date(l.date).getFullYear() === currentYear).reduce((acc, l) => acc + (l.eggCount || 0), 0);
-      const totalEggs = reproLogs.reduce((acc, l) => acc + (l.eggCount || 0), 0);
-      return { seasonEggs, totalEggs };
-  }, [reproLogs]);
-
-  const tabs = [
-      { id: 'overview', label: 'Overview' },
-      { id: 'husbandry', label: 'Husbandry Logs' },
-      { id: 'medical', label: 'Medical Records' },
-      ...(animal.sex === 'Female' ? [{ id: 'repro', label: 'Reproduction' }] : []),
-      { id: 'intelligence', label: 'Species Info' },
-  ];
+  const FilterPill = ({ type, label }: { type: LogType | 'ALL', label: string }) => (
+      <button
+        onClick={() => setLogFilter(type)}
+        className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${logFilter === type ? 'bg-slate-900 text-white shadow-md' : 'bg-white text-slate-500 border border-slate-200 hover:border-slate-300'}`}
+      >
+          {label}
+      </button>
+  );
 
   return (
-    <div className="min-h-screen bg-slate-200 pb-24 animate-in fade-in duration-500">
-      
-      {/* Top Navigation */}
-      <div className="bg-white border-b-2 border-slate-300 sticky top-0 z-30 shadow-sm no-print">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex justify-between items-center">
-            <button onClick={onBack} className="text-slate-500 hover:text-slate-900 font-bold text-xs uppercase tracking-wider flex items-center gap-2 transition-all group">
-                <ArrowLeft size={16} className="group-hover:-translate-x-1 transition-transform"/> Back to Dashboard
+    <div className="min-h-screen bg-slate-50/50 pb-20 font-sans">
+        {/* Navigation & Actions */}
+        <div className="px-6 py-4 flex justify-between items-center bg-white/50 backdrop-blur-sm sticky top-0 z-10 border-b border-slate-200/50">
+            <button onClick={onBack} className="flex items-center gap-2 text-slate-500 hover:text-slate-800 font-bold uppercase text-xs tracking-widest transition-colors">
+                <ChevronLeft size={16} /> Back to Dashboard
             </button>
             <div className="flex gap-2">
-                <button onClick={() => setIsSignGeneratorOpen(true)} className="flex items-center gap-2 bg-purple-50 hover:bg-purple-100 text-purple-700 px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all border-2 border-purple-200">
-                    <ImageIcon size={14} /> Create Sign
+                <button onClick={() => setIsSignGeneratorOpen(true)} className="p-2 text-slate-400 hover:text-slate-700 bg-white border border-slate-200 rounded-lg shadow-sm transition-all" title="Generate Signage">
+                    <Printer size={16} />
                 </button>
-                <button onClick={() => setIsEditing(true)} className="flex items-center gap-2 bg-slate-50 hover:bg-slate-100 text-slate-700 px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all border-2 border-slate-300">
-                    <Edit2 size={14} /> Edit
+                <button onClick={() => setIsEditProfileOpen(true)} className="p-2 text-slate-400 hover:text-emerald-600 bg-white border border-slate-200 rounded-lg shadow-sm transition-all" title="Edit Profile">
+                    <Edit size={16} />
                 </button>
-                {isAdmin && (
-                    <button onClick={() => window.confirm('Permanently delete record?') && onDeleteAnimal()} className="p-2 text-slate-400 hover:text-rose-600 bg-white border-2 border-slate-300 rounded-lg transition-all">
-                        <Trash2 size={16}/>
-                    </button>
-                )}
+                <button onClick={handleDelete} className="p-2 text-slate-400 hover:text-rose-600 bg-white border border-slate-200 rounded-lg shadow-sm transition-all" title="Delete Record">
+                    <Trash2 size={16} />
+                </button>
             </div>
-          </div>
-      </div>
+        </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 no-print">
-          
-          {/* Hazard Alert for High Risk Animals */}
-          {isHazardous && (
-              <div className={`mb-6 text-white p-5 rounded-2xl shadow-xl flex items-center justify-between border-2 ${bannerColorClass}`}>
-                  <div className="flex items-center gap-5">
-                      <div className="bg-white/20 p-3 rounded-xl">
-                          {animal.isVenomous ? <Skull size={36}/> : <AlertTriangle size={36}/>}
-                      </div>
-                      <div>
-                          <h3 className="text-xl font-black uppercase tracking-tighter leading-tight">CAUTION: {animal.hazardRating}</h3>
-                          <p className="text-[10px] font-bold opacity-80 uppercase tracking-widest mt-1">
-                            {animal.isVenomous ? 'Classification: Venomous / High Toxicity' : 'Classification: Special Handling Required'}
-                          </p>
-                      </div>
-                  </div>
-                  {animal.isVenomous && <Skull size={36} className="opacity-30" />}
-              </div>
-          )}
-
-          {/* Profile Header */}
-          <div className="flex flex-col md:flex-row items-start gap-8 mb-8">
-              <div className="shrink-0 relative">
-                  <img 
-                    src={animal.imageUrl} 
-                    alt={animal.name} 
-                    className={`w-32 h-32 rounded-full object-cover border-4 shadow-lg bg-slate-200 ${isHazardous ? (animal.hazardRating === HazardRating.HIGH || animal.isVenomous ? 'border-rose-600' : 'border-amber-500') : 'border-white'}`}
-                  />
-                  {isHazardous && (
-                      <div className={`absolute -bottom-2 -right-2 text-white p-2 rounded-full border-2 border-white shadow-md ${animal.isVenomous || animal.hazardRating === HazardRating.HIGH ? 'bg-rose-600' : 'bg-amber-600'}`}>
-                          {animal.isVenomous ? <Skull size={16}/> : <AlertTriangle size={16}/>}
-                      </div>
-                  )}
-              </div>
-              <div className="pt-2">
-                  <div className="flex items-center gap-3">
-                    <h1 className="text-4xl font-bold text-slate-900 tracking-tight mb-1">{animal.name}</h1>
-                    {isHazardous && (
-                        <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border ${
-                            animal.hazardRating === HazardRating.HIGH || animal.isVenomous ? 'bg-rose-50 text-rose-600 border-rose-200' : 'bg-amber-50 text-amber-600 border-amber-200'
-                        }`}>
-                            {animal.hazardRating}
-                        </span>
-                    )}
-                  </div>
-                  <p className="text-lg text-slate-500 font-medium mb-3">{animal.species} <span className="text-slate-300 mx-2">|</span> <span className="text-sm font-bold uppercase tracking-widest text-slate-400 italic">{animal.latinName}</span></p>
-                  
-                  <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-slate-600">
-                      <div className="flex items-center gap-2">
-                          <span className="font-bold text-slate-900">Sex:</span> {animal.sex || 'Unknown'}
-                      </div>
-                      <div className="flex items-center gap-2">
-                          <span className="font-bold text-slate-900">Age:</span> {getAge(animal)}
-                      </div>
-                      <div className="flex items-center gap-2">
-                          <span className="font-bold text-slate-900">Enclosure:</span> {animal.location}
-                      </div>
-                      <div className="flex items-center gap-2">
-                          <span className="font-bold text-slate-900">Conservation:</span> 
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${getRedListColor(animal.redListStatus)}`}>{getRedListAbbreviation(animal.redListStatus)}</span>
-                      </div>
-                  </div>
-              </div>
-          </div>
-
-          {/* Tabs */}
-          <div className="flex border-b-2 border-slate-300 mb-8 overflow-x-auto gap-8 no-print">
-              {tabs.map(tab => (
-                  <button 
-                    key={tab.id} onClick={() => setActiveTab(tab.id as any)} 
-                    className={`pb-3 text-sm font-bold transition-colors whitespace-nowrap border-b-4 -mb-[2px] ${
-                        activeTab === tab.id 
-                        ? 'border-teal-500 text-teal-600' 
-                        : 'border-transparent text-slate-500 hover:text-slate-800'
-                    }`}
-                  >
-                      {tab.label}
-                  </button>
-              ))}
-          </div>
-
-          {/* Content Area */}
-          <div className="min-h-[400px] no-print">
-              {activeTab === 'overview' && (
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-in slide-in-from-bottom-4 duration-300">
-                    <div className="lg:col-span-2 space-y-8">
-                        <section>
-                            <div className="flex justify-between items-center mb-3">
-                                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2"><AlignLeft size={14}/> Subject Master File</h3>
-                            </div>
-                            <div className={`bg-white rounded-2xl border-2 border-slate-300 shadow-md overflow-hidden border-l-8 ${accentColorClass}`}>
-                                <div className="p-6 space-y-6 flex justify-between">
-                                    <div className="flex-1">
-                                        {/* Narrative Section */}
-                                        <div className={`grid grid-cols-1 ${hasSpecialRequirements ? 'md:grid-cols-2' : ''} gap-8`}>
-                                            <div className={hasSpecialRequirements ? '' : 'col-span-full'}>
-                                                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Subject Description</h4>
-                                                <p className="text-slate-700 text-sm leading-relaxed font-medium">{animal.description || "No narrative recorded for this subject."}</p>
-                                            </div>
-                                            {hasSpecialRequirements && (
-                                                <div className="bg-amber-50/50 p-4 rounded-xl border border-amber-100">
-                                                    <h4 className="text-[10px] font-black text-amber-600 uppercase tracking-widest mb-2 flex items-center gap-2"><Zap size={12}/> Critical Husbandry Notes</h4>
-                                                    <ul className="list-disc list-outside ml-4 space-y-1.5">
-                                                        {animal.specialRequirements?.split('\n').filter(line => line.trim()).map((line, i) => (
-                                                            <li key={i} className="text-slate-700 text-sm leading-relaxed font-bold pl-1">{line}</li>
-                                                        ))}
-                                                    </ul>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                    <div className="shrink-0 ml-6">
-                                        <IUCNBadge status={animal.redListStatus} size="md" />
-                                    </div>
-                                </div>
-                                
-                                <div className="p-6 pt-0 space-y-6">
-                                    {/* Environment Targets */}
-                                    {(animal.targetDayTemp || animal.targetNightTemp || animal.targetBaskingTemp || animal.targetCoolTemp || animal.targetHumidityMin || animal.targetHumidityMax) && (
-                                        <div className="pt-6 border-t border-slate-100">
-                                            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Environmental Control Targets</h4>
-                                            <div className="flex flex-wrap gap-4">
-                                                {animal.targetDayTemp && (
-                                                    <div className="bg-orange-500 border-2 border-orange-600 px-5 py-4 rounded-2xl flex items-center gap-4 text-white shadow-lg">
-                                                        <Sun size={28} className="text-white" />
-                                                        <div>
-                                                            <p className="text-[10px] font-black text-white/80 uppercase tracking-widest leading-none mb-1">Day Target</p>
-                                                            <p className="text-2xl font-black leading-none">{animal.targetDayTemp}°C</p>
-                                                        </div>
-                                                    </div>
-                                                )}
-                                                {animal.targetNightTemp && (
-                                                    <div className="bg-emerald-600 border-2 border-emerald-700 px-5 py-4 rounded-2xl flex items-center gap-4 text-white shadow-lg">
-                                                        <Moon size={28} className="text-white" />
-                                                        <div>
-                                                            <p className="text-[10px] font-black text-white/80 uppercase tracking-widest leading-none mb-1">Night Target</p>
-                                                            <p className="text-2xl font-black leading-none">{animal.targetNightTemp}°C</p>
-                                                        </div>
-                                                    </div>
-                                                )}
-                                                {animal.targetBaskingTemp && (
-                                                    <div className="bg-rose-600 border-2 border-rose-700 px-5 py-4 rounded-2xl flex items-center gap-4 text-white shadow-lg">
-                                                        <Sun size={28} className="text-white" />
-                                                        <div>
-                                                            <p className="text-[10px] font-black text-white/80 uppercase tracking-widest leading-none mb-1">Basking Target</p>
-                                                            <p className="text-2xl font-black leading-none">{animal.targetBaskingTemp}°C</p>
-                                                        </div>
-                                                    </div>
-                                                )}
-                                                {animal.targetCoolTemp && (
-                                                    <div className="bg-blue-500 border-2 border-blue-600 px-5 py-4 rounded-2xl flex items-center gap-4 text-white shadow-lg">
-                                                        <Moon size={28} className="text-white" />
-                                                        <div>
-                                                            <p className="text-[10px] font-black text-white/80 uppercase tracking-widest leading-none mb-1">Cool End Target</p>
-                                                            <p className="text-2xl font-black leading-none">{animal.targetCoolTemp}°C</p>
-                                                        </div>
-                                                    </div>
-                                                )}
-                                                {(animal.targetHumidityMin || animal.targetHumidityMax) && (
-                                                    <div className="bg-cyan-600 border-2 border-cyan-700 px-5 py-4 rounded-2xl flex items-center gap-4 text-white shadow-lg">
-                                                        <Droplets size={28} className="text-white" />
-                                                        <div>
-                                                            <p className="text-[10px] font-black text-white/80 uppercase tracking-widest leading-none mb-1">Humidity</p>
-                                                            <p className="text-2xl font-black leading-none">
-                                                                {animal.targetHumidityMin || '?'}-{animal.targetHumidityMax || '?'}%
-                                                            </p>
-                                                        </div>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {/* Registry Integration */}
-                                    <div className="pt-6 border-t border-slate-100">
-                                        <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Registry & Statutory Metadata</h4>
-                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                                            <DetailItem label="Scientific Name" value={animal.latinName} italic />
-                                            <DetailItem label="Microchip" value={animal.microchip} mono />
-                                            {isBird && <DetailItem label="Ring Number" value={animal.ringNumber} mono />}
-                                            <DetailItem label="Conservation" value={animal.redListStatus} color={getRedListColor(animal.redListStatus).split(' ')[1]} />
-                                            <DetailItem label="Arrival Date" value={animal.arrivalDate ? new Date(animal.arrivalDate).toLocaleDateString() : '-'} />
-                                            <DetailItem label="Subject Origin" value={animal.origin} />
-                                            <DetailItem label="Hazard Class" value={animal.hazardRating} color={animal.hazardRating === HazardRating.HIGH ? 'text-rose-600' : 'text-slate-700'} />
-                                            <DetailItem label="Toxicity" value={animal.isVenomous ? 'Venomous' : 'Non-Venomous'} color={animal.isVenomous ? 'text-rose-600' : 'text-slate-400'} />
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </section>
-                        
-                        <section>
-                            <div className="flex justify-between items-center mb-3">
-                                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Weight & Health Trend (30 Days)</h3>
-                                <div className="flex gap-4">
-                                    <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500">
-                                        <div className="w-2 h-2 rounded-full bg-teal-500"></div> Weight
-                                    </div>
-                                    <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500">
-                                        <div className="w-2 h-2 rounded-full bg-rose-500"></div> Keel Score
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="bg-white p-4 rounded-2xl border-2 border-slate-300 shadow-md h-72">
-                                {chartData.length > 0 ? (
-                                    <ResponsiveContainer width="100%" height="100%">
-                                        <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                                            <defs>
-                                                <linearGradient id="colorWeight" x1="0" y1="0" x2="0" y2="1">
-                                                    <stop offset="5%" stopColor="#14b8a6" stopOpacity={0.2}/>
-                                                    <stop offset="95%" stopColor="#14b8a6" stopOpacity={0}/>
-                                                </linearGradient>
-                                            </defs>
-                                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                                            <XAxis dataKey="date" stroke="#94a3b8" fontSize={10} fontWeight="600" tickLine={false} axisLine={false} dy={10} minTickGap={30} />
-                                            <YAxis yAxisId="left" domain={['auto', 'auto']} stroke="#14b8a6" fontSize={10} fontWeight="600" tickLine={false} axisLine={false} dx={-10} />
-                                            <YAxis yAxisId="right" orientation="right" domain={[1, 5]} ticks={[1,2,3,4,5]} stroke="#f43f5e" fontSize={10} fontWeight="600" tickLine={false} axisLine={false} dx={10} />
-                                            <Tooltip 
-                                                contentStyle={{ backgroundColor: '#fff', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', fontWeight: 'bold', fontSize: '12px' }}
-                                            />
-                                            <Area yAxisId="left" type="monotone" dataKey="weight" stroke="#14b8a6" fill="url(#colorWeight)" strokeWidth={3} activeDot={{ r: 6, strokeWidth: 0, fill: '#0f766e' }} />
-                                            <Line yAxisId="right" type="step" dataKey="bcs" stroke="#f43f5e" strokeWidth={2} dot={{r: 3, fill: '#f43f5e'}} connectNulls />
-                                        </ComposedChart>
-                                    </ResponsiveContainer>
-                                ) : (
-                                    <div className="h-full flex items-center justify-center text-slate-400 text-sm italic">
-                                        No weight or health data available to chart.
-                                    </div>
-                                )}
-                            </div>
-                        </section>
+        <div className="max-w-7xl mx-auto px-6 py-8 space-y-8">
+            {/* PROFILE HEADER */}
+            <div className="flex flex-col md:flex-row items-center md:items-start gap-8">
+                <div className="w-32 h-32 md:w-40 md:h-40 rounded-full border-4 border-white shadow-xl overflow-hidden shrink-0 bg-slate-200">
+                    <img src={animal.imageUrl} alt={animal.name} className="w-full h-full object-cover" />
+                </div>
+                <div className="flex-1 text-center md:text-left space-y-2 pt-2">
+                    <h1 className="text-4xl md:text-5xl font-black text-slate-900 uppercase tracking-tighter leading-none">{animal.name}</h1>
+                    <div className="flex flex-wrap justify-center md:justify-start items-baseline gap-3 text-slate-500">
+                        <span className="text-xl font-bold uppercase tracking-wide">{animal.species}</span>
+                        <span className="hidden md:inline w-px h-4 bg-slate-300"></span>
+                        <span className="font-serif italic font-medium uppercase tracking-wider text-sm opacity-70">{animal.latinName}</span>
                     </div>
                     
-                    {/* Right Sidebar */}
-                    <div className="space-y-8">
-                        <section>
-                            <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Live Status</h3>
-                            <div className="bg-white p-5 rounded-2xl border-2 border-slate-300 shadow-md space-y-4">
-                                <div className="flex items-center gap-4">
-                                    <div className="w-12 h-12 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600 border border-emerald-100">
-                                        <Scale size={24}/>
-                                    </div>
-                                    <div>
-                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Latest Weight</p>
-                                        <p className="text-xl font-black text-slate-800">
-                                            {latestWeightLog 
-                                                ? (latestWeightLog.weightGrams !== undefined 
-                                                    ? formatWeightDisplay(latestWeightLog.weightGrams, animal.weightUnit) 
-                                                    : latestWeightLog.value) 
-                                                : 'N/A'}
-                                        </p>
-                                    </div>
-                                </div>
-
-                                <div className="flex items-center gap-4">
-                                    <div className="w-12 h-12 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600 border border-blue-100">
-                                        <Utensils size={24}/>
-                                    </div>
-                                    <div>
-                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Last Feed</p>
-                                        <p className="text-xl font-black text-slate-800 truncate max-w-[150px]">
-                                            {husbandryLogs.find(l => l.type === LogType.FEED)?.value || 'Nil Recorded'}
-                                        </p>
-                                    </div>
-                                </div>
-
-                                <div className="pt-4 border-t border-slate-100">
-                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Target Ranges</p>
-                                    <div className="space-y-1">
-                                        {animal.flyingWeight && (
-                                            <div className="flex justify-between text-sm">
-                                                <span className="text-slate-500 font-bold">Fly Wt:</span>
-                                                <span className="text-slate-900 font-black">{formatWeightDisplay(animal.flyingWeight, animal.weightUnit)}</span>
-                                            </div>
-                                        )}
-                                        {animal.winterWeight && (
-                                            <div className="flex justify-between text-sm">
-                                                <span className="text-slate-500 font-bold">Winter Wt:</span>
-                                                <span className="text-slate-900 font-black">{formatWeightDisplay(animal.winterWeight, animal.weightUnit)}</span>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-                        </section>
+                    <div className="flex flex-wrap justify-center md:justify-start gap-4 md:gap-8 mt-4 text-xs font-bold text-slate-600 uppercase tracking-widest">
+                        <div className="flex items-center gap-1.5"><span className="text-slate-400">Sex:</span> {animal.sex}</div>
+                        <div className="flex items-center gap-1.5"><span className="text-slate-400">Age:</span> {age}</div>
+                        <div className="flex items-center gap-1.5"><span className="text-slate-400">Enclosure:</span> {animal.location}</div>
+                        {animal.ringNumber && <div className="flex items-center gap-1.5"><span className="text-slate-400">Ring:</span> {animal.ringNumber}</div>}
+                        <div className="flex items-center gap-2">
+                            <span className="text-slate-400">Conservation:</span> 
+                            <span className={`px-2 py-0.5 rounded text-white text-[10px] ${animal.redListStatus === 'LC' ? 'bg-emerald-600' : 'bg-amber-500'}`}>{animal.redListStatus || 'NE'}</span>
+                        </div>
                     </div>
                 </div>
-              )}
+            </div>
 
-              {activeTab === 'intelligence' && (
-                <div className="animate-in slide-in-from-bottom-4 duration-300">
-                    {!speciesCardData ? (
-                        <div className="bg-white rounded-[2rem] border-2 border-slate-300 p-12 text-center shadow-md">
-                            <div className="w-20 h-20 bg-slate-50 rounded-3xl flex items-center justify-center mx-auto mb-6 border-2 border-slate-100 text-slate-400">
-                                <Sparkles size={40}/>
+            {/* TABS NAVIGATION */}
+            <div className="border-b-2 border-slate-200 flex gap-4 overflow-x-auto">
+                <TabButton name="Overview" label="Overview" />
+                <TabButton name="Husbandry Logs" label="Husbandry Logs" />
+                <TabButton name="Medical Records" label="Medical Records" />
+                <TabButton name="Species Info" label="Species Info" />
+            </div>
+
+            {/* TAB CONTENT: OVERVIEW */}
+            {activeTab === 'Overview' && (
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-in slide-in-from-bottom-2 duration-300">
+                    {/* LEFT COLUMN: MASTER FILE */}
+                    <div className="lg:col-span-2 space-y-6">
+                        <div className="bg-white rounded-[1.5rem] p-8 shadow-sm border border-slate-200/60 relative overflow-hidden">
+                            <div className="absolute top-0 left-0 w-1.5 h-full bg-[#10b981]"></div>
+                            <div className="flex items-center gap-3 mb-6">
+                                <div className="p-1.5"><Filter className="rotate-90 text-slate-400" size={20}/></div>
+                                <h3 className="text-sm font-black text-slate-500 uppercase tracking-[0.2em]">Subject Master File</h3>
                             </div>
-                            <h3 className="text-xl font-bold text-slate-800 uppercase tracking-tight mb-2">Species Intelligence Dossier</h3>
-                            <p className="text-slate-500 text-sm max-w-md mx-auto mb-8 font-medium">Synthesize an AI-generated educational report for this species, including global conservation status and dietary adaptations.</p>
-                            <button 
-                                onClick={handleGenerateIntelligence} 
-                                disabled={isGeneratingSpecies}
-                                className="bg-slate-900 text-white px-8 py-4 rounded-xl font-black uppercase text-xs tracking-[0.2em] shadow-xl hover:bg-black transition-all flex items-center gap-3 mx-auto disabled:opacity-50"
-                            >
-                                {isGeneratingSpecies ? <Loader2 className="animate-spin" size={18}/> : <Sparkles size={18}/>}
-                                {isGeneratingSpecies ? 'Synthesizing...' : 'Generate Report'}
-                            </button>
-                        </div>
-                    ) : (
-                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                            <div className="lg:col-span-2 bg-white rounded-[2rem] border-2 border-slate-300 p-8 shadow-md prose prose-slate max-w-none">
-                                <ReactMarkdown>{speciesCardData.text}</ReactMarkdown>
-                            </div>
-                            <div className="space-y-6">
-                                <div className="bg-slate-900 rounded-[2rem] p-6 text-white shadow-xl">
-                                    <h4 className="text-[10px] font-black uppercase tracking-[0.3em] mb-6 flex items-center gap-2 text-emerald-400"><Globe size={14}/> Native Range Map</h4>
-                                    <div className="bg-white rounded-xl overflow-hidden aspect-square border-2 border-white/10 p-2 flex items-center justify-center">
-                                        <img src={animal.distributionMapUrl || speciesCardData.mapImage} alt="Range Map" className="w-full h-auto mix-blend-multiply filter contrast-125" />
+
+                            <div className="space-y-8">
+                                <div>
+                                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Subject Description</h4>
+                                    <p className="text-sm font-medium text-slate-700 leading-relaxed max-w-2xl">{animal.description || "No physical description available."}</p>
+                                </div>
+
+                                <div className="bg-amber-50 border border-amber-100 rounded-xl p-6 relative">
+                                    <div className="absolute top-4 right-4 text-amber-200"><AlertTriangle size={24}/></div>
+                                    <h4 className="text-[10px] font-black text-amber-600 uppercase tracking-widest mb-3 flex items-center gap-2">
+                                        <AlertTriangle size={12}/> Critical Husbandry Notes
+                                    </h4>
+                                    {animal.criticalHusbandryNotes && animal.criticalHusbandryNotes.length > 0 ? (
+                                        <ul className="space-y-2">
+                                            {animal.criticalHusbandryNotes.map((note, idx) => (
+                                                <li key={idx} className="flex items-start gap-2 text-xs font-bold text-slate-700">
+                                                    <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0"></span>
+                                                    {note}
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    ) : (
+                                        <p className="text-xs font-bold text-amber-800/50 italic">No critical notes flagged for this subject.</p>
+                                    )}
+                                </div>
+
+                                <div>
+                                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Registry & Statutory Metadata</h4>
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-y-6 gap-x-4">
+                                        <div><p className="text-[9px] font-black text-slate-300 uppercase tracking-widest mb-1">Scientific Name</p><p className="text-xs font-black text-slate-800 italic">{animal.latinName || '-'}</p></div>
+                                        <div><p className="text-[9px] font-black text-slate-300 uppercase tracking-widest mb-1">Microchip</p><p className="text-xs font-black text-slate-800 font-mono">{animal.microchip || '-'}</p></div>
+                                        <div><p className="text-[9px] font-black text-slate-300 uppercase tracking-widest mb-1">Ring Number</p><p className="text-xs font-black text-slate-800 font-mono">{animal.ringNumber || '-'}</p></div>
+                                        <div><p className="text-[9px] font-black text-slate-300 uppercase tracking-widest mb-1">Conservation</p><p className="text-xs font-black text-slate-800">{animal.redListStatus}</p></div>
+                                        
+                                        <div><p className="text-[9px] font-black text-slate-300 uppercase tracking-widest mb-1">Arrival Date</p><p className="text-xs font-black text-slate-800">{animal.arrivalDate ? new Date(animal.arrivalDate).toLocaleDateString() : '-'}</p></div>
+                                        <div><p className="text-[9px] font-black text-slate-300 uppercase tracking-widest mb-1">Subject Origin</p><p className="text-xs font-black text-slate-800">{animal.origin || 'Unknown'}</p></div>
+                                        <div><p className="text-[9px] font-black text-slate-300 uppercase tracking-widest mb-1">Hazard Class</p><p className="text-xs font-black text-slate-800 uppercase">{animal.hazardRating}</p></div>
+                                        <div><p className="text-[9px] font-black text-slate-300 uppercase tracking-widest mb-1">Toxicity</p><p className="text-xs font-black text-slate-800">{animal.toxicity || 'Non-Venomous'}</p></div>
                                     </div>
-                                    <p className="text-[8px] font-bold text-slate-500 uppercase text-center mt-4 tracking-widest">AI Generated Distribution Modeling</p>
+                                </div>
+                            </div>
+                            
+                            {/* Floating Badge */}
+                            <div className="absolute top-8 right-8 hidden md:block">
+                                <IUCNBadge status={animal.redListStatus} size="lg"/>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* RIGHT COLUMN: LIVE STATUS */}
+                    <div className="lg:col-span-1 space-y-6">
+                        <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest pl-1">Live Status</h3>
+                        
+                        <div className="bg-white p-6 rounded-[1.5rem] border border-slate-200 shadow-sm flex items-center gap-4">
+                            <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-100">
+                                <Scale size={24} />
+                            </div>
+                            <div>
+                                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Latest Weight</p>
+                                <p className="text-2xl font-black text-slate-900 tracking-tight">
+                                    {latestWeight?.weightGrams ? formatWeightDisplay(latestWeight.weightGrams, animal.weightUnit) : (latestWeight?.value || 'N/A')}
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="bg-white p-6 rounded-[1.5rem] border border-slate-200 shadow-sm flex items-center gap-4">
+                            <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center border border-blue-100">
+                                <Utensils size={24} />
+                            </div>
+                            <div>
+                                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Last Feed</p>
+                                <p className="text-lg font-black text-slate-900 leading-tight">
+                                    {lastFeed?.value || 'No recent feed'}
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="bg-white p-6 rounded-[1.5rem] border border-slate-200 shadow-sm">
+                            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Target Ranges</h4>
+                            <div className="space-y-3">
+                                <div className="flex justify-between items-center p-3 bg-slate-50 rounded-xl border border-slate-100">
+                                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">Flying Weight</span>
+                                    <span className="text-xs font-black text-slate-900">{animal.flyingWeight ? formatWeightDisplay(animal.flyingWeight, animal.weightUnit) : '--'}</span>
+                                </div>
+                                <div className="flex justify-between items-center p-3 bg-slate-50 rounded-xl border border-slate-100">
+                                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">Min Night Temp</span>
+                                    <span className="text-xs font-black text-slate-900">{animal.targetNightTemp ? `${animal.targetNightTemp}°C` : '--'}</span>
                                 </div>
                             </div>
                         </div>
-                    )}
+                    </div>
                 </div>
-              )}
-          </div>
-      </div>
+            )}
 
-      {/* MODALS */}
-      {isEditing && (
-          <AnimalFormModal 
-            isOpen={isEditing} 
-            onClose={() => setIsEditing(false)} 
-            onSave={(updated) => { onUpdateAnimal(updated); setIsEditing(false); }} 
-            initialData={animal} 
-            locations={locations}
-          />
-      )}
+            {/* TAB CONTENT: HUSBANDRY LOGS */}
+            {activeTab === 'Husbandry Logs' && (
+                <div className="space-y-6 animate-in slide-in-from-bottom-2 duration-300">
+                    <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+                        <div className="flex flex-wrap gap-2">
+                            <FilterPill type="ALL" label="ALL" />
+                            <FilterPill type={LogType.FEED} label="FEED" />
+                            <FilterPill type={LogType.WEIGHT} label="WEIGHT" />
+                            <FilterPill type={LogType.FLIGHT} label="FLIGHT" />
+                            <FilterPill type={LogType.TRAINING} label="TRAINING" />
+                            <FilterPill type={LogType.TEMPERATURE} label="TEMPERATURE" />
+                        </div>
+                        <button 
+                            onClick={() => { setEntryType(LogType.GENERAL); setIsAddEntryOpen(true); }}
+                            className="bg-[#10b981] hover:bg-emerald-600 text-white px-6 py-2.5 rounded-lg shadow-lg shadow-emerald-900/10 text-[10px] font-black uppercase tracking-widest flex items-center gap-2 transition-all active:scale-95"
+                        >
+                            <Plus size={16} strokeWidth={3} /> Add Husbandry Log
+                        </button>
+                    </div>
 
-      {isAddLogOpen && (
-          <AddEntryModal 
-            isOpen={isAddLogOpen} 
-            onClose={() => { setIsAddLogOpen(false); setEditingLog(undefined); }} 
-            onSave={(entry) => { 
-                let updatedLogs = [...animal.logs];
-                if (editingLog) {
-                    updatedLogs = updatedLogs.map(l => l.id === entry.id ? entry : l);
-                } else {
-                    updatedLogs = [entry, ...updatedLogs];
-                }
-                onUpdateAnimal({ ...animal, logs: updatedLogs }); 
-                setIsAddLogOpen(false); 
-                setEditingLog(undefined);
-            }}
-            onAddTask={(task) => {
-                if (onAddTask) {
-                    onAddTask(task);
-                }
-            }}
-            onDelete={handleDeleteLog}
-            onUpdateAnimal={onUpdateAnimal}
-            animal={animal}
-            allAnimals={allAnimals} 
-            initialType={logFormType} 
-            existingLog={editingLog}
-            foodOptions={foodOptions} 
-            feedMethods={feedMethods[animal.category] || []}
-            eventTypes={eventTypes}
-          />
-      )}
+                    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left border-collapse">
+                                <thead className="bg-white border-b-2 border-slate-100">
+                                    <tr>
+                                        <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Date</th>
+                                        <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Type</th>
+                                        <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Value</th>
+                                        <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest w-1/3">Notes</th>
+                                        <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Auth & Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100">
+                                    {filteredLogs.map(log => (
+                                        <tr key={log.id} className="hover:bg-slate-50 transition-colors group">
+                                            <td className="px-6 py-4 whitespace-nowrap">
+                                                <span className="text-xs font-bold text-slate-700">{new Date(log.date).toLocaleDateString('en-GB')}</span>
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap">
+                                                <span className={`inline-flex items-center px-2 py-1 rounded text-[9px] font-black uppercase tracking-widest border ${
+                                                    log.type === LogType.WEIGHT ? 'bg-emerald-50 text-emerald-700 border-emerald-100' :
+                                                    log.type === LogType.FEED ? 'bg-amber-50 text-amber-700 border-amber-100' :
+                                                    'bg-slate-100 text-slate-600 border-slate-200'
+                                                }`}>
+                                                    {log.type}
+                                                </span>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <span className="text-sm font-black text-slate-800">
+                                                    {log.type === LogType.WEIGHT && log.weightGrams ? formatWeightDisplay(log.weightGrams, animal.weightUnit) : log.value}
+                                                </span>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <p className="text-xs font-medium text-slate-500 italic">{log.notes || '-'}</p>
+                                            </td>
+                                            <td className="px-6 py-4 text-right">
+                                                <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">{log.userInitials}</span>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                    {filteredLogs.length === 0 && (
+                                        <tr><td colSpan={5} className="px-6 py-16 text-center text-xs font-bold text-slate-400 uppercase tracking-widest">No Logs Found</td></tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            )}
 
-      {isMedicalModalOpen && (
-          <MedicalRecordModal
-            isOpen={isMedicalModalOpen}
-            onClose={() => setIsMedicalModalOpen(false)}
-            onSave={handleSaveMedicalRecord}
-            animals={[animal]}
-            preSelectedAnimalId={animal.id}
-          />
-      )}
+            {/* TAB CONTENT: MEDICAL RECORDS */}
+            {activeTab === 'Medical Records' && (
+                <div className="space-y-6 animate-in slide-in-from-bottom-2 duration-300">
+                    <div className="flex justify-end">
+                        <button 
+                            onClick={() => { setEntryType(LogType.HEALTH); setIsAddEntryOpen(true); }}
+                            className="bg-rose-600 hover:bg-rose-700 text-white px-6 py-2.5 rounded-lg shadow-lg shadow-rose-900/10 text-[10px] font-black uppercase tracking-widest flex items-center gap-2 transition-all active:scale-95"
+                        >
+                            <Plus size={16} strokeWidth={3} /> Add Clinical Record
+                        </button>
+                    </div>
 
-      {isSignGeneratorOpen && (
-          <SignGenerator 
-            animal={animal}
-            orgProfile={orgProfile}
-            onClose={() => setIsSignGeneratorOpen(false)}
-          />
-      )}
+                    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left border-collapse">
+                                <thead className="bg-white border-b-2 border-slate-100">
+                                    <tr>
+                                        <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Date</th>
+                                        <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Category</th>
+                                        <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Details</th>
+                                        <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Auth</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100">
+                                    {medicalLogs.map(log => (
+                                        <tr key={log.id} className="hover:bg-slate-50 transition-colors group">
+                                            <td className="px-6 py-4 whitespace-nowrap">
+                                                <span className="text-xs font-bold text-slate-700">{new Date(log.date).toLocaleDateString('en-GB')}</span>
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap">
+                                                <span className="inline-flex items-center px-2 py-1 rounded text-[9px] font-black uppercase tracking-widest border bg-rose-50 text-rose-700 border-rose-100">
+                                                    {log.healthType || 'General'}
+                                                </span>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <p className="text-sm font-black text-slate-800 mb-1">{log.value}</p>
+                                                <p className="text-xs font-medium text-slate-500 italic">{log.notes || '-'}</p>
+                                            </td>
+                                            <td className="px-6 py-4 text-right">
+                                                <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">{log.userInitials}</span>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                    {medicalLogs.length === 0 && (
+                                        <tr><td colSpan={4} className="px-6 py-16 text-center text-xs font-bold text-slate-400 uppercase tracking-widest">No Clinical Records Found</td></tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* TAB CONTENT: SPECIES INFO */}
+            {activeTab === 'Species Info' && (
+                <div className="py-20 text-center text-slate-400 bg-white rounded-2xl border border-slate-200 border-dashed">
+                    <Activity size={48} className="mx-auto mb-4 opacity-20"/>
+                    <p className="text-xs font-black uppercase tracking-widest">Module Active - Data Pending</p>
+                </div>
+            )}
+        </div>
+
+        {/* MODALS */}
+        {isSignGeneratorOpen && (
+            <SignGenerator 
+                animal={animal}
+                orgProfile={orgProfile}
+                onClose={() => setIsSignGeneratorOpen(false)}
+            />
+        )}
+
+        {isEditProfileOpen && (
+            <AnimalFormModal
+                isOpen={isEditProfileOpen}
+                onClose={() => setIsEditProfileOpen(false)}
+                onSave={(updated) => updateAnimal(updated)}
+                initialData={animal}
+                locations={locations}
+            />
+        )}
+
+        {isAddEntryOpen && (
+            <AddEntryModal 
+                isOpen={isAddEntryOpen}
+                onClose={() => setIsAddEntryOpen(false)}
+                onSave={(entry) => {
+                    const updatedLogs = [entry, ...(animal.logs || [])];
+                    updateAnimal({ ...animal, logs: updatedLogs });
+                }}
+                animal={animal}
+                initialType={entryType}
+                foodOptions={foodOptions}
+                feedMethods={feedMethods[animal.category] || []}
+                eventTypes={eventTypes}
+                allAnimals={animals}
+            />
+        )}
     </div>
   );
 };

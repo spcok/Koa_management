@@ -1,15 +1,11 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
-import { User, OrganizationProfile } from '../types';
+import { User } from '../types';
 import { ArrowRight, User as UserIcon, ShieldCheck, AlertCircle, Loader2, ChevronLeft, Delete } from 'lucide-react';
+import { useAppData } from '../hooks/useAppData';
 
-interface LoginScreenProps {
-  users: User[];
-  onLogin: (user: User) => void;
-  orgProfile?: OrganizationProfile | null;
-}
-
-const LoginScreen: React.FC<LoginScreenProps> = ({ users, onLogin, orgProfile }) => {
+const LoginScreen: React.FC = () => {
+  const { users, login, orgProfile } = useAppData();
+  
   const [step, setStep] = useState<'initials' | 'pin'>('initials');
   const [initialsInput, setInitialsInput] = useState('');
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
@@ -59,15 +55,13 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ users, onLogin, orgProfile })
           return;
       }
 
-      // Handle numbers
       setPin(prev => {
           if (prev.length < 4) {
               const newPin = prev + input;
               if (newPin.length === 4) {
-                  // Validate immediately after state update would reflect
                   setTimeout(() => {
                       if (newPin === selectedUser.pin) {
-                          onLogin(selectedUser);
+                          login(selectedUser);
                       } else {
                           setError('Invalid PIN');
                           setPin('');
@@ -79,9 +73,8 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ users, onLogin, orgProfile })
           }
           return prev;
       });
-  }, [selectedUser, onLogin]);
+  }, [selectedUser, login]);
 
-  // Keyboard Event Listener
   useEffect(() => {
       if (step !== 'pin') return;
 
@@ -100,14 +93,11 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ users, onLogin, orgProfile })
   }, [step, handlePinInput]);
 
   return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6 relative overflow-hidden">
-         {/* Subtle Background Pattern */}
+    <div className="fixed inset-0 bg-slate-50 flex items-center justify-center p-4 md:p-6 z-[200] overflow-y-auto">
          <div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{ backgroundImage: 'radial-gradient(#64748b 1px, transparent 1px)', backgroundSize: '32px 32px' }}></div>
          
-         {/* Main Card */}
-         <div className="bg-white w-full max-w-md rounded-[2rem] shadow-2xl shadow-slate-200/50 border border-slate-100 overflow-hidden relative z-10 animate-in fade-in zoom-in-95 duration-500">
+         <div className="bg-white w-full max-w-md rounded-[2rem] shadow-2xl shadow-slate-200/50 border border-slate-100 overflow-hidden relative z-10 animate-in fade-in zoom-in-95 duration-500 my-auto">
              
-             {/* Header Section */}
              <div className="pt-12 pb-8 px-8 text-center bg-gradient-to-b from-white to-slate-50/50">
                  <div className="w-24 h-24 bg-white rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg shadow-slate-100 border border-slate-50">
                     <img src={logoSrc} alt="Logo" className="w-auto h-14 object-contain" />
@@ -129,7 +119,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ users, onLogin, orgProfile })
                                 <input 
                                     type="text" 
                                     value={initialsInput} 
-                                    onChange={(e) => { if(initialsInput !== e.target.value) setInitialsInput(e.target.value); }}
+                                    onChange={(e) => setInitialsInput(e.target.value)}
                                     className="block w-full pl-12 pr-4 py-4 bg-slate-50 border-2 border-slate-100 text-slate-900 placeholder-slate-300 text-center text-lg font-bold rounded-xl focus:outline-none focus:border-emerald-500 focus:bg-white transition-all uppercase tracking-[0.2em]"
                                     placeholder="INITIALS" 
                                     maxLength={3} 
@@ -156,7 +146,6 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ users, onLogin, orgProfile })
                      </form>
                  ) : (
                      <div className="space-y-8 animate-in slide-in-from-right-8 duration-300">
-                        {/* User Profile Summary */}
                         <div className="flex flex-col items-center gap-3">
                             <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center text-slate-700 font-black text-xl border-4 border-white shadow-sm">
                                 {selectedUser?.initials}
@@ -167,14 +156,12 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ users, onLogin, orgProfile })
                             </div>
                         </div>
 
-                        {/* PIN Dots */}
                         <div className="flex justify-center gap-4 py-2">
                             {[0,1,2,3].map(i => (
                                 <div key={i} className={`w-3 h-3 rounded-full transition-all duration-300 ${pin.length > i ? 'bg-slate-900 scale-125' : 'bg-slate-200'}`} />
                             ))}
                         </div>
 
-                        {/* Numpad */}
                         <div className="grid grid-cols-3 gap-3 max-w-[280px] mx-auto">
                             {[1,2,3,4,5,6,7,8,9].map(val => (
                                 <button 
@@ -201,7 +188,6 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ users, onLogin, orgProfile })
                  )}
              </div>
 
-             {/* Footer */}
              <div className="bg-slate-50 py-4 px-8 border-t border-slate-100 flex items-center justify-center gap-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                  <ShieldCheck size={12} className="text-emerald-500" /> Secure Environment
              </div>

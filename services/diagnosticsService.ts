@@ -1,102 +1,109 @@
-
-import { Animal, Task, User } from '../types';
+import { Animal, Task, User, AnimalCategory, LogType, HealthRecordType, HealthCondition } from '../types';
 
 export interface DiagnosticIssue {
   id: string;
   timestamp: number;
   severity: 'Critical' | 'Warning' | 'Info';
-  category: 'Database' | 'Network' | 'System' | 'Security' | 'Logic' | 'Performance';
+  category: 'Database' | 'Security' | 'Logic' | 'Compliance';
   message: string;
   remediation?: string;
+  subjectId?: string;
 }
 
 export const diagnosticsService = {
   /**
-   * Runs a comprehensive health check on the database data structures.
-   * Validates schema integrity, referential integrity, and logical consistency.
+   * Runs a statutory compliance audit based on the Zoo Licensing Act 1981
+   * and Secretary of State's Standards of Modern Zoo Practice (SSSMZP).
    */
-  runDatabaseHealthCheck: (animals: Animal[], tasks: Task[], users: User[]): DiagnosticIssue[] => {
+  runFullAudit: (animals: Animal[], tasks: Task[], users: User[]): DiagnosticIssue[] => {
     const issues: DiagnosticIssue[] = [];
     const timestamp = Date.now();
 
-    // 1. ANIMAL SCHEMA VALIDATION
     animals.forEach(a => {
-      // Critical: Primary Key Integrity
-      if (!a.id) {
-          issues.push({
-              id: `schema_missing_id_${Math.random().toString(36).substr(2, 9)}`,
-              timestamp,
-              severity: 'Critical',
-              category: 'Database',
-              message: `Animal record detected with missing 'id' field.`,
-              remediation: 'Database corruption likely. Manual row deletion required via Supabase dashboard.'
-          });
-      }
-
-      // Critical: Name Field (Required for UI)
-      if (!a.name || a.name.trim() === '') {
-          issues.push({
-              id: `schema_missing_name_${a.id}`,
-              timestamp,
-              severity: 'Critical',
-              category: 'Database',
-              message: `Animal record (ID: ${a.id}) is missing required field 'name'.`,
-              remediation: 'Edit animal profile to assign a valid call name.'
-          });
-      }
-
-      // Critical: Species Field (Required for AI & Statutory Reporting)
-      if (!a.species || a.species === 'Unknown' || a.species.trim() === '') {
+      // 1. STATUTORY IDENTIFICATION (ZLA Section 9)
+      const hasId = a.ringNumber || a.microchip || a.hasNoId;
+      if (!hasId) {
         issues.push({
-          id: `integrity_species_${a.id}`,
+          id: `comp_id_${a.id}`,
           timestamp,
           severity: 'Critical',
-          category: 'Database',
-          message: `Animal "${a.name || 'ID ' + a.id}" has undefined or invalid 'species'.`,
-          remediation: 'Update animal record with correct species taxonomy.'
+          category: 'Compliance',
+          message: `Animal "${a.name}" lacks statutory unique identifier (Ring or Microchip).`,
+          remediation: 'ZLA 1981 requires individual identification. Assign a ring/chip or verify "No ID" status.',
+          subjectId: a.id
         });
       }
+
+      // 2. ACQUISITION RECORDS (ZLA Section 9)
+      if (!a.arrivalDate || !a.origin) {
+        issues.push({
+          id: `comp_orig_${a.id}`,
+          timestamp,
+          severity: 'Warning',
+          category: 'Compliance',
+          message: `Animal "${a.name}" is missing acquisition history (Arrival Date or Origin).`,
+          remediation: 'Update the animal profile with legal origin data.',
+          subjectId: a.id
+        });
+      }
+
+      // 3. TAXONOMY (SSSMZP Standard 1)
+      if (!a.latinName || a.latinName === 'Unknown') {
+        issues.push({
+          id: `comp_tax_${a.id}`,
+          timestamp,
+          severity: 'Warning',
+          category: 'Compliance',
+          message: `Animal "${a.name}" has incomplete scientific taxonomy.`,
+          remediation: 'Use the AI Auto-fill tool in the profile editor to fetch the Latin name.',
+          subjectId: a.id
+        });
+      }
+
+      // 4. VETERINARY COMPLIANCE (SSSMZP Standard 3)
+      const healthLogs = (a.logs || []).filter(l => l.type === LogType.HEALTH);
+      const medicationLogs = healthLogs.filter(l => l.healthType === HealthRecordType.MEDICATION);
       
-      // Warning: Future Dating in Logs
-      const futureLogs = (a.logs || []).filter(l => new Date(l.date).getTime() > Date.now() + 86400000); // +24h buffer
-      if (futureLogs.length > 0) {
-         issues.push({
-          id: `logic_future_logs_${a.id}`,
-          timestamp,
-          severity: 'Warning',
-          category: 'Logic',
-          message: `Animal "${a.name}" has ${futureLogs.length} logs with future dates.`,
-          remediation: 'Verify server time and check log entry timestamps.'
-        });
+      medicationLogs.forEach(ml => {
+          if (!ml.medicationBatch || !ml.prescribedBy) {
+              issues.push({
+                  id: `comp_med_${ml.id}`,
+                  timestamp,
+                  severity: 'Warning',
+                  category: 'Compliance',
+                  message: `Medication record for "${a.name}" (${ml.date}) is missing batch or prescriber data.`,
+                  remediation: 'RCVS/DEFRA standards require full traceability of dispensed controlled substances.',
+                  subjectId: a.id
+              });
+          }
+      });
+
+      // 5. DECEASED PROTOCOL
+      const deceasedLog = healthLogs.find(l => l.condition === HealthCondition.DECEASED);
+      if (deceasedLog && (!deceasedLog.causeOfDeath || !deceasedLog.disposalMethod)) {
+          issues.push({
+              id: `comp_eol_${a.id}`,
+              timestamp,
+              severity: 'Critical',
+              category: 'Compliance',
+              message: `Deceased record for "${a.name}" lacks mandatory cause or disposal method.`,
+              remediation: 'Complete the "End of Life" protocol in the medical record.',
+              subjectId: a.id
+          });
       }
     });
 
-    // 2. REFERENTIAL INTEGRITY (Orphaned Tasks)
-    const animalIds = new Set(animals.map(a => a.id));
-    tasks.forEach(t => {
-      if (t.animalId && !animalIds.has(t.animalId)) {
+    // 6. PERSONNEL & ACCESS (Security)
+    const activeAdmins = users.filter(u => u.role === 'Admin' && u.active);
+    if (activeAdmins.length === 0) {
         issues.push({
-          id: `orphan_task_${t.id}`,
-          timestamp,
-          severity: 'Warning',
-          category: 'Database',
-          message: `Task "${t.title}" references non-existent Animal ID: ${t.animalId}`,
-          remediation: 'Delete task or reassign to valid animal.'
+            id: `sec_no_admin`,
+            timestamp,
+            severity: 'Critical',
+            category: 'Security',
+            message: 'No active Administrators found in the registry.',
+            remediation: 'System lockout risk. Elevate a user to Admin immediately.'
         });
-      }
-    });
-
-    // 3. SECURITY INTEGRITY (Admin Existence)
-    const admins = users.filter(u => u.role === 'Admin');
-    if (admins.length === 0 && users.length > 0) {
-       issues.push({
-          id: `security_no_admin`,
-          timestamp,
-          severity: 'Critical',
-          category: 'Security',
-          message: `No active Administrators found in User Registry.`,
-          remediation: 'Elevate a user to Admin immediately to prevent system lockout.'
-       });
     }
 
     return issues;

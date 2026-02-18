@@ -1,27 +1,24 @@
 
 import React, { useState, useMemo, useTransition } from 'react';
-import { Animal, LogType, LogEntry, HealthRecordType, HealthCondition, AnimalCategory, Task, User, UserRole, OrganizationProfile, ShellQuality } from '../types';
+// Fix: Changed OrganizationProfile to OrganisationProfile
+import { Animal, LogType, LogEntry, HealthRecordType, HealthCondition, AnimalCategory, Task, User, UserRole, OrganisationProfile, ShellQuality } from '../types';
 import { Heart, Activity, Calendar, Save, Upload, FileText, AlertCircle, Plus, X, Filter, RotateCcw, Clock, User as UserIcon, Edit2, Trash2, Skull, Printer, Biohazard, ShieldCheck, Thermometer, AlertTriangle, Pill, ClipboardList, ArrowRight, Sparkles, Loader2, Check, BarChart3, Egg } from 'lucide-react';
 import { analyzeHealthHistory, analyzeCollectionHealth } from '../services/geminiService';
 import ReactMarkdown from 'react-markdown';
 import AddEntryModal from './AddEntryModal';
 import MedicalRecordModal from './MedicalRecordModal';
 import Quarantine from './Quarantine';
+// FIX: Import useAppData hook to get data from context.
+import { useAppData } from '../hooks/useAppData';
 
 interface HealthProps {
-  animals: Animal[];
   onSelectAnimal: (animal: Animal) => void;
-  onUpdateAnimal: (animal: Animal) => void;
-  tasks?: Task[];
-  onAddTask?: (task: Task) => void;
-  onUpdateTask?: (task: Task) => void;
-  onDeleteTask?: (id: string) => void;
-  users?: User[];
-  currentUser?: User;
-  orgProfile?: OrganizationProfile | null;
 }
 
-const Health: React.FC<HealthProps> = ({ animals, onSelectAnimal, onUpdateAnimal, tasks, onAddTask, onUpdateTask, onDeleteTask, users, currentUser, orgProfile }) => {
+const Health: React.FC<HealthProps> = ({ onSelectAnimal }) => {
+  // FIX: Get data and actions from useAppData context instead of props.
+  const { animals, updateAnimal, tasks, addTask, updateTask, deleteTask, users, currentUser, orgProfile } = useAppData();
+
   const [activeTab, setActiveTab] = useState<'medical' | 'quarantine' | 'mar' | 'repro'>('medical');
   const [isModalOpen, setIsModalOpen] = useState(false);
   
@@ -67,14 +64,14 @@ const Health: React.FC<HealthProps> = ({ animals, onSelectAnimal, onUpdateAnimal
   const handleDeleteLog = (logId: string, animal: Animal) => {
     if (window.confirm('Permanently purge clinical record?')) {
         const updatedLogs = (animal.logs || []).filter(l => l.id !== logId);
-        onUpdateAnimal({ ...animal, logs: updatedLogs });
+        updateAnimal({ ...animal, logs: updatedLogs });
     }
   };
 
   const handleSaveMedicalRecord = (healthLog: LogEntry, animalId: string, isDeceased: boolean) => {
       const animal = animals.find(a => a.id === animalId);
       if (animal) {
-          onUpdateAnimal({ 
+          updateAnimal({ 
               ...animal, 
               logs: [healthLog, ...(animal.logs || [])], 
               archived: isDeceased 
@@ -176,7 +173,7 @@ const Health: React.FC<HealthProps> = ({ animals, onSelectAnimal, onUpdateAnimal
               <div className="lg:col-span-3 space-y-5">
                     {collectionBrief && (
                          <div className="bg-slate-900 border-l-8 border-emerald-500 p-6 rounded-2xl text-white shadow-xl relative overflow-hidden group animate-in slide-in-from-top-4">
-                            <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
+                            <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-100 transition-opacity">
                                 <Activity size={160} />
                             </div>
                             <div className="relative z-10">
@@ -353,7 +350,7 @@ const Health: React.FC<HealthProps> = ({ animals, onSelectAnimal, onUpdateAnimal
       )}
 
       {activeTab === 'quarantine' && (
-          <Quarantine animals={animals} onUpdateAnimal={onUpdateAnimal} currentUser={currentUser} />
+          <Quarantine animals={animals} onUpdateAnimal={updateAnimal} currentUser={currentUser} />
       )}
 
       {activeTab === 'mar' && (
@@ -490,7 +487,7 @@ const Health: React.FC<HealthProps> = ({ animals, onSelectAnimal, onUpdateAnimal
             onClose={() => { setIsModalOpen(false); setEditingLog(undefined); setEditingAnimal(undefined); }} 
             onSave={(entry) => {
                 const updatedLogs = editingAnimal.logs.map(l => l.id === entry.id ? entry : l);
-                onUpdateAnimal({ ...editingAnimal, logs: updatedLogs });
+                updateAnimal({ ...editingAnimal, logs: updatedLogs });
                 setIsModalOpen(false);
                 setEditingLog(undefined);
                 setEditingAnimal(undefined);
@@ -522,7 +519,7 @@ const Health: React.FC<HealthProps> = ({ animals, onSelectAnimal, onUpdateAnimal
               onClose={() => { setIsEggLogOpen(false); setEggLogAnimal(null); }}
               onSave={(entry) => {
                  const updatedLogs = [entry, ...(eggLogAnimal.logs || [])];
-                 onUpdateAnimal({ ...eggLogAnimal, logs: updatedLogs });
+                 updateAnimal({ ...eggLogAnimal, logs: updatedLogs });
                  // Note: AddEntryModal automatically calls onClose after onSave if implemented correctly, but we manage state here too.
                  setIsEggLogOpen(false);
                  setEggLogAnimal(null);

@@ -5,7 +5,8 @@ export const DEFAULT_SYSTEM_PREFERENCES: SystemPreferences = {
   unitSystem: 'Metric',
   tempUnit: 'C',
   dashboardDensity: 'Standard',
-  brandColor: '#10b981',
+  // Fix: brandColor changed to brandColour to match SystemPreferences type
+  brandColour: '#10b981',
   sessionTimeoutMinutes: 5,
   autoPurgeDays: 365
 };

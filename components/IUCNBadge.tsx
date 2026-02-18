@@ -11,6 +11,7 @@ interface IUCNBadgeProps {
 // Interface for each IUCN configuration entry to support optional 'border'
 interface IUCNConfigEntry {
     label: string;
+    description: string;
     code: string;
     color: string;
     text: string;
@@ -20,16 +21,16 @@ interface IUCNConfigEntry {
 export const IUCNBadge: React.FC<IUCNBadgeProps> = ({ status, size = 'md', className = '' }) => {
     const config = useMemo(() => {
         const base: Record<ConservationStatus, IUCNConfigEntry> = {
-            [ConservationStatus.LC]: { label: 'LEAST CONCERN', code: 'LC', color: 'bg-[#60B044]', text: 'text-white' },
-            [ConservationStatus.NT]: { label: 'NEAR THREATENED', code: 'NT', color: 'bg-[#CCE226]', text: 'text-white' },
-            [ConservationStatus.VU]: { label: 'VULNERABLE', code: 'VU', color: 'bg-[#F9E814]', text: 'text-slate-900' },
-            [ConservationStatus.EN]: { label: 'ENDANGERED', code: 'EN', color: 'bg-[#F38121]', text: 'text-white' },
-            [ConservationStatus.CR]: { label: 'CRITICALLY ENDANGERED', code: 'CR', color: 'bg-[#D40000]', text: 'text-white' },
-            [ConservationStatus.EW]: { label: 'EXTINCT IN WILD', code: 'EW', color: 'bg-[#542344]', text: 'text-white' },
-            [ConservationStatus.EX]: { label: 'EXTINCT', code: 'EX', color: 'bg-[#000000]', text: 'text-white' },
-            [ConservationStatus.DD]: { label: 'DATA DEFICIENT', code: 'DD', color: 'bg-[#D1D1D1]', text: 'text-white' },
-            [ConservationStatus.NE]: { label: 'NOT EVALUATED', code: 'NE', color: 'bg-white', text: 'text-slate-900', border: 'border-slate-300' },
-            [ConservationStatus.NC]: { label: 'NOT CHECKED', code: 'NC', color: 'bg-[#E5E5E5]', text: 'text-slate-500' },
+            [ConservationStatus.LC]: { label: 'LEAST CONCERN', description: 'LEAST CONCERN', code: 'LC', color: 'bg-[#60B044]', text: 'text-white' },
+            [ConservationStatus.NT]: { label: 'NEAR THREATENED', description: 'NEAR THREATENED', code: 'NT', color: 'bg-[#CCE226]', text: 'text-white' },
+            [ConservationStatus.VU]: { label: 'VULNERABLE', description: 'VULNERABLE', code: 'VU', color: 'bg-[#F9E814]', text: 'text-slate-900' },
+            [ConservationStatus.EN]: { label: 'ENDANGERED', description: 'ENDANGERED', code: 'EN', color: 'bg-[#F38121]', text: 'text-white' },
+            [ConservationStatus.CR]: { label: 'CRITICALLY ENDANGERED', description: 'CRITICALLY ENDANGERED', code: 'CR', color: 'bg-[#D40000]', text: 'text-white' },
+            [ConservationStatus.EW]: { label: 'EXTINCT IN WILD', description: 'EXTINCT IN WILD', code: 'EW', color: 'bg-[#542344]', text: 'text-white' },
+            [ConservationStatus.EX]: { label: 'EXTINCT', description: 'EXTINCT', code: 'EX', color: 'bg-[#000000]', text: 'text-white' },
+            [ConservationStatus.DD]: { label: 'DATA DEFICIENT', description: 'DATA DEFICIENT', code: 'DD', color: 'bg-[#D1D1D1]', text: 'text-white' },
+            [ConservationStatus.NE]: { label: 'NOT EVALUATED', description: 'NOT EVALUATED', code: 'NE', color: 'bg-white', text: 'text-slate-900', border: 'border-slate-300' },
+            [ConservationStatus.NC]: { label: 'NOT CHECKED', description: 'NOT CHECKED', code: 'NC', color: 'bg-[#E5E5E5]', text: 'text-slate-500' },
         };
         return base[status || ConservationStatus.NE] || base[ConservationStatus.NE];
     }, [status]);
@@ -59,7 +60,7 @@ export const IUCNBadge: React.FC<IUCNBadgeProps> = ({ status, size = 'md', class
             
             <div className="flex flex-col items-center justify-center h-full pt-1">
                 <span className={`${config.text} ${s.code} font-black tracking-tight mb-0.5`}>{config.code}</span>
-                <span className={`${config.text} ${s.label} font-black uppercase tracking-widest max-w-[80%] opacity-90`}>{config.label}</span>
+                <span className={`${config.text} ${s.label} font-black uppercase tracking-widest max-w-[80%] opacity-90 leading-none`}>{config.description}</span>
             </div>
         </div>
     );

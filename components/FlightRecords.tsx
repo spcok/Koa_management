@@ -2,16 +2,13 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Animal, LogType, LogEntry } from '../types';
 import { Map as MapIcon, Plane, Thermometer, Wind, Activity, X, Maximize2, AlertOctagon, CloudSun } from 'lucide-react';
+import { useAppData } from '../hooks/useAppData';
 
 // Declare Leaflet globally as it is loaded via CDN
 declare global {
   interface Window {
     L: any;
   }
-}
-
-interface FlightRecordsProps {
-  animals: Animal[];
 }
 
 interface GPSStats {
@@ -104,7 +101,8 @@ const parseGPX = (gpxContent: string): GPSStats | null => {
   }
 };
 
-const FlightRecords: React.FC<FlightRecordsProps> = ({ animals }) => {
+const FlightRecords: React.FC = () => {
+    const { animals } = useAppData();
     const [selectedLog, setSelectedLog] = useState<{log: LogEntry, animal: Animal, stats: GPSStats | null} | null>(null);
     const mapRef = useRef<HTMLDivElement>(null);
     const leafletMap = useRef<any>(null);

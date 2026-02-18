@@ -7,32 +7,29 @@ import {
   ChevronLeft, ChevronRight, Maximize, Minimize,
   HelpCircle, FileText, Calendar, ClipboardCheck
 } from 'lucide-react';
-import { UserRole, User, TimeLogEntry, UserPermissions, OrganizationProfile } from '../types';
+// Fix: Changed OrganizationProfile to OrganisationProfile
+import { UserRole, User, TimeLogEntry, UserPermissions, OrganisationProfile } from '../types';
+import { useAppData } from '../hooks/useAppData';
 
 interface LayoutProps {
   children: React.ReactNode;
   activeView: string;
   onNavigate: (view: any) => void;
-  currentUser: User;
-  onLogout: () => void;
-  activeShift?: TimeLogEntry | null;
-  onClockIn?: () => void;
-  onClockOut?: () => void;
-  isOffline?: boolean;
-  fontScale?: number;
-  setFontScale?: (scale: number) => void;
-  orgProfile?: OrganizationProfile | null;
 }
 
 const Layout: React.FC<LayoutProps> = ({ 
-  children, activeView, onNavigate, currentUser, onLogout, 
-  activeShift, onClockIn, onClockOut, orgProfile 
+  children, activeView, onNavigate
 }) => {
+  // FIX: Use correct function names from context (e.g., `logout` instead of `onLogout`).
+  const { 
+    currentUser, logout, activeShift, clockIn, clockOut, orgProfile 
+  } = useAppData();
+
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   
-  const isAdmin = currentUser.role === UserRole.ADMIN;
+  const isAdmin = currentUser?.role === UserRole.ADMIN;
   
   useEffect(() => {
     const handleFullscreenChange = () => {
@@ -63,7 +60,7 @@ const Layout: React.FC<LayoutProps> = ({
     holidayApprover: isAdmin,
     attendanceManager: isAdmin, missingRecords: isAdmin,
     reports: isAdmin, rounds: true,
-    ...(currentUser.permissions || {})
+    ...(currentUser?.permissions || {})
   };
 
   const handleNavigate = (view: string) => {
@@ -158,36 +155,36 @@ const Layout: React.FC<LayoutProps> = ({
             <>
                 <div className="flex items-center gap-3 mb-4 px-2">
                     <div className="w-9 h-9 rounded-full bg-slate-700 flex items-center justify-center font-black text-xs text-white border border-slate-600 shrink-0">
-                        {currentUser.initials}
+                        {currentUser?.initials || '--'}
                     </div>
                     <div className="flex-1 min-w-0">
-                        <p className="text-xs font-bold text-white truncate text-left">{currentUser.name}</p>
-                        <p className="text-[9px] font-black text-emerald-500 truncate uppercase tracking-widest text-left">{currentUser.jobPosition || currentUser.role}</p>
+                        <p className="text-xs font-bold text-white truncate text-left">{currentUser?.name || 'Unknown'}</p>
+                        <p className="text-[9px] font-black text-emerald-500 truncate uppercase tracking-widest text-left">{currentUser?.jobPosition || currentUser?.role || 'Guest'}</p>
                     </div>
-                    <button onClick={onLogout} className="text-slate-500 hover:text-red-400 transition-colors"><LogOut size={16}/></button>
+                    <button onClick={logout} className="text-slate-500 hover:text-red-400 transition-colors"><LogOut size={16}/></button>
                 </div>
 
                 {activeShift ? (
-                    <button onClick={onClockOut} className="w-full bg-amber-500/10 border border-amber-500/50 text-amber-500 rounded-lg py-2 text-xs font-bold flex items-center justify-center gap-2 hover:bg-amber-500/20 transition-all">
+                    <button onClick={clockOut} className="w-full bg-amber-500/10 border border-amber-500/50 text-amber-500 rounded-lg py-2 text-xs font-bold flex items-center justify-center gap-2 hover:bg-amber-500/20 transition-all">
                         <Power size={14}/> CLOCK OUT
                     </button>
                 ) : (
-                    <button onClick={onClockIn} className="w-full bg-emerald-600 text-white rounded-lg py-2 text-xs font-bold flex items-center justify-center gap-2 hover:bg-emerald-50 transition-all shadow-lg shadow-emerald-900/20">
+                    <button onClick={clockIn} className="w-full bg-emerald-600 text-white rounded-lg py-2 text-xs font-bold flex items-center justify-center gap-2 hover:bg-emerald-50 transition-all shadow-lg shadow-emerald-900/20">
                         <Clock size={14}/> START SHIFT
                     </button>
                 )}
             </>
         ) : (
             <div className="flex flex-col items-center gap-4">
-                 <button onClick={onLogout} className="w-9 h-9 rounded-full bg-slate-800 flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-700 transition-colors" title="Logout">
+                 <button onClick={logout} className="w-9 h-9 rounded-full bg-slate-800 flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-700 transition-colors" title="Logout">
                     <LogOut size={16}/>
                  </button>
                  {activeShift ? (
-                    <button onClick={onClockOut} className="w-9 h-9 rounded-lg bg-amber-500/20 text-amber-500 flex items-center justify-center hover:bg-amber-500/30 transition-colors" title="Clock Out">
+                    <button onClick={clockOut} className="w-9 h-9 rounded-lg bg-amber-500/20 text-amber-500 flex items-center justify-center hover:bg-amber-500/30 transition-colors" title="Clock Out">
                         <Power size={16}/>
                     </button>
                  ) : (
-                    <button onClick={onClockIn} className="w-9 h-9 rounded-lg bg-emerald-600 text-white flex items-center justify-center hover:bg-emerald-50 transition-colors" title="Clock In">
+                    <button onClick={clockIn} className="w-9 h-9 rounded-lg bg-emerald-600 text-white flex items-center justify-center hover:bg-emerald-50 transition-colors" title="Clock In">
                         <Clock size={16}/>
                     </button>
                  )}
@@ -239,7 +236,7 @@ const Layout: React.FC<LayoutProps> = ({
               {orgProfile?.logoUrl && <img src={orgProfile.logoUrl} alt="Logo" className="w-6 h-6 object-contain" />}
               <span className="text-sm font-bold text-white">KOA Manager</span>
           </div>
-          <div className="w-7 h-7 bg-slate-700 rounded-full flex items-center justify-center font-black text-[10px] text-white border border-slate-600">{currentUser.initials}</div>
+          <div className="w-7 h-7 bg-slate-700 rounded-full flex items-center justify-center font-black text-[10px] text-white border border-slate-600">{currentUser?.initials || '--'}</div>
         </header>
 
         <div className="flex-1 overflow-y-auto bg-slate-200 print:bg-white print:overflow-visible safe-area-pb">

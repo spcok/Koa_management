@@ -1,6 +1,7 @@
 
 import { supabase } from './supabaseClient';
-import { Animal, AnimalCategory, Task, User, UserRole, SiteLogEntry, Contact, OrganizationProfile, Incident, FirstAidLogEntry, TimeLogEntry, GlobalDocument, AuditLogEntry, LocalBackupConfig, LocalBackupEntry, HolidayRequest, SystemPreferences } from '../types';
+// Fix: Changed OrganizationProfile to OrganisationProfile
+import { Animal, AnimalCategory, Task, User, UserRole, SiteLogEntry, Contact, OrganisationProfile, Incident, FirstAidLogEntry, TimeLogEntry, GlobalDocument, AuditLogEntry, LocalBackupConfig, LocalBackupEntry, HolidayRequest, SystemPreferences } from '../types';
 import { DEFAULT_FOOD_OPTIONS, DEFAULT_FEED_METHODS, MOCK_ANIMALS, DEFAULT_SYSTEM_PREFERENCES, DEFAULT_EVENT_TYPES } from '../constants';
 import { RealtimeChannel } from '@supabase/supabase-js';
 
@@ -45,7 +46,6 @@ const handleSupabaseError = (error: any, context: string) => {
 };
 
 export const dataService = {
-    // ... Subscriptions ...
     subscribeToAnimals: (onUpdate: (eventType: string, animal: Animal | string) => void): RealtimeChannel => {
         return supabase
             .channel('animals-channel')
@@ -59,7 +59,6 @@ export const dataService = {
             .subscribe();
     },
 
-    // ... Core Data Methods ...
     fetchAnimals: async (): Promise<Animal[]> => {
         try {
             const { data, error } = await supabase.from('animals').select('json');
@@ -67,7 +66,7 @@ export const dataService = {
                 handleSupabaseError(error, 'fetchAnimals');
                 return MOCK_ANIMALS; 
             }
-            return data.map((row: any) => row.json);
+            return (data || []).map((row: any) => row.json);
         } catch (e) {
             return MOCK_ANIMALS;
         }
@@ -109,7 +108,7 @@ export const dataService = {
     fetchTasks: async (): Promise<Task[]> => {
         const { data, error } = await supabase.from('tasks').select('json');
         if (error) { handleSupabaseError(error, 'fetchTasks'); return []; }
-        return data.map((row: any) => row.json);
+        return (data || []).map((row: any) => row.json);
     },
 
     saveTasks: async (tasks: Task[]): Promise<void> => {
@@ -126,7 +125,7 @@ export const dataService = {
     fetchSiteLogs: async (): Promise<SiteLogEntry[]> => {
         const { data, error } = await supabase.from('site_logs').select('json');
         if (error) { handleSupabaseError(error, 'fetchSiteLogs'); return []; }
-        return data.map((row: any) => row.json);
+        return (data || []).map((row: any) => row.json);
     },
 
     saveSiteLog: async (log: SiteLogEntry): Promise<void> => {
@@ -145,7 +144,7 @@ export const dataService = {
             handleSupabaseError(error, 'fetchIncidents');
             return [];
         }
-        return data.map((row: any) => row.json);
+        return (data || []).map((row: any) => row.json);
     },
 
     saveIncident: async (incident: Incident): Promise<void> => {
@@ -164,7 +163,7 @@ export const dataService = {
             handleSupabaseError(error, 'fetchFirstAidLogs');
             return [];
         }
-        return data.map((row: any) => row.json);
+        return (data || []).map((row: any) => row.json);
     },
 
     saveFirstAidLog: async (log: FirstAidLogEntry): Promise<void> => {
@@ -193,7 +192,6 @@ export const dataService = {
         if (error) throw error;
     },
 
-    // --- HOLIDAY REQUEST METHODS ---
     fetchHolidayRequests: async (): Promise<HolidayRequest[]> => {
         const { data, error } = await supabase.from('holiday_requests').select('json');
         if (error) { handleSupabaseError(error, 'fetchHolidayRequests'); return []; }
@@ -210,7 +208,6 @@ export const dataService = {
         if (error) throw error;
     },
 
-    // --- GLOBAL INSTITUTIONAL METHODS ---
     fetchGlobalDocuments: async (): Promise<GlobalDocument[]> => {
         const { data, error } = await supabase.from('global_documents').select('json');
         if (error) { handleSupabaseError(error, 'fetchGlobalDocuments'); return []; }
@@ -238,7 +235,6 @@ export const dataService = {
         if (error) throw error;
     },
 
-    // --- LOCAL BACKUP METHODS ---
     fetchLocalBackups: async (): Promise<LocalBackupEntry[]> => {
         const { data, error } = await supabase.from('local_backups').select('json');
         if (error) { handleSupabaseError(error, 'fetchLocalBackups'); return []; }
@@ -255,7 +251,6 @@ export const dataService = {
         if (error) throw error;
     },
 
-    // ... Settings ...
     fetchSettingsKey: async (key: string, defaultValue: any): Promise<any> => {
         const { data, error } = await supabase.from('settings').select('value').eq('key', key).single();
         if (error && error.code !== 'PGRST116') {
@@ -285,7 +280,8 @@ export const dataService = {
     saveContacts: async (val: Contact[]) => dataService.saveSettingsKey('contacts', val),
 
     fetchOrgProfile: async () => dataService.fetchSettingsKey('org_profile', null),
-    saveOrgProfile: async (val: OrganizationProfile) => dataService.saveSettingsKey('org_profile', val),
+    // Fix: Changed OrganizationProfile to OrganisationProfile
+    saveOrgProfile: async (val: OrganisationProfile) => dataService.saveSettingsKey('org_profile', val),
 
     fetchLocalBackupConfig: async (): Promise<LocalBackupConfig> => dataService.fetchSettingsKey('local_backup_config', DEFAULT_LOCAL_BACKUP_CONFIG),
     saveLocalBackupConfig: async (val: LocalBackupConfig) => dataService.saveSettingsKey('local_backup_config', val),

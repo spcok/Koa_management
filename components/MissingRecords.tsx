@@ -2,12 +2,11 @@
 import React, { useState, useMemo } from 'react';
 import { Animal, AnimalCategory, LogType } from '../types';
 import { AlertOctagon, CheckCircle2, Scale, Utensils, Calendar } from 'lucide-react';
+import { useAppData } from '../hooks/useAppData';
 
-interface MissingRecordsProps {
-  animals: Animal[];
-}
-
-const MissingRecords: React.FC<MissingRecordsProps> = ({ animals }) => {
+const MissingRecords: React.FC = () => {
+  const { animals } = useAppData();
+  
   const [daysToCheck, setDaysToCheck] = useState<number>(7);
   const [selectedCategory, setSelectedCategory] = useState<AnimalCategory | 'ALL'>('ALL');
 

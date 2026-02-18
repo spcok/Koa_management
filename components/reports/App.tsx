@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { Animal, AnimalCategory, Task, User, UserRole, SiteLogEntry, Incident, FirstAidLogEntry, OrganizationProfile, Contact, SortOption, TimeLogEntry, UserPermissions } from './types.ts';
 import { dataService } from './services/dataService.ts';
@@ -144,32 +145,34 @@ const App: React.FC = () => {
   const handleClockOut = async () => { if (!currentUser || !activeShift) return; const now = Date.now(); const diffMins = Math.floor((now - activeShift.startTime) / 60000); const completedShift: TimeLogEntry = { ...activeShift, endTime: now, durationMinutes: diffMins, status: 'Completed' }; setActiveShift(null); setTimeLogs(prev => prev.map(l => l.id === activeShift.id ? completedShift : l)); await dataService.saveTimeLog(completedShift); };
   const handleDeleteTimeLog = async (id: string) => { setTimeLogs(prev => prev.filter(l => l.id !== id)); await dataService.deleteTimeLog(id); };
 
-  if (!currentUser) return <LoginScreen users={users} onLogin={handleLogin} orgProfile={orgProfile} />;
+  // FIX: LoginScreen now uses context, so no props are needed.
+  if (!currentUser) return <LoginScreen />;
 
   const isAdmin = currentUser.role === UserRole.ADMIN;
   const p: UserPermissions = { dashboard: true, dailyLog: true, tasks: true, medical: isAdmin, movements: isAdmin, safety: isAdmin, maintenance: true, settings: isAdmin, flightRecords: true, feedingSchedule: isAdmin, attendance: isAdmin, attendanceManager: isAdmin, missingRecords: isAdmin, reports: isAdmin, ...(currentUser.permissions || {}) };
 
   return (
     <div style={{ fontSize: `${fontScale}%` }}>
+      {/* FIX: Removed props from components that now use context. This fixes TypeScript errors, but the components will only work if this App component is wrapped in an AppProvider. */}
       <Layout activeView={view} onNavigate={setView} currentUser={currentUser} onLogout={handleLogout} isOffline={isOffline} fontScale={fontScale} setFontScale={setFontScale} activeShift={activeShift} onClockIn={handleClockIn} onClockOut={handleClockOut} orgProfile={orgProfile}>
-        {view === 'dashboard' && p.dashboard && <Dashboard animals={animals} userRole={currentUser.role} onSelectAnimal={selectAnimalAndNavigate} onAddAnimal={handleAddAnimal} onUpdateAnimal={handleUpdateAnimal} onReorderAnimals={handleReorderAnimals} foodOptions={foodOptions} feedMethods={feedMethods} locations={locations} sortOption={sortOption} setSortOption={handleUpdateSortOption} isOrderLocked={isOrderLocked} onToggleLock={handleToggleLock} tasks={tasks} onUpdateTask={handleUpdateTask} activeTab={activeCategory} setActiveTab={setActiveCategory} viewDate={viewDate} setViewDate={setViewDate} />}
-        {view === 'timesheets' && p.attendance && <TimeSheets timeLogs={timeLogs} currentUser={currentUser} users={users} onDeleteLog={handleDeleteTimeLog} />}
-        {view === 'animal_profile' && selectedAnimal && <AnimalProfile animal={selectedAnimal} onBack={() => setView('dashboard')} onUpdateAnimal={handleUpdateAnimal} onDeleteAnimal={handleDeleteAnimal} foodOptions={foodOptions} feedMethods={feedMethods} orgProfile={orgProfile} locations={locations} isAdmin={p.settings} />}
-        {view === 'daily' && p.dailyLog && <DailyLog animals={animals} onUpdateAnimal={handleUpdateAnimal} foodOptions={foodOptions} feedMethods={feedMethods} sortOption={sortOption} setSortOption={handleUpdateSortOption} currentUser={currentUser} activeCategory={activeCategory} setActiveCategory={setActiveCategory} viewDate={viewDate} setViewDate={setViewDate} />}
-        {view === 'tasks' && p.tasks && <Tasks tasks={tasks} animals={animals} onAddTask={handleAddTask} onUpdateTask={handleUpdateTask} onDeleteTask={handleDeleteTask} users={users} currentUser={currentUser} onAddSiteLog={handleAddSiteLog} onUpdateAnimal={handleUpdateAnimal} />}
-        {view === 'flight_records' && p.flightRecords && <FlightRecords animals={animals} />}
-        {view === 'schedule' && p.feedingSchedule && <Schedule animals={animals} tasks={tasks} foodOptions={foodOptions} onAddTasks={async (newTasks) => { setTasks(prev => [...prev, ...newTasks]); await dataService.saveTasks(newTasks); }} onDeleteTask={handleDeleteTask} />}
+        {view === 'dashboard' && p.dashboard && <Dashboard onSelectAnimal={selectAnimalAndNavigate} activeTab={activeCategory} setActiveTab={setActiveCategory} viewDate={viewDate} setViewDate={setViewDate} />}
+        {view === 'timesheets' && p.attendance && <TimeSheets />}
+        {view === 'animal_profile' && selectedAnimal && <AnimalProfile animal={selectedAnimal} onBack={() => setView('dashboard')} />}
+        {view === 'daily' && p.dailyLog && <DailyLog activeCategory={activeCategory} setActiveCategory={setActiveCategory} viewDate={viewDate} setViewDate={setViewDate} />}
+        {view === 'tasks' && p.tasks && <Tasks />}
+        {view === 'flight_records' && p.flightRecords && <FlightRecords />}
+        {view === 'schedule' && p.feedingSchedule && <Schedule />}
         {view === 'weather' && <WeatherView />}
-        {view === 'health' && p.medical && <Health animals={animals} onSelectAnimal={selectAnimalAndNavigate} onUpdateAnimal={handleUpdateAnimal} tasks={tasks} onAddTask={handleAddTask} onUpdateTask={handleUpdateTask} onDeleteTask={handleDeleteTask} users={users} currentUser={currentUser} orgProfile={orgProfile} />}
-        {view === 'movements' && p.movements && <Movements animals={animals} onUpdateAnimal={handleUpdateAnimal} currentUser={currentUser} />}
-        {view === 'drills' && p.safety && <SafetyDrills logs={siteLogs} timeLogs={timeLogs} users={users} onAddLog={handleAddSiteLog} onDeleteLog={handleDeleteTimeLog} currentUser={currentUser} />}
-        {view === 'incidents' && p.safety && <Incidents incidents={incidents} animals={animals} currentUser={currentUser} onAddIncident={handleAddIncident} onUpdateIncident={handleUpdateIncident} onDeleteIncident={handleDeleteIncident} />}
-        {view === 'first_aid' && (currentUser.role === UserRole.ADMIN || p.safety) && <FirstAid logs={firstAidLogs} currentUser={currentUser} onAddLog={handleAddFirstAid} onDeleteLog={handleDeleteFirstAid} />}
-        {view === 'maintenance' && p.maintenance && <SiteMaintenance logs={siteLogs} currentUser={currentUser} onAddLog={handleAddSiteLog} onDeleteLog={handleDeleteTimeLog} />}
-        {view === 'missing_records' && p.missingRecords && <MissingRecords animals={animals} />}
-        {view === 'reports' && p.reports && <Reports animals={animals} users={users} orgProfile={orgProfile} currentUser={currentUser} incidents={incidents} siteLogs={siteLogs} timeLogs={timeLogs} />}
-        {view === 'settings' && p.settings && <Settings animals={animals} onImport={handleImport} foodOptions={foodOptions} onUpdateFoodOptions={handleUpdateFoodOptions} feedMethods={feedMethods} onUpdateFeedMethods={handleUpdateFeedMethods} users={users} onUpdateUsers={handleUpdateUsers} locations={locations} onUpdateLocations={handleUpdateLocations} contacts={contacts} onUpdateContacts={handleUpdateContacts} orgProfile={orgProfile} onUpdateOrgProfile={handleUpdateOrgProfile} onUpdateAnimal={handleUpdateAnimal} />}
-        {view === 'help' && <HelpCenter currentUser={currentUser} />}
+        {view === 'health' && p.medical && <Health onSelectAnimal={selectAnimalAndNavigate} />}
+        {view === 'movements' && p.movements && <Movements />}
+        {view === 'drills' && p.safety && <SafetyDrills />}
+        {view === 'incidents' && p.safety && <Incidents />}
+        {view === 'first_aid' && (currentUser.role === UserRole.ADMIN || p.safety) && <FirstAid />}
+        {view === 'maintenance' && p.maintenance && <SiteMaintenance />}
+        {view === 'missing_records' && p.missingRecords && <MissingRecords />}
+        {view === 'reports' && p.reports && <Reports />}
+        {view === 'settings' && p.settings && <Settings onLaunchBenchmark={() => setView('benchmark')} />}
+        {view === 'help' && <HelpCenter />}
       </Layout>
     </div>
   );

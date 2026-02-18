@@ -2,15 +2,11 @@
 import React, { useState, useMemo } from 'react';
 import { SiteLogEntry, User } from '../types';
 import { Wrench, Plus, Filter, FileText, CheckCircle, Clock, AlertTriangle, Trash2, Calendar, MapPin, PoundSterling, X, Printer, Edit2 } from 'lucide-react';
+import { useAppData } from '../hooks/useAppData';
 
-interface SiteMaintenanceProps {
-  logs: SiteLogEntry[];
-  currentUser: User;
-  onAddLog: (log: SiteLogEntry) => void;
-  onDeleteLog: (id: string) => void;
-}
-
-const SiteMaintenance: React.FC<SiteMaintenanceProps> = ({ logs, currentUser, onAddLog, onDeleteLog }) => {
+const SiteMaintenance: React.FC = () => {
+  const { siteLogs, currentUser, addSiteLog, deleteSiteLog } = useAppData();
+  
   const [filterStatus, setFilterStatus] = useState<'ALL' | 'Pending' | 'In Progress' | 'Completed'>('ALL');
   const [isModalOpen, setIsModalOpen] = useState(false);
 
@@ -25,7 +21,7 @@ const SiteMaintenance: React.FC<SiteMaintenanceProps> = ({ logs, currentUser, on
   const [logDate, setLogDate] = useState(new Date().toISOString().split('T')[0]);
 
   const filteredLogs = useMemo(() => {
-    let result = [...(logs || [])];
+    let result = [...(siteLogs || [])];
     if (filterStatus !== 'ALL') {
         result = result.filter(l => l.status === filterStatus);
     }
@@ -35,7 +31,7 @@ const SiteMaintenance: React.FC<SiteMaintenanceProps> = ({ logs, currentUser, on
         if (dateComp !== 0) return dateComp;
         return b.timestamp - a.timestamp;
     });
-  }, [logs, filterStatus]);
+  }, [siteLogs, filterStatus]);
 
   const handleOpenModal = (log?: SiteLogEntry) => {
       if (log) {
@@ -70,18 +66,17 @@ const SiteMaintenance: React.FC<SiteMaintenanceProps> = ({ logs, currentUser, on
           location,
           priority,
           status,
-          // FIX: Explicitly check for empty string to allow '0' as valid cost
           cost: cost !== '' ? Number.parseFloat(cost) : undefined,
-          loggedBy: editingId ? (logs.find(l => l.id === editingId)?.loggedBy || currentUser.initials) : currentUser.initials,
-          timestamp: editingId ? (logs.find(l => l.id === editingId)?.timestamp || Date.now()) : Date.now()
+          loggedBy: editingId ? (siteLogs.find(l => l.id === editingId)?.loggedBy || currentUser.initials) : currentUser.initials,
+          timestamp: editingId ? (siteLogs.find(l => l.id === editingId)?.timestamp || Date.now()) : Date.now()
       };
-      onAddLog(entry);
+      addSiteLog(entry);
       setIsModalOpen(false);
   };
 
   const handleDelete = (id: string) => {
       if (window.confirm('Permanently remove maintenance record?')) {
-          onDeleteLog(id);
+          deleteSiteLog(id);
       }
   };
 

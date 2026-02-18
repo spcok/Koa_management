@@ -1,6 +1,6 @@
 
 import { GoogleGenAI, GenerateContentResponse, Type } from "@google/genai";
-import { Animal, LogType, AnimalCategory, ConservationStatus } from "../types";
+import { Animal, LogType, AnimalCategory, ConservationStatus, HazardRating } from "../types";
 
 // Singleton instance for AI client
 let aiInstance: GoogleGenAI | null = null;
@@ -32,6 +32,17 @@ const normalizeIUCNStatus = (input: string): ConservationStatus => {
 };
 
 /**
+ * Helper to normalize string input to a HazardRating enum value
+ */
+const normalizeHazardRating = (input: string): HazardRating => {
+    const s = input.trim().toUpperCase();
+    if (s === 'HIGH') return HazardRating.HIGH;
+    if (s === 'MEDIUM') return HazardRating.MEDIUM;
+    if (s === 'LOW') return HazardRating.LOW;
+    return HazardRating.NONE;
+};
+
+/**
  * Helper for exponential backoff retries
  */
 async function withRetry<T>(fn: () => Promise<T>, retries = 3, delay = 2000): Promise<T> {
@@ -49,6 +60,53 @@ async function withRetry<T>(fn: () => Promise<T>, retries = 3, delay = 2000): Pr
     throw error;
   }
 }
+
+/**
+ * Fetches comprehensive species details for statutory registry
+ */
+export const getSpeciesDetails = async (species: string): Promise<{
+    latinName?: string;
+    conservationStatus?: ConservationStatus;
+    hazardRating?: HazardRating;
+    isVenomous?: boolean;
+  }> => {
+    if (!species.trim()) return {};
+    const ai = getAi();
+    try {
+      const response = await withRetry<GenerateContentResponse>(() => ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: `Analyze the animal species "${species}" for zoo statutory registry purposes.
+        
+        Provide the following data in JSON format:
+        - latinName: Scientific name (string)
+        - conservationStatus: IUCN Red List Code (e.g. LC, NT, VU, EN, CR, EW, EX, DD, NE)
+        - hazardRating: Risk level for handlers (Low, Medium, High). High = dangerous carnivores, venomous, or large raptors.
+        - isVenomous: boolean (true if venomous/poisonous)
+  
+        Return ONLY valid JSON.`,
+        config: {
+          responseMimeType: "application/json",
+          temperature: 0.1,
+        }
+      }));
+      
+      try {
+          const data = JSON.parse(response.text || '{}');
+          return {
+              latinName: data.latinName,
+              conservationStatus: data.conservationStatus ? normalizeIUCNStatus(data.conservationStatus) : undefined,
+              hazardRating: data.hazardRating ? normalizeHazardRating(data.hazardRating) : undefined,
+              isVenomous: data.isVenomous
+          };
+      } catch (e) {
+          console.error("JSON Parse Error", e);
+          return {};
+      }
+    } catch (error) {
+      console.error("Gemini Error (getSpeciesDetails):", error);
+      return {};
+    }
+  };
 
 /**
  * Fetches the scientific Latin name for a given species

@@ -3,22 +3,13 @@ import React, { useState } from 'react';
 import { Task, Animal, LogType, User, SiteLogEntry } from '../types';
 import { CheckCircle2, Circle, Plus, Calendar, User as UserIcon, AlertCircle, ListTodo, X, Check, ClipboardList, UserCheck } from 'lucide-react';
 import AddEntryModal from './AddEntryModal';
+import { useAppData } from '../hooks/useAppData';
 
-interface TasksProps {
-  tasks: Task[];
-  animals: Animal[];
-  onAddTask: (task: Task) => void;
-  onUpdateTask: (task: Task) => void;
-  onDeleteTask: (id: string) => void;
-  users?: User[];
-  currentUser?: User | null;
-  onAddSiteLog?: (log: SiteLogEntry) => void;
-  onUpdateAnimal?: (animal: Animal) => void;
-}
+const Tasks: React.FC = () => {
+  const { 
+    tasks, animals, addTask, updateTask, deleteTask, users = [], currentUser, updateAnimal 
+  } = useAppData();
 
-const Tasks: React.FC<TasksProps> = ({ 
-    tasks, animals, onAddTask, onUpdateTask, onDeleteTask, users = [], currentUser, onAddSiteLog, onUpdateAnimal 
-}) => {
   const [filter, setFilter] = useState<'assigned' | 'pending' | 'completed'>('assigned');
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedAnimalForEntry, setSelectedAnimalForEntry] = useState<Animal | null>(null);
@@ -41,7 +32,7 @@ const Tasks: React.FC<TasksProps> = ({
 
   const handleTaskClick = (task: Task) => {
       if (task.completed) {
-          if (window.confirm("Re-open task?")) onUpdateTask({ ...task, completed: false });
+          if (window.confirm("Re-open task?")) updateTask({ ...task, completed: false });
           return;
       }
       if (task.type === LogType.HEALTH && task.animalId) {
@@ -54,7 +45,7 @@ const Tasks: React.FC<TasksProps> = ({
           }
       }
       if (window.confirm(`Complete: ${task.title}?`)) {
-          onUpdateTask({ ...task, completed: true });
+          updateTask({ ...task, completed: true });
       }
   };
 
@@ -70,7 +61,7 @@ const Tasks: React.FC<TasksProps> = ({
           recurring: false,
           assignedTo: newAssignedTo || undefined
       };
-      onAddTask(task);
+      addTask(task);
       setShowAddModal(false);
       setNewTitle('');
       setNewAnimalId('');
@@ -85,7 +76,7 @@ const Tasks: React.FC<TasksProps> = ({
                 <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-3 uppercase tracking-tight">
                     <ListTodo className="text-slate-600" size={28} /> Duty Rota
                 </h1>
-                <p className="text-slate-50 text-sm font-medium">Section Care Tasks & Assignments</p>
+                <p className="text-slate-500 text-sm font-medium">Section Care Tasks & Assignments</p>
              </div>
              <button 
                 onClick={() => setShowAddModal(true)} 
@@ -143,7 +134,6 @@ const Tasks: React.FC<TasksProps> = ({
             )}
         </div>
 
-        {/* CREATE TASK MODAL - z-[100] to be above sidebar */}
         {showAddModal && (
             <div className="fixed inset-0 bg-slate-900/0 flex items-center justify-center z-[100] p-4">
                 <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-0 animate-in zoom-in-95 border-2 border-slate-300 overflow-hidden">
@@ -219,8 +209,8 @@ const Tasks: React.FC<TasksProps> = ({
 
         {showEntryModal && selectedAnimalForEntry && (
             <AddEntryModal isOpen={showEntryModal} onClose={() => setShowEntryModal(false)} onSave={(entry) => {
-                onUpdateAnimal?.({ ...selectedAnimalForEntry, logs: [entry, ...selectedAnimalForEntry.logs] });
-                onUpdateTask({ ...completingTask!, completed: true });
+                updateAnimal?.({ ...selectedAnimalForEntry, logs: [entry, ...selectedAnimalForEntry.logs] });
+                updateTask({ ...completingTask!, completed: true });
                 setShowEntryModal(false);
             }} animal={selectedAnimalForEntry} initialType={completingTask?.type || LogType.HEALTH} foodOptions={{} as any} feedMethods={[]}/>
         )}

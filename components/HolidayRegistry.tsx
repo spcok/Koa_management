@@ -1,17 +1,12 @@
 
 import React, { useState, useMemo } from 'react';
-import { HolidayRequest, User, UserRole } from '../types';
+import { HolidayRequest, UserRole } from '../types';
 import { Calendar, Plus, CheckCircle, XCircle, Clock, Trash2, Check, X, Info } from 'lucide-react';
+import { useAppData } from '../hooks/useAppData';
 
-interface HolidayRegistryProps {
-    requests: HolidayRequest[];
-    currentUser: User;
-    onAddRequest: (req: HolidayRequest) => void;
-    onUpdateRequest: (req: HolidayRequest) => void;
-    onDeleteRequest: (id: string) => void;
-}
-
-const HolidayRegistry: React.FC<HolidayRegistryProps> = ({ requests, currentUser, onAddRequest, onUpdateRequest, onDeleteRequest }) => {
+const HolidayRegistry: React.FC = () => {
+    const { holidayRequests, currentUser, addHoliday, updateHoliday, deleteHoliday } = useAppData();
+    
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
@@ -20,9 +15,9 @@ const HolidayRegistry: React.FC<HolidayRegistryProps> = ({ requests, currentUser
     const canApprove = currentUser.permissions?.holidayApprover || currentUser.role === UserRole.ADMIN;
 
     const filteredRequests = useMemo(() => {
-        if (canApprove) return requests;
-        return requests.filter(r => r.userId === currentUser.id);
-    }, [requests, currentUser.id, canApprove]);
+        if (canApprove) return holidayRequests;
+        return holidayRequests.filter(r => r.userId === currentUser.id);
+    }, [holidayRequests, currentUser.id, canApprove]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -36,7 +31,7 @@ const HolidayRegistry: React.FC<HolidayRegistryProps> = ({ requests, currentUser
             status: 'Pending',
             timestamp: Date.now()
         };
-        onAddRequest(newReq);
+        addHoliday(newReq);
         setIsModalOpen(false);
         setStartDate('');
         setEndDate('');
@@ -44,7 +39,7 @@ const HolidayRegistry: React.FC<HolidayRegistryProps> = ({ requests, currentUser
     };
 
     const handleStatusUpdate = (req: HolidayRequest, status: 'Approved' | 'Rejected') => {
-        onUpdateRequest({
+        updateHoliday({
             ...req,
             status,
             approvedBy: currentUser.name
@@ -124,7 +119,7 @@ const HolidayRegistry: React.FC<HolidayRegistryProps> = ({ requests, currentUser
                                                 
                                                 {(canApprove || (isOwner && isPending)) && (
                                                     <button 
-                                                        onClick={() => { if(window.confirm("Purge holiday request from the registry?")) onDeleteRequest(req.id) }} 
+                                                        onClick={() => { if(window.confirm("Purge holiday request from the registry?")) deleteHoliday(req.id) }} 
                                                         className="p-2 text-slate-300 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all"
                                                         title="Delete Request"
                                                     >

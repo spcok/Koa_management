@@ -1,22 +1,16 @@
-
 import React, { useState, useMemo } from 'react';
 import { TimeLogEntry, User, UserRole } from '../types';
-import { Clock, Calendar, ArrowRight, Timer, Edit2, Trash2, X, Check, AlertCircle } from 'lucide-react';
+import { Clock, Calendar, ArrowRight, Timer, Edit2, Trash2, X, AlertCircle } from 'lucide-react';
+import { useAppData } from '../hooks/useAppData';
 
-interface TimeSheetsProps {
-    timeLogs: TimeLogEntry[];
-    currentUser: User;
-    users: User[];
-    onDeleteLog?: (id: string) => void;
-    onUpdateLog?: (log: TimeLogEntry) => void;
-}
-
-const TimeSheets: React.FC<TimeSheetsProps> = ({ timeLogs, currentUser, users, onDeleteLog, onUpdateLog }) => {
+const TimeSheets: React.FC = () => {
+    const { timeLogs, currentUser, users, deleteTimeLog } = useAppData();
+    
     const [filterUserId, setFilterUserId] = useState<string>('ALL');
     const [filterDate, setFilterDate] = useState<string>('');
     const [editingLog, setEditingLog] = useState<TimeLogEntry | null>(null);
 
-    const isAdmin = currentUser.role === UserRole.ADMIN;
+    const isAdmin = currentUser?.role === UserRole.ADMIN;
 
     const filteredLogs = useMemo(() => {
         return [...timeLogs].filter(log => {
@@ -35,7 +29,7 @@ const TimeSheets: React.FC<TimeSheetsProps> = ({ timeLogs, currentUser, users, o
 
     const handleDelete = (id: string) => {
         if (window.confirm("Permanently remove this attendance record from the statutory ledger?")) {
-            onDeleteLog?.(id);
+            deleteTimeLog?.(id);
         }
     };
 
@@ -46,7 +40,7 @@ const TimeSheets: React.FC<TimeSheetsProps> = ({ timeLogs, currentUser, users, o
                     <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-3 uppercase tracking-tight">
                         <Clock className="text-slate-600" size={28} /> Attendance Ledger
                     </h1>
-                    <p className="text-slate-500 text-sm font-medium">Authorized record of personnel presence and operational hours.</p>
+                    <p className="text-slate-500 text-sm font-medium">Official record of personnel presence and operational hours.</p>
                 </div>
                 <div className="flex flex-wrap gap-2 w-full md:w-auto">
                     <div className="flex-1 md:w-48">
@@ -125,9 +119,9 @@ const TimeSheets: React.FC<TimeSheetsProps> = ({ timeLogs, currentUser, users, o
                                             <td className="px-6 py-4 text-right print:hidden">
                                                 <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                                                     <button 
-                                                        onClick={() => setEditingLog(log)}
-                                                        className="p-2 text-slate-400 hover:text-emerald-600 bg-white border border-slate-200 rounded-lg shadow-sm transition-all"
-                                                        title="Edit Log"
+                                                        disabled
+                                                        className="p-2 text-slate-300 bg-white border border-slate-200 rounded-lg shadow-sm transition-all"
+                                                        title="Edit Log (Disabled)"
                                                     >
                                                         <Edit2 size={14}/>
                                                     </button>
@@ -152,125 +146,6 @@ const TimeSheets: React.FC<TimeSheetsProps> = ({ timeLogs, currentUser, users, o
                         </tbody>
                     </table>
                 </div>
-            </div>
-
-            {/* EDIT LOG MODAL */}
-            {editingLog && (
-                <EditTimeLogModal 
-                    log={editingLog} 
-                    onClose={() => setEditingLog(null)} 
-                    onSave={(updated) => {
-                        onUpdateLog?.(updated);
-                        setEditingLog(null);
-                    }} 
-                />
-            )}
-        </div>
-    );
-};
-
-interface EditTimeLogModalProps {
-    log: TimeLogEntry;
-    onClose: () => void;
-    onSave: (log: TimeLogEntry) => void;
-}
-
-const EditTimeLogModal: React.FC<EditTimeLogModalProps> = ({ log, onClose, onSave }) => {
-    const [date, setDate] = useState(log.date);
-    const [startTime, setStartTime] = useState(new Date(log.startTime).toTimeString().slice(0, 5));
-    const [endTime, setEndTime] = useState(log.endTime ? new Date(log.endTime).toTimeString().slice(0, 5) : '');
-    const [status, setStatus] = useState(log.status);
-
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        
-        const startTs = new Date(`${date}T${startTime}`).getTime();
-        let endTs: number | undefined = undefined;
-        let duration: number | undefined = undefined;
-
-        if (endTime && status === 'Completed') {
-            endTs = new Date(`${date}T${endTime}`).getTime();
-            if (endTs < startTs) {
-                alert("Clock-out time cannot be before clock-in time.");
-                return;
-            }
-            duration = Math.floor((endTs - startTs) / 60000);
-        }
-
-        onSave({
-            ...log,
-            date,
-            startTime: startTs,
-            endTime: endTs,
-            durationMinutes: duration,
-            status: status
-        });
-    };
-
-    const inputClass = "w-full px-4 py-3 bg-slate-50 border-2 border-slate-200 rounded-xl text-sm font-bold focus:border-emerald-500 focus:outline-none transition-all placeholder-slate-400";
-
-    return (
-        <div className="fixed inset-0 bg-slate-900/0 flex items-center justify-center z-[100] p-4">
-            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-0 animate-in zoom-in-95 border-2 border-slate-300 overflow-hidden">
-                <div className="p-6 border-b-2 border-slate-100 flex justify-between items-center bg-slate-50/50">
-                    <div>
-                        <h2 className="text-xl font-bold text-slate-900 uppercase tracking-tight">Edit Attendance</h2>
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Registry Correction: {log.userName}</p>
-                    </div>
-                    <button onClick={onClose} className="text-slate-300 hover:text-slate-900 p-1"><X size={24}/></button>
-                </div>
-                <form onSubmit={handleSubmit} className="p-6 space-y-6">
-                    <div className="space-y-4">
-                        <div>
-                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Duty Date</label>
-                            <input type="date" required value={date} onChange={e => setDate(e.target.value)} className={inputClass} />
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Clock In</label>
-                                <input type="time" required value={startTime} onChange={e => setStartTime(e.target.value)} className={inputClass} />
-                            </div>
-                            <div>
-                                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Clock Out</label>
-                                <input 
-                                    type="time" 
-                                    value={endTime} 
-                                    onChange={e => {
-                                        setEndTime(e.target.value);
-                                        if (e.target.value) setStatus('Completed');
-                                    }} 
-                                    className={`${inputClass} ${status === 'Active' ? 'opacity-50' : ''}`} 
-                                    disabled={status === 'Active'}
-                                />
-                            </div>
-                        </div>
-                        <div>
-                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Shift Status</label>
-                            <select 
-                                value={status} 
-                                onChange={e => {
-                                    setStatus(e.target.value as any);
-                                    if (e.target.value === 'Active') setEndTime('');
-                                }} 
-                                className={inputClass}
-                            >
-                                <option value="Active">Currently on Duty (Active)</option>
-                                <option value="Completed">Shift Finalized (Completed)</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <div className="bg-amber-50 border-2 border-amber-100 rounded-xl p-4 flex gap-3">
-                        <AlertCircle className="text-amber-600 shrink-0" size={18} />
-                        <p className="text-[10px] font-bold text-amber-800 leading-relaxed uppercase">
-                            Warning: Updating statutory attendance records requires Curatorial authorization. All changes are logged.
-                        </p>
-                    </div>
-
-                    <button type="submit" className="w-full py-4 bg-slate-900 text-white rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-black transition-all shadow-xl active:scale-[0.98]">
-                        Authorize & Save Changes
-                    </button>
-                </form>
             </div>
         </div>
     );

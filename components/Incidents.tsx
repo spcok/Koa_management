@@ -2,17 +2,11 @@
 import React, { useState, useMemo } from 'react';
 import { Incident, IncidentType, IncidentSeverity, Animal, User } from '../types';
 import { ShieldAlert, Plus, Calendar, Clock, X, AlertTriangle, MapPin, Trash2 } from 'lucide-react';
+import { useAppData } from '../hooks/useAppData';
 
-interface IncidentsProps {
-  incidents: Incident[];
-  animals: Animal[];
-  currentUser?: User | null;
-  onAddIncident: (incident: Incident) => void;
-  onUpdateIncident: (incident: Incident) => void;
-  onDeleteIncident: (id: string) => void;
-}
-
-const Incidents: React.FC<IncidentsProps> = ({ incidents, animals, currentUser, onAddIncident, onUpdateIncident, onDeleteIncident }) => {
+const Incidents: React.FC = () => {
+  const { incidents, animals, currentUser, addIncident, updateIncident, deleteIncident } = useAppData();
+  
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [filterSeverity, setFilterSeverity] = useState<IncidentSeverity | 'ALL'>('ALL');
@@ -40,7 +34,7 @@ const Incidents: React.FC<IncidentsProps> = ({ incidents, animals, currentUser, 
 
   const handleSubmit = (e: React.FormEvent) => {
       e.preventDefault();
-      onAddIncident({
+      addIncident({
           id: `inc_${Date.now()}`,
           date, 
           time: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }), 
@@ -111,7 +105,7 @@ const Incidents: React.FC<IncidentsProps> = ({ incidents, animals, currentUser, 
                                     </td>
                                     <td className="px-6 py-4 text-right">
                                         <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <button onClick={() => { if(window.confirm("Purge incident record?")) onDeleteIncident(incident.id) }} className="p-2 text-slate-400 hover:text-rose-600 bg-white border border-slate-200 rounded-lg shadow-sm transition-colors"><Trash2 size={14}/></button>
+                                            <button onClick={() => { if(window.confirm("Purge incident record?")) deleteIncident(incident.id) }} className="p-2 text-slate-400 hover:text-rose-600 bg-white border border-slate-200 rounded-lg shadow-sm transition-colors"><Trash2 size={14}/></button>
                                         </div>
                                     </td>
                                 </tr>

@@ -2,16 +2,11 @@
 import React, { useState, useMemo, useTransition } from 'react';
 import { Animal, AnimalCategory, Task, LogType } from '../types';
 import { CalendarClock, Plus, Calendar, Trash2, Filter, Utensils, RefreshCw, Loader2 } from 'lucide-react';
+import { useAppData } from '../hooks/useAppData';
 
-interface ScheduleProps {
-  animals: Animal[];
-  tasks: Task[];
-  foodOptions: Record<AnimalCategory, string[]>;
-  onAddTasks: (tasks: Task[]) => void;
-  onDeleteTask: (id: string) => void;
-}
+const Schedule: React.FC = () => {
+  const { animals, tasks, foodOptions, addTasks, deleteTask } = useAppData();
 
-const Schedule: React.FC<ScheduleProps> = ({ animals, tasks, foodOptions, onAddTasks, onDeleteTask }) => {
   // Generation State
   const [selectedCategory, setSelectedCategory] = useState<AnimalCategory>(AnimalCategory.EXOTICS);
   const [selectedAnimalId, setSelectedAnimalId] = useState('');
@@ -82,7 +77,7 @@ const Schedule: React.FC<ScheduleProps> = ({ animals, tasks, foodOptions, onAddT
               notes: notes
           }));
 
-          onAddTasks(newTasks);
+          addTasks(newTasks);
           
           // Reset
           setSelectedDates([]);
@@ -322,7 +317,7 @@ const Schedule: React.FC<ScheduleProps> = ({ animals, tasks, foodOptions, onAddT
                                             </div>
 
                                             <button 
-                                                onClick={() => onDeleteTask(task.id)}
+                                                onClick={() => deleteTask(task.id)}
                                                 className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
                                                 title="Delete Schedule Item"
                                             >

@@ -2,17 +2,11 @@
 import React, { useState, useMemo } from 'react';
 import { SiteLogEntry, User, TimeLogEntry } from '../types';
 import { ShieldAlert, Plus, Clock, Users, Timer, X, Trash2, CheckCircle2, UserCheck, Check, Calendar } from 'lucide-react';
+import { useAppData } from '../hooks/useAppData';
 
-interface SafetyDrillsProps {
-  logs: SiteLogEntry[];
-  timeLogs: TimeLogEntry[];
-  users: User[];
-  onAddLog: (log: SiteLogEntry) => void;
-  onDeleteLog: (id: string) => void;
-  currentUser?: User | null;
-}
-
-const SafetyDrills: React.FC<SafetyDrillsProps> = ({ logs = [], timeLogs = [], users = [], onAddLog, onDeleteLog, currentUser }) => {
+const SafetyDrills: React.FC = () => {
+  const { siteLogs, timeLogs, users, addSiteLog, deleteSiteLog, currentUser } = useAppData();
+  
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [viewingDrill, setViewingDrill] = useState<SiteLogEntry | null>(null);
   
@@ -25,9 +19,9 @@ const SafetyDrills: React.FC<SafetyDrillsProps> = ({ logs = [], timeLogs = [], u
   const [verifiedUserIds, setVerifiedUserIds] = useState<Set<string>>(new Set());
 
   const drillLogs = useMemo(() => {
-      if (!logs) return [];
-      return logs.filter(l => l.title && l.title.includes('Drill')).sort((a, b) => b.timestamp - a.timestamp);
-  }, [logs]);
+      if (!siteLogs) return [];
+      return siteLogs.filter(l => l.title && l.title.includes('Drill')).sort((a, b) => b.timestamp - a.timestamp);
+  }, [siteLogs]);
 
   const getOnSitePersonnel = (drillDate: string, drillTime: string) => {
       try {
@@ -78,7 +72,7 @@ const SafetyDrills: React.FC<SafetyDrillsProps> = ({ logs = [], timeLogs = [], u
           timestamp: new Date(`${date}T${time}`).getTime()
       };
 
-      onAddLog(newLog);
+      addSiteLog(newLog);
       setIsModalOpen(false);
       setDuration('');
       setNotes('');
@@ -142,7 +136,7 @@ const SafetyDrills: React.FC<SafetyDrillsProps> = ({ logs = [], timeLogs = [], u
                                     <td className="px-6 py-4 text-right">
                                         <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                                             <button onClick={() => setViewingDrill(log)} className="p-2 text-slate-400 hover:text-emerald-600 bg-white border border-slate-200 rounded-lg shadow-sm transition-colors"><UserCheck size={16}/></button>
-                                            <button onClick={() => onDeleteLog(log.id)} className="p-2 text-slate-400 hover:text-rose-600 bg-white border border-slate-200 rounded-lg shadow-sm transition-colors"><Trash2 size={14}/></button>
+                                            <button onClick={() => deleteSiteLog(log.id)} className="p-2 text-slate-400 hover:text-rose-600 bg-white border border-slate-200 rounded-lg shadow-sm transition-colors"><Trash2 size={14}/></button>
                                         </div>
                                     </td>
                                 </tr>

@@ -202,6 +202,8 @@ export interface Animal {
   location: string;
   description?: string;
   specialRequirements?: string;
+  criticalHusbandryNotes?: string[];
+  toxicity?: string;
   imageUrl: string;
   distributionMapUrl?: string;
   
@@ -240,6 +242,7 @@ export interface Animal {
   quarantineStartDate?: string;
   quarantineReason?: string;
   order?: number;
+  isGroup?: boolean;
 }
 
 export interface Task {
@@ -329,10 +332,10 @@ export interface Contact {
   notes?: string;
 }
 
-export interface OrganizationProfile {
+export interface OrganisationProfile {
   name: string;
   address: string;
-  licenseNumber: string;
+  licenceNumber: string;
   contactEmail: string;
   contactPhone: string;
   logoUrl: string;
@@ -344,7 +347,7 @@ export interface SystemPreferences {
   unitSystem: 'Metric' | 'Imperial';
   tempUnit: 'C' | 'F';
   dashboardDensity: 'Compact' | 'Standard' | 'Comfortable';
-  brandColor: string;
+  brandColour: string;
   sessionTimeoutMinutes: number;
   autoPurgeDays: number;
 }

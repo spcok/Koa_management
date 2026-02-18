@@ -2,15 +2,11 @@
 import React, { useState, useMemo } from 'react';
 import { FirstAidLogEntry, User } from '../types';
 import { Stethoscope, Plus, MapPin, Clock, X, Trash2, Calendar, User as UserIcon } from 'lucide-react';
+import { useAppData } from '../hooks/useAppData';
 
-interface FirstAidProps {
-  logs: FirstAidLogEntry[];
-  currentUser?: User | null;
-  onAddLog: (log: FirstAidLogEntry) => void;
-  onDeleteLog: (id: string) => void;
-}
-
-const FirstAid: React.FC<FirstAidProps> = ({ logs, currentUser, onAddLog, onDeleteLog }) => {
+const FirstAid: React.FC = () => {
+  const { firstAidLogs, currentUser, addFirstAid, deleteFirstAid } = useAppData();
+  
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
 
@@ -24,7 +20,7 @@ const FirstAid: React.FC<FirstAidProps> = ({ logs, currentUser, onAddLog, onDele
   const [outcome, setOutcome] = useState<FirstAidLogEntry['outcome']>('Returned to Work');
 
   const filteredLogs = useMemo(() => {
-    return logs.filter(log => 
+    return firstAidLogs.filter(log => 
         log.personName.toLowerCase().includes(searchTerm.toLowerCase()) || 
         log.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
         log.location.toLowerCase().includes(searchTerm.toLowerCase())
@@ -33,11 +29,11 @@ const FirstAid: React.FC<FirstAidProps> = ({ logs, currentUser, onAddLog, onDele
         if (dateComp !== 0) return dateComp;
         return b.timestamp - a.timestamp;
     });
-  }, [logs, searchTerm]);
+  }, [firstAidLogs, searchTerm]);
 
   const handleSubmit = (e: React.FormEvent) => {
       e.preventDefault();
-      onAddLog({
+      addFirstAid({
           id: `fa_${Date.now()}`,
           date, time, personName, type, description, treatment,
           treatedBy: currentUser?.name || 'SYS',
@@ -101,7 +97,7 @@ const FirstAid: React.FC<FirstAidProps> = ({ logs, currentUser, onAddLog, onDele
                                 </td>
                                 <td className="px-6 py-4 text-right">
                                     <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <button onClick={() => { if(window.confirm("Permanently purge health record?")) onDeleteLog(log.id) }} className="p-2 text-slate-400 hover:text-rose-600 bg-white border border-slate-200 rounded-lg shadow-sm transition-colors"><Trash2 size={14}/></button>
+                                        <button onClick={() => { if(window.confirm("Permanently purge health record?")) deleteFirstAid(log.id) }} className="p-2 text-slate-400 hover:text-rose-600 bg-white border border-slate-200 rounded-lg shadow-sm transition-colors"><Trash2 size={14}/></button>
                                     </div>
                                 </td>
                             </tr>

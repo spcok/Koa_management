@@ -1,14 +1,12 @@
+
 import React, { useState, useMemo } from 'react';
 import { Animal, LogType, LogEntry, User } from '../types';
 import { ArrowLeftRight, Edit2, Trash2, Plus, X, ArrowRight, User as UserIcon } from 'lucide-react';
+import { useAppData } from '../hooks/useAppData';
 
-interface MovementsProps {
-  animals: Animal[];
-  onUpdateAnimal?: (animal: Animal) => void;
-  currentUser?: User | null;
-}
-
-const Movements: React.FC<MovementsProps> = ({ animals, onUpdateAnimal, currentUser }) => {
+const Movements: React.FC = () => {
+  const { animals, updateAnimal, currentUser } = useAppData();
+  
   const [filterType, setFilterType] = useState<'ALL' | 'Acquisition' | 'Disposition' | 'Transfer'>('ALL');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingLog, setEditingLog] = useState<{ log: LogEntry, animalId: string } | null>(null);
@@ -28,7 +26,6 @@ const Movements: React.FC<MovementsProps> = ({ animals, onUpdateAnimal, currentU
       );
       const filtered = filterType === 'ALL' ? allLogs : allLogs.filter(l => l.movementType === filterType);
       
-      // Sort by date descending (newest first), then by timestamp for entries on the same day
       return filtered.sort((a, b) => {
           const dateComp = b.date.localeCompare(a.date);
           if (dateComp !== 0) return dateComp;
@@ -59,7 +56,7 @@ const Movements: React.FC<MovementsProps> = ({ animals, onUpdateAnimal, currentU
 
   const handleSubmit = (e: React.FormEvent) => {
       e.preventDefault();
-      if (!formAnimalId || !onUpdateAnimal) return;
+      if (!formAnimalId || !updateAnimal) return;
       const animal = animals.find(a => a.id === formAnimalId);
       if (!animal) return;
 
@@ -80,7 +77,7 @@ const Movements: React.FC<MovementsProps> = ({ animals, onUpdateAnimal, currentU
       if (editingLog) updatedLogs = updatedLogs.map(l => l.id === editingLog.log.id ? movementLog : l);
       else updatedLogs.unshift(movementLog);
 
-      onUpdateAnimal({ ...animal, location: formDest || animal.location, logs: updatedLogs });
+      updateAnimal({ ...animal, location: formDest || animal.location, logs: updatedLogs });
       setIsModalOpen(false);
   };
 

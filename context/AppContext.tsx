@@ -1,6 +1,7 @@
 
 import { createContext } from 'react';
-import { Animal, AnimalCategory, Task, User, SiteLogEntry, Incident, FirstAidLogEntry, OrganizationProfile, Contact, SortOption, TimeLogEntry, HolidayRequest, SystemPreferences } from '../types';
+// Fix: Changed OrganizationProfile to OrganisationProfile
+import { Animal, AnimalCategory, Task, User, SiteLogEntry, Incident, FirstAidLogEntry, OrganisationProfile, Contact, SortOption, TimeLogEntry, HolidayRequest, SystemPreferences } from '../types';
 
 export interface AppContextType {
   currentUser: User | null;
@@ -17,7 +18,8 @@ export interface AppContextType {
   eventTypes: string[];
   locations: string[];
   contacts: Contact[];
-  orgProfile: OrganizationProfile | null;
+  // Fix: Changed OrganizationProfile to OrganisationProfile
+  orgProfile: OrganisationProfile | null;
   systemPreferences: SystemPreferences;
   sortOption: SortOption;
   isOrderLocked: boolean;
@@ -59,7 +61,8 @@ export interface AppContextType {
   updateEventTypes: (types: string[]) => void;
   updateLocations: (locs: string[]) => void;
   updateContacts: (contacts: Contact[]) => void;
-  updateOrgProfile: (profile: OrganizationProfile) => void;
+  // Fix: Changed OrganizationProfile to OrganisationProfile
+  updateOrgProfile: (profile: OrganisationProfile) => void;
   updateSystemPreferences: (prefs: SystemPreferences) => void;
   
   addHoliday: (req: HolidayRequest) => void;
