@@ -1,5 +1,5 @@
 
-import { Animal, AnimalCategory, LogType, SystemPreferences } from './types';
+import { Animal, AnimalCategory, LogType, SystemPreferences, LocalBackupConfig } from './types';
 
 export const DEFAULT_SYSTEM_PREFERENCES: SystemPreferences = {
   unitSystem: 'Metric',
@@ -9,6 +9,13 @@ export const DEFAULT_SYSTEM_PREFERENCES: SystemPreferences = {
   brandColour: '#10b981',
   sessionTimeoutMinutes: 5,
   autoPurgeDays: 365
+};
+
+// Fix: Added DEFAULT_LOCAL_BACKUP_CONFIG to constants for use in dataService
+export const DEFAULT_LOCAL_BACKUP_CONFIG: LocalBackupConfig = {
+  enabled: true,
+  frequency: 'daily',
+  retentionCount: 7
 };
 
 export const DEFAULT_FOOD_OPTIONS = {

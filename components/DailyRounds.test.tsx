@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -69,6 +70,8 @@ describe('DailyRounds Component', () => {
       currentUser: mockUser,
       addSiteLog: onAddSiteLog,
       addIncident: onAddIncident,
+      // Fix: Added missing isOffline property to satisfy AppContextType requirement
+      isOffline: false,
       // Add other required context properties with default/mock values
       users: [mockUser],
       tasks: [],

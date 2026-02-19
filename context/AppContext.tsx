@@ -1,6 +1,5 @@
 
 import { createContext } from 'react';
-// Fix: Changed OrganizationProfile to OrganisationProfile
 import { Animal, AnimalCategory, Task, User, SiteLogEntry, Incident, FirstAidLogEntry, OrganisationProfile, Contact, SortOption, TimeLogEntry, HolidayRequest, SystemPreferences } from '../types';
 
 export interface AppContextType {
@@ -18,12 +17,12 @@ export interface AppContextType {
   eventTypes: string[];
   locations: string[];
   contacts: Contact[];
-  // Fix: Changed OrganizationProfile to OrganisationProfile
   orgProfile: OrganisationProfile | null;
   systemPreferences: SystemPreferences;
   sortOption: SortOption;
   isOrderLocked: boolean;
   activeShift: TimeLogEntry | null;
+  isOffline: boolean;
   
   // Actions
   login: (user: User) => void;
@@ -61,7 +60,6 @@ export interface AppContextType {
   updateEventTypes: (types: string[]) => void;
   updateLocations: (locs: string[]) => void;
   updateContacts: (contacts: Contact[]) => void;
-  // Fix: Changed OrganizationProfile to OrganisationProfile
   updateOrgProfile: (profile: OrganisationProfile) => void;
   updateSystemPreferences: (prefs: SystemPreferences) => void;
   

@@ -5,9 +5,8 @@ import {
   ArrowLeftRight, ShieldAlert, AlertTriangle, Stethoscope, Heart, Wrench, 
   AlertOctagon, Clock, Settings, LogOut, Menu, Power, 
   ChevronLeft, ChevronRight, Maximize, Minimize,
-  HelpCircle, FileText, Calendar, ClipboardCheck
+  HelpCircle, FileText, Calendar, ClipboardCheck, Wifi, WifiOff
 } from 'lucide-react';
-// Fix: Changed OrganizationProfile to OrganisationProfile
 import { UserRole, User, TimeLogEntry, UserPermissions, OrganisationProfile } from '../types';
 import { useAppData } from '../hooks/useAppData';
 
@@ -20,9 +19,8 @@ interface LayoutProps {
 const Layout: React.FC<LayoutProps> = ({ 
   children, activeView, onNavigate
 }) => {
-  // FIX: Use correct function names from context (e.g., `logout` instead of `onLogout`).
   const { 
-    currentUser, logout, activeShift, clockIn, clockOut, orgProfile 
+    currentUser, logout, activeShift, clockIn, clockOut, orgProfile, isOffline 
   } = useAppData();
 
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -108,6 +106,20 @@ const Layout: React.FC<LayoutProps> = ({
               <img src={orgProfile.logoUrl} alt="Logo" className="w-8 h-8 object-contain rounded-lg bg-white/10" />
           ) : (
               <div className="w-8 h-8 bg-slate-800 rounded-lg flex items-center justify-center font-bold text-emerald-500 border border-slate-700">K</div>
+          )}
+      </div>
+
+      {/* Connectivity Status Bar */}
+      <div className={`px-4 py-2 border-b border-slate-800/50 flex items-center gap-2 ${isOffline ? 'bg-rose-900/20' : 'bg-emerald-900/10'}`}>
+          {isOffline ? (
+              <WifiOff size={14} className="text-rose-500" />
+          ) : (
+              <Wifi size={14} className="text-emerald-500" />
+          )}
+          {!isSidebarCollapsed && (
+              <span className={`text-[9px] font-black uppercase tracking-widest ${isOffline ? 'text-rose-500' : 'text-emerald-500/70'}`}>
+                  {isOffline ? 'Offline - Data Caching' : 'Online - Secure Sync'}
+              </span>
           )}
       </div>
 
@@ -204,20 +216,16 @@ const Layout: React.FC<LayoutProps> = ({
   return (
     <div className="flex h-screen bg-[#f3f4f6] overflow-hidden font-sans selection:bg-emerald-500/30 selection:text-emerald-900">
       
-      {/* Mobile Menu Overlay - Higher z-index to block main interaction but below sidebar */}
       {isMobileMenuOpen && (
         <div className="fixed inset-0 bg-black/60 z-[70] md:hidden no-print" onClick={() => setIsMobileMenuOpen(false)} />
       )}
 
-      {/* Sidebar - Highest layout z-index to slide over */}
       <aside className={`fixed inset-y-0 left-0 z-[80] transform transition-all duration-300 ease-in-out md:static ${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'} no-print`}>
         {sidebarContent}
       </aside>
 
-      {/* Main Content */}
       <main className="flex-1 flex flex-col min-w-0 relative overflow-hidden print:overflow-visible">
         
-        {/* Mobile Header - Lower z-index so sidebar slides over it */}
         <header className="md:hidden h-14 bg-[#1c1c1e] border-b border-slate-800 flex items-center justify-between px-4 z-50 no-print shadow-md">
           <div className="flex items-center gap-3">
               <button onClick={() => setIsMobileMenuOpen(true)} className="text-slate-300 p-2 -ml-2 hover:bg-slate-800 rounded-lg transition-colors">

@@ -171,7 +171,7 @@ const DailyRounds: React.FC = () => {
     const tabs = Object.values(AnimalCategory);
 
     return (
-        <div className="flex flex-col h-[calc(100vh-64px)] md:h-auto bg-slate-100 animate-in fade-in duration-300">
+        <div className="flex flex-col min-h-full bg-slate-100 animate-in fade-in duration-300">
             <div className="bg-white border-b border-slate-200 px-4 py-4 sticky top-0 z-20 shadow-sm">
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
                     <div>
@@ -194,21 +194,41 @@ const DailyRounds: React.FC = () => {
                 </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4 space-y-3 pb-64">
+            <div className="p-4 space-y-3 pb-64">
                 {categoryAnimals.length === 0 ? (
                     <div className="text-center py-12 opacity-50"><p className="font-bold text-slate-400 text-sm">No animals in this section.</p></div>
                 ) : (
                     categoryAnimals.map(animal => {
                         const state = checks[animal.id] || { isAlive: true, isWatered: false, isSecure: false };
-                        const isSecure = state.isSecure || !!state.securityIssue;
-                        let isDone = false;
-                        if (activeTab === AnimalCategory.OWLS || activeTab === AnimalCategory.RAPTORS) isDone = state.isAlive && isSecure;
-                        else isDone = state.isAlive && state.isWatered && isSecure;
+                        const isDone = (activeTab === AnimalCategory.OWLS || activeTab === AnimalCategory.RAPTORS) 
+                            ? (state.isAlive && (state.isSecure || !!state.securityIssue))
+                            : (state.isAlive && state.isWatered && (state.isSecure || !!state.securityIssue));
                         
                         return (
-                            <div key={animal.id} className={`bg-white border-2 rounded-xl p-3 flex flex-col sm:flex-row items-center gap-4 transition-all ${isDone ? 'border-emerald-100 shadow-sm' : (!state.isAlive || state.securityIssue) ? 'border-rose-100 bg-rose-50' : 'border-slate-200'}`}>
-                                <div className="flex items-center gap-3 w-full sm:w-auto"><img src={animal.imageUrl} alt={animal.name} className="w-12 h-12 rounded-lg object-cover bg-slate-200 shadow-sm" /><div className="flex-1 min-w-0"><h3 className="font-bold text-slate-800 text-sm truncate">{animal.name}</h3><p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{animal.location}</p>{!state.isAlive && (<span className="text-[9px] font-black text-rose-600 bg-rose-100 px-1.5 py-0.5 rounded flex items-center gap-1 mt-1 w-fit"><AlertTriangle size={10}/> HEALTH ISSUE</span>)}{state.securityIssue && (<span className="text-[9px] font-black text-rose-600 bg-rose-100 px-1.5 py-0.5 rounded flex items-center gap-1 mt-1 w-fit"><ShieldCheck size={10}/> SECURITY ALERT</span>)}</div></div>
-                                <div className="flex items-center justify-between w-full sm:w-auto sm:ml-auto gap-2 sm:gap-4"><button onClick={() => handleHealthToggle(animal.id)} className={`flex flex-col items-center justify-center w-14 h-14 rounded-xl border-2 transition-all ${state.isAlive ? 'border-emerald-100 bg-emerald-50 text-emerald-600' : 'border-rose-200 bg-rose-100 text-rose-600'}`}><Heart size={20} fill={state.isAlive ? "currentColor" : "none"} /><span className="text-[8px] font-black uppercase mt-0.5">{state.isAlive ? 'WELL' : 'SICK'}</span></button><button onClick={() => toggleWater(animal.id)} disabled={!state.isAlive} className={`flex flex-col items-center justify-center w-14 h-14 rounded-xl border-2 transition-all ${state.isWatered ? 'border-blue-100 bg-blue-50 text-blue-500' : 'border-slate-100 bg-slate-50 text-slate-300'} disabled:opacity-50`}>{state.isWatered ? <Check size={24} strokeWidth={4} /> : <Droplets size={20} />}<span className="text-[8px] font-black uppercase mt-0.5">WATER</span></button><button onClick={() => toggleSecure(animal.id)} disabled={!state.isAlive} className={`flex flex-col items-center justify-center w-14 h-14 rounded-xl border-2 transition-all ${state.isSecure ? 'border-emerald-100 bg-emerald-50 text-emerald-600' : (state.securityIssue ? 'border-rose-200 bg-rose-100 text-rose-600' : 'border-slate-100 bg-slate-50 text-slate-300')} disabled:opacity-50`}>{state.isSecure ? <Check size={24} strokeWidth={4} /> : (!!state.securityIssue ? <X size={24} strokeWidth={4} /> : <Lock size={20} />)}<span className="text-[8px] font-black uppercase mt-0.5">{state.isSecure ? 'SAFE' : (!!state.securityIssue ? 'RISK' : 'SECURE')}</span></button></div>
+                            <div key={animal.id} className={`bg-white border-2 rounded-xl p-2 md:p-3 flex items-center gap-2 md:gap-4 transition-all ${isDone ? 'border-emerald-100 shadow-sm' : (!state.isAlive || state.securityIssue) ? 'border-rose-100 bg-rose-50' : 'border-slate-200'}`}>
+                                <div className="flex items-center gap-3 flex-1 min-w-0">
+                                    <img src={animal.imageUrl} alt={animal.name} className="hidden md:block w-12 h-12 rounded-lg object-cover bg-slate-200 shadow-sm shrink-0" />
+                                    <div className="flex-1 min-w-0">
+                                        <h3 className="font-bold text-slate-800 text-sm truncate">{animal.name}</h3>
+                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{animal.location}</p>
+                                        {!state.isAlive && (<span className="text-[9px] font-black text-rose-600 bg-rose-100 px-1.5 py-0.5 rounded flex items-center gap-1 mt-1 w-fit"><AlertTriangle size={10}/> HEALTH</span>)}
+                                        {state.securityIssue && (<span className="text-[9px] font-black text-rose-600 bg-rose-100 px-1.5 py-0.5 rounded flex items-center gap-1 mt-1 w-fit"><ShieldCheck size={10}/> ALERT</span>)}
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-1 md:gap-4 shrink-0">
+                                    <button onClick={() => handleHealthToggle(animal.id)} className={`flex flex-col items-center justify-center w-12 h-12 md:w-14 md:h-14 rounded-xl border-2 transition-all ${state.isAlive ? 'border-emerald-100 bg-emerald-50 text-emerald-600' : 'border-rose-200 bg-rose-100 text-rose-600'}`}>
+                                        <Heart size={20} fill={state.isAlive ? "currentColor" : "none"} className="md:w-5 md:h-5"/>
+                                        <span className="text-[7px] md:text-[8px] font-black uppercase mt-0.5 hidden md:block">{state.isAlive ? 'WELL' : 'SICK'}</span>
+                                    </button>
+                                    <button onClick={() => toggleWater(animal.id)} disabled={!state.isAlive} className={`flex flex-col items-center justify-center w-12 h-12 md:w-14 md:h-14 rounded-xl border-2 transition-all ${state.isWatered ? 'border-blue-100 bg-blue-50 text-blue-500' : 'border-slate-100 bg-slate-50 text-slate-300'} disabled:opacity-50`}>
+                                        {state.isWatered ? <Check size={24} className="md:w-6 md:h-6" strokeWidth={4} /> : <Droplets size={20} className="md:w-5 md:h-5"/>}
+                                        <span className="text-[7px] md:text-[8px] font-black uppercase mt-0.5 hidden md:block">WATER</span>
+                                    </button>
+                                    <button onClick={() => toggleSecure(animal.id)} disabled={!state.isAlive} className={`flex flex-col items-center justify-center w-12 h-12 md:w-14 md:h-14 rounded-xl border-2 transition-all ${state.isSecure ? 'border-emerald-100 bg-emerald-50 text-emerald-600' : (state.securityIssue ? 'border-rose-200 bg-rose-100 text-rose-600' : 'border-slate-100 bg-slate-50 text-slate-300')} disabled:opacity-50`}>
+                                        {state.isSecure ? <Check size={24} className="md:w-6 md:h-6" strokeWidth={4} /> : (!!state.securityIssue ? <X size={24} className="md:w-6 md:h-6" strokeWidth={4} /> : <Lock size={20} className="md:w-5 md:h-5"/>)}
+                                        <span className="text-[7px] md:text-[8px] font-black uppercase mt-0.5 hidden md:block">{state.isSecure ? 'SAFE' : (!!state.securityIssue ? 'RISK' : 'SECURE')}</span>
+                                    </button>
+                                </div>
                             </div>
                         );
                     })
@@ -223,3 +243,4 @@ const DailyRounds: React.FC = () => {
 };
 
 export default DailyRounds;
+    

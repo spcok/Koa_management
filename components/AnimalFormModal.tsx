@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef, useTransition, useActionState } from 'react';
 import { Animal, AnimalCategory, HazardRating, ConservationStatus } from '../types';
-import { X, Check, Camera, Sparkles, Loader2, Zap, Shield, History, Info, Globe, Skull, Upload, Users, Fingerprint } from 'lucide-react';
+import { X, Check, Camera, Sparkles, Loader2, Zap, Shield, History, Info, Globe, Skull, Upload, Users } from 'lucide-react';
 import { getLatinName, getConservationStatus } from '../services/geminiService';
 
 interface AnimalFormModalProps {
@@ -122,6 +122,7 @@ const AnimalFormModal: React.FC<AnimalFormModalProps> = ({ isOpen, onClose, onSa
 
   const inputClass = "w-full px-4 py-2.5 bg-[#f3f6f9] border border-[#e1e8ef] rounded-lg text-sm font-bold text-slate-700 focus:outline-none focus:border-emerald-500 transition-all placeholder-slate-300";
   const labelClass = "block text-[10px] font-black text-slate-400 uppercase mb-1.5 ml-1 tracking-widest";
+  const isBird = category === AnimalCategory.OWLS || category === AnimalCategory.RAPTORS;
   
   return (
     <div className="fixed inset-0 bg-slate-900/0 flex items-center justify-center z-[100] p-4 animate-in fade-in duration-300">
@@ -150,7 +151,7 @@ const AnimalFormModal: React.FC<AnimalFormModalProps> = ({ isOpen, onClose, onSa
                             
                             <div className="grid md:grid-cols-12 gap-6">
                                 <div className="md:col-span-5"><label className={labelClass}>SUBJECT NAME * <input name="name" required defaultValue={initialData?.name} className={inputClass} /></label></div>
-                                <div className="md:col-span-4"><label className={labelClass}>SECTION * <select name="category" value={category} onChange={(e) => setCategory(e.target.value as AnimalCategory)} className={inputClass}>
+                                <div className="md:col-span-4"><label className={labelClass}>SECTION * <select name="category" value={category || AnimalCategory.OWLS} onChange={(e) => setCategory(e.target.value as AnimalCategory)} className={inputClass}>
                                   {(Object.values(AnimalCategory) as string[]).map(cat => <option key={String(cat)}>{cat}</option>)}
                                 </select></label></div>
                                 <div className="md:col-span-3"><label className={labelClass}>LOCATION * <input name="location" list="location-list" required defaultValue={initialData?.location} className={inputClass} /></label><datalist id="location-list">
@@ -171,7 +172,7 @@ const AnimalFormModal: React.FC<AnimalFormModalProps> = ({ isOpen, onClose, onSa
                                 </div>
                             )}
 
-                            <div className="grid md:grid-cols-12 gap-6"><div className="md:col-span-7"><label className={labelClass}>COMMON SPECIES *</label><div className="flex gap-2"><input name="species" required defaultValue={initialData?.species} className={inputClass} /><button type="button" onClick={handleAutoFill} disabled={isAiPending} className="px-4 bg-[#0f172a] text-white rounded-lg hover:bg-black disabled:opacity-50">{isAiPending ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={18} />}</button></div></div><div className="md:col-span-5"><label className={labelClass}>SCIENTIFIC NAME <input name="latinName" value={latinName} onChange={e => setLatinName(e.target.value)} className={`${inputClass} italic`} /></label></div></div><div className="grid md:grid-cols-12 gap-6"><div className="md:col-span-4"><label className={labelClass}>SEX <select name="sex" defaultValue={initialData?.sex} className={inputClass}><option>Male</option><option>Female</option><option>Unknown</option></select></label></div><div className="md:col-span-4"><div className="flex justify-between items-center mb-1.5 px-1"><label className="text-10px font-black text-slate-400 uppercase">DATE OF BIRTH</label><div className="flex items-center gap-2"><input type="checkbox" name="isDobUnknown" defaultChecked={initialData?.isDobUnknown}/><span className="text-[9px] font-black text-slate-400 uppercase">UNKNOWN</span></div></div><input type="date" name="dob" defaultValue={initialData?.dob} className={inputClass} /></div><div className="md:col-span-4"><label className={labelClass}>IUCN STATUS <select name="redListStatus" value={redList} onChange={e => setRedList(e.target.value as ConservationStatus)} className={inputClass}>
+                            <div className="grid md:grid-cols-12 gap-6"><div className="md:col-span-7"><label className={labelClass}>COMMON SPECIES *</label><div className="flex gap-2"><input name="species" required defaultValue={initialData?.species} className={inputClass} /><button type="button" onClick={handleAutoFill} disabled={isAiPending} className="px-4 bg-[#0f172a] text-white rounded-lg hover:bg-black disabled:opacity-50">{isAiPending ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={18} />}</button></div></div><div className="md:col-span-5"><label className={labelClass}>SCIENTIFIC NAME <input name="latinName" value={latinName} onChange={e => setLatinName(e.target.value)} className={`${inputClass} italic`} /></label></div></div><div className="grid md:grid-cols-12 gap-6"><div className="md:col-span-4"><label className={labelClass}>SEX <select name="sex" defaultValue={initialData?.sex} className={inputClass}><option>Male</option><option>Female</option><option>Unknown</option></select></label></div><div className="md:col-span-4"><div className="flex justify-between items-center mb-1.5 px-1"><label className="text-10px font-black text-slate-400 uppercase">DATE OF BIRTH</label><div className="flex items-center gap-2"><input type="checkbox" name="isDobUnknown" defaultChecked={initialData?.isDobUnknown}/><span className="text-[9px] font-black text-slate-400 uppercase">UNKNOWN</span></div></div><input type="date" name="dob" defaultValue={initialData?.dob} className={inputClass} /></div><div className="md:col-span-4"><label className={labelClass}>IUCN STATUS <select name="redListStatus" value={redList || ConservationStatus.LC} onChange={e => setRedList(e.target.value as ConservationStatus)} className={inputClass}>
                           {(Object.values(ConservationStatus) as string[]).map(s => <option key={String(s)}>{s}</option>)}
                         </select></label></div></div>
                         </section>
@@ -198,21 +199,21 @@ const AnimalFormModal: React.FC<AnimalFormModalProps> = ({ isOpen, onClose, onSa
                                 <div>
                                     <label className={labelClass}>Sire (Father)</label>
                                     <div className="relative">
-                                        <Fingerprint size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                                        <Users size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                                         <input name="sire" defaultValue={initialData?.sire} className={`${inputClass} pl-9`} placeholder="Ancestry ID or Name" />
                                     </div>
                                 </div>
                                 <div>
                                     <label className={labelClass}>Dam (Mother)</label>
                                     <div className="relative">
-                                        <Fingerprint size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                                        <Users size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                                         <input name="dam" defaultValue={initialData?.dam} className={`${inputClass} pl-9`} placeholder="Ancestry ID or Name" />
                                     </div>
                                 </div>
                             </div>
                         </section>
 
-                        <section className="space-y-6"><h3 className="text-[11px] font-black text-[#f59e0b] uppercase tracking-[0.2em] flex items-center gap-2 pb-3 border-b border-[#fffbeb]"><Zap size={16}/> MARKERS & BIOMETRICS</h3><div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6"><div className="lg:col-span-2"><div className="flex justify-between items-center mb-1.5 px-1"><label className="text-[10px] font-black text-slate-400 uppercase">IDENTIFICATION</label><div className="flex items-center gap-2"><input type="checkbox" name="hasNoId" defaultChecked={initialData?.hasNoId}/><span className="text-[9px] font-black text-slate-400 uppercase">NO ID</span></div></div><div className="grid grid-cols-2 gap-4"><input name="microchip" defaultValue={initialData?.microchip} className={`${inputClass} font-mono`} placeholder="Microchip..." /><input name="ringNumber" defaultValue={initialData?.ringNumber} className={`${inputClass} font-mono`} placeholder="Ring..." /></div></div><div><label className={labelClass}>HAZARD CLASS <select name="hazardRating" value={hazardRating} onChange={e => setHazardRating(e.target.value as HazardRating)} className={inputClass}>
+                        <section className="space-y-6"><h3 className="text-[11px] font-black text-[#f59e0b] uppercase tracking-[0.2em] flex items-center gap-2 pb-3 border-b border-[#fffbeb]"><Zap size={16}/> MARKERS & BIOMETRICS</h3><div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6"><div className="lg:col-span-2"><div className="flex justify-between items-center mb-1.5 px-1"><label className="text-[10px] font-black text-slate-400 uppercase">IDENTIFICATION</label><div className="flex items-center gap-2"><input type="checkbox" name="hasNoId" defaultChecked={initialData?.hasNoId}/><span className="text-[9px] font-black text-slate-400 uppercase">NO ID</span></div></div><div className={`grid ${isBird ? 'grid-cols-2' : 'grid-cols-1'} gap-4`}><input name="microchip" defaultValue={initialData?.microchip} className={`${inputClass} font-mono`} placeholder="Microchip..." />{isBird && <input name="ringNumber" defaultValue={initialData?.ringNumber} className={`${inputClass} font-mono`} placeholder="Ring..." />}</div></div><div><label className={labelClass}>HAZARD CLASS <select name="hazardRating" value={hazardRating || HazardRating.NONE} onChange={e => setHazardRating(e.target.value as HazardRating)} className={inputClass}>
                           {(Object.values(HazardRating) as string[]).map(h => <option key={String(h)}>{h}</option>)}
                         </select></label></div><div className="flex flex-col justify-end pb-1.5"><label className="flex items-center gap-2 cursor-pointer bg-slate-50 p-2 rounded-lg border border-slate-100 hover:border-emerald-200 transition-all"><input type="checkbox" name="isVenomous" checked={isVenomous} onChange={e => setIsVenomous(e.target.checked)}/> <span className="text-[10px] font-black text-slate-500 uppercase flex items-center gap-1.5"><Skull size={10}/> VENOMOUS</span></label></div></div></section>
                     </div>

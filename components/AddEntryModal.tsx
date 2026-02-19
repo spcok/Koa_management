@@ -82,7 +82,7 @@ const AddEntryModal: React.FC<AddEntryModalProps> = ({
                 setFeedType(parts.slice(1).join(' ') || '');
                 setHasCast(existingLog.hasCast === true ? 'yes' : 'no');
             }
-            if (existingLog.type === LogType.WEIGHT) setWeightValue(existingLog.weightGrams?.toString() || existingLog.value);
+            if (existingLog.type === LogType.WEIGHT) setWeightValue(existingLog.weightGrams?.toString() || existingLog.value || '');
             if (existingLog.type === LogType.HEALTH) { setHealthType(existingLog.healthType || HealthRecordType.OBSERVATION); setHealthBcs(existingLog.bcs || 3); }
             if (existingLog.type === LogType.TEMPERATURE) { setTempBasking(existingLog.baskingTemp?.toString() || ''); setTempCool(existingLog.coolTemp?.toString() || ''); }
             if (existingLog.type === LogType.EGG) setShellQuality(existingLog.shellQuality || ShellQuality.NORMAL);
@@ -179,7 +179,7 @@ const AddEntryModal: React.FC<AddEntryModalProps> = ({
                     {logFormType === LogType.FEED && (
                       <div className="space-y-6 bg-amber-50/30 p-6 rounded-[2rem] border-2 border-amber-100/50">
                         <div className="grid grid-cols-2 gap-6">
-                          <div><label className={labelClass}>Diet Quantity<input type="number" step="0.1" required value={feedQuantity} onChange={e => setFeedQuantity(e.target.value)} className={inputClass}/></label></div>
+                          <div><label className={labelClass}>Diet Quantity<input type="number" step="0.1" required value={feedQuantity || ''} onChange={e => setFeedQuantity(e.target.value)} className={inputClass}/></label></div>
                           <div><label className={labelClass}>Food Inventory Item<select required value={feedType} onChange={e => setFeedType(e.target.value)} className={inputClass}><option value="">Select...</option>{(foodOptions[animal.category] || []).map(opt => <option key={opt} value={opt}>{opt}</option>)}</select></label></div>
                         </div>
                         {(animal.category === AnimalCategory.RAPTORS || animal.category === AnimalCategory.OWLS) && (

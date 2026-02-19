@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useTransition } from 'react';
 import { Animal, AnimalCategory, Task, LogType } from '../types';
-import { CalendarClock, Plus, Calendar, Trash2, Filter, Utensils, RefreshCw, Loader2 } from 'lucide-react';
+import { CalendarClock, Plus, Calendar, Trash2, Filter, Utensils, RefreshCw, Loader2, History, ArrowRight, Copy } from 'lucide-react';
 import { useAppData } from '../hooks/useAppData';
 
 const Schedule: React.FC = () => {
@@ -20,6 +20,8 @@ const Schedule: React.FC = () => {
   
   // Viewing State
   const [viewFilterAnimalId, setViewFilterAnimalId] = useState<string>('ALL');
+  const [viewScope, setViewScope] = useState<'upcoming' | 'history'>('upcoming');
+  const [viewLayout, setViewLayout] = useState<'timeline' | 'animal'>('timeline');
 
   // Manual Mode
   const [selectedDates, setSelectedDates] = useState<string[]>([]);
@@ -84,13 +86,82 @@ const Schedule: React.FC = () => {
       });
   };
 
+  const handleQuickExtend = (animalId: string) => {
+      const animalTasks = tasks.filter(t => t.animalId === animalId && t.type === LogType.FEED);
+      if (animalTasks.length === 0) return;
+      
+      // Sort to find last task
+      animalTasks.sort((a, b) => b.dueDate.localeCompare(a.dueDate));
+      const lastTask = animalTasks[0];
+      
+      // Set Form State
+      setSelectedCategory(animals.find(a => a.id === animalId)?.category || AnimalCategory.EXOTICS);
+      setSelectedAnimalId(animalId);
+      
+      // Try to parse basic quantity/food from notes
+      // Format: "1 Mouse + Calci-dust"
+      if (lastTask.notes) {
+          const match = lastTask.notes.match(/^(\d+(\.\d+)?) (.+?)( \+ Calci-dust)?$/);
+          if (match) {
+              setQuantity(match[1]);
+              setFoodType(match[3].trim());
+              setWithCalciDust(!!match[4]);
+          } else {
+              setQuantity('1');
+              setFoodType('');
+          }
+      }
+
+      // Determine next start date
+      const lastDate = new Date(lastTask.dueDate);
+      lastDate.setDate(lastDate.getDate() + 1); // Start tomorrow relative to last task
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      
+      // Use whichever is later: day after last task, or tomorrow (to avoid scheduling in past)
+      // Actually, if we extend a schedule that ended last week, we probably want to start from today.
+      const startDate = lastDate > new Date() ? lastDate : tomorrow;
+      
+      const y = startDate.getFullYear();
+      const m = String(startDate.getMonth() + 1).padStart(2, '0');
+      const d = String(startDate.getDate()).padStart(2, '0');
+      
+      setIntervalStart(`${y}-${m}-${d}`);
+      setScheduleMode('interval');
+      
+      // Attempt to guess interval
+      if (animalTasks.length > 1) {
+          const secondLast = animalTasks[1];
+          const diffTime = Math.abs(new Date(lastTask.dueDate).getTime() - new Date(secondLast.dueDate).getTime());
+          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+          if (diffDays > 0 && diffDays < 30) setIntervalDays(diffDays);
+      }
+  };
+
   // View Filtering Logic
-  const scheduledFeeds = useMemo(() => {
+  const filteredTasks = useMemo(() => {
     return tasks
-        .filter(t => !t.completed && t.type === LogType.FEED)
+        .filter(t => t.type === LogType.FEED)
+        .filter(t => viewScope === 'upcoming' ? !t.completed : t.completed)
         .filter(t => viewFilterAnimalId === 'ALL' || t.animalId === viewFilterAnimalId)
-        .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
-  }, [tasks, viewFilterAnimalId]);
+        .sort((a, b) => viewScope === 'upcoming' ? a.dueDate.localeCompare(b.dueDate) : b.dueDate.localeCompare(a.dueDate));
+  }, [tasks, viewFilterAnimalId, viewScope]);
+
+  // Grouped Data for Animal View
+  const animalGroups = useMemo(() => {
+      const groups = new Map<string, { animal: Animal, tasks: Task[] }>();
+      
+      filteredTasks.forEach(task => {
+          if (!task.animalId) return;
+          if (!groups.has(task.animalId)) {
+              const animal = animals.find(a => a.id === task.animalId);
+              if (animal) groups.set(task.animalId, { animal, tasks: [] });
+          }
+          groups.get(task.animalId)?.tasks.push(task);
+      });
+      
+      return Array.from(groups.values());
+  }, [filteredTasks, animals]);
 
   // Calendar Grid Generator
   const calendarDays = useMemo(() => {
@@ -100,7 +171,6 @@ const Schedule: React.FC = () => {
       const daysInMonth = new Date(year, month + 1, 0).getDate();
       const days = [];
       for(let i=1; i<=daysInMonth; i++) {
-          // Construct local date manually to ensure YYYY-MM-DD matches display
           const d = new Date(year, month, i);
           const y = d.getFullYear();
           const m = String(d.getMonth() + 1).padStart(2, '0');
@@ -108,7 +178,7 @@ const Schedule: React.FC = () => {
           days.push(`${y}-${m}-${day}`);
       }
       return days;
-  }, []); // Empty dependency array as this month view is static relative to current session
+  }, []);
 
   const inputClass = "w-full px-3 py-2 bg-slate-700 text-white border border-slate-600 rounded-lg placeholder-slate-400 focus:ring-2 focus:ring-emerald-500 focus:outline-none";
 
@@ -199,9 +269,6 @@ const Schedule: React.FC = () => {
                                             <div key={d} className="text-center text-[10px] text-slate-400 font-bold py-1">{d}</div>
                                         ))}
                                         {calendarDays.map(date => {
-                                            // date is strictly YYYY-MM-DD
-                                            const dObj = new Date(date); 
-                                            // getDate() on a local date constructed from YYYY, MM, DD returns correct day
                                             const [y, m, d] = date.split('-').map(Number);
                                             const localDate = new Date(y, m-1, d);
                                             const dayNum = localDate.getDate();
@@ -269,20 +336,37 @@ const Schedule: React.FC = () => {
             {/* RIGHT COLUMN: VIEWING */}
             <div className="lg:col-span-2 space-y-6">
                 <div className="bg-white rounded-xl shadow-sm border border-slate-200 h-full flex flex-col">
-                    <div className="p-6 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                         <div>
-                            <h2 className="font-bold text-lg text-slate-800 flex items-center gap-2">
-                                <Utensils size={20} className="text-orange-500"/> Scheduled Feeds
-                            </h2>
-                            <p className="text-xs text-slate-500">{scheduledFeeds.length} upcoming feeds scheduled</p>
+                    <div className="p-6 border-b border-slate-100 flex flex-col gap-4">
+                         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                             <div>
+                                <h2 className="font-bold text-lg text-slate-800 flex items-center gap-2">
+                                    <Utensils size={20} className="text-orange-500"/> Scheduled Feeds
+                                </h2>
+                                <p className="text-xs text-slate-500">{filteredTasks.length} {viewScope} feeds found</p>
+                             </div>
+                             
+                             <div className="flex flex-wrap items-center gap-2">
+                                 {/* Scope Toggle */}
+                                 <div className="bg-slate-100 p-1 rounded-lg flex border border-slate-200">
+                                     <button onClick={() => setViewScope('upcoming')} className={`px-3 py-1.5 rounded text-[10px] font-bold uppercase transition-all ${viewScope === 'upcoming' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>Upcoming</button>
+                                     <button onClick={() => setViewScope('history')} className={`px-3 py-1.5 rounded text-[10px] font-bold uppercase transition-all flex items-center gap-1 ${viewScope === 'history' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}><History size={10}/> History</button>
+                                 </div>
+
+                                 {/* View Layout Toggle */}
+                                 <div className="bg-slate-100 p-1 rounded-lg flex border border-slate-200">
+                                     <button onClick={() => setViewLayout('timeline')} className={`px-3 py-1.5 rounded text-[10px] font-bold uppercase transition-all ${viewLayout === 'timeline' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>Timeline</button>
+                                     <button onClick={() => setViewLayout('animal')} className={`px-3 py-1.5 rounded text-[10px] font-bold uppercase transition-all ${viewLayout === 'animal' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>By Animal</button>
+                                 </div>
+                             </div>
                          </div>
-                         
-                         <div className="flex items-center gap-2 bg-slate-50 p-1.5 rounded-lg border border-slate-200">
+
+                         {/* Animal Filter */}
+                         <div className="flex items-center gap-2 bg-slate-50 p-2 rounded-lg border border-slate-200 w-full">
                              <Filter size={14} className="text-slate-400 ml-2" />
                              <select 
                                 value={viewFilterAnimalId} 
                                 onChange={(e) => setViewFilterAnimalId(e.target.value)}
-                                className="bg-transparent text-sm font-medium text-slate-700 border-none focus:ring-0 cursor-pointer"
+                                className="bg-transparent text-sm font-medium text-slate-700 border-none focus:ring-0 cursor-pointer w-full"
                              >
                                  <option value="ALL">All Animals</option>
                                  {animals.map(a => <option key={a.id} value={a.id}>{a.name} ({a.species})</option>)}
@@ -291,46 +375,85 @@ const Schedule: React.FC = () => {
                     </div>
 
                     <div className="flex-1 overflow-y-auto p-4 max-h-[600px]">
-                        {scheduledFeeds.length > 0 ? (
-                            <div className="space-y-3">
-                                {scheduledFeeds.map(task => {
-                                    const animal = animals.find(a => a.id === task.animalId);
-                                    if (!animal) return null;
-                                    
-                                    const dateObj = new Date(task.dueDate);
-                                    const isToday = task.dueDate === new Date().toISOString().split('T')[0];
+                        {filteredTasks.length > 0 ? (
+                            viewLayout === 'timeline' ? (
+                                <div className="space-y-3">
+                                    {filteredTasks.map(task => {
+                                        const animal = animals.find(a => a.id === task.animalId);
+                                        if (!animal) return null;
+                                        
+                                        const dateObj = new Date(task.dueDate);
+                                        const isToday = task.dueDate === new Date().toISOString().split('T')[0];
 
-                                    return (
-                                        <div key={task.id} className="flex items-center bg-white border border-slate-100 rounded-lg p-3 shadow-sm hover:border-emerald-200 hover:shadow-md transition-all group">
-                                            <div className={`w-16 h-16 rounded-lg flex flex-col items-center justify-center mr-4 border ${isToday ? 'bg-emerald-50 border-emerald-100 text-emerald-700' : 'bg-slate-50 border-slate-100 text-slate-500'}`}>
-                                                <span className="text-[10px] uppercase font-bold">{dateObj.toLocaleString('default', {month: 'short'})}</span>
-                                                <span className="text-xl font-bold leading-none">{dateObj.getDate()}</span>
-                                                <span className="text-[10px] font-medium">{dateObj.toLocaleString('default', {weekday: 'short'})}</span>
-                                            </div>
-                                            
-                                            <div className="flex-1">
-                                                <div className="flex items-center gap-2">
-                                                    <h3 className="font-bold text-slate-800">{animal.name}</h3>
-                                                    <span className="text-xs text-slate-500 bg-slate-100 px-1.5 rounded">{animal.species}</span>
+                                        return (
+                                            <div key={task.id} className={`flex items-center bg-white border rounded-lg p-3 shadow-sm hover:shadow-md transition-all group ${task.completed ? 'border-slate-200 opacity-60' : 'border-slate-100 hover:border-emerald-200'}`}>
+                                                <div className={`w-16 h-16 rounded-lg flex flex-col items-center justify-center mr-4 border ${isToday ? 'bg-emerald-50 border-emerald-100 text-emerald-700' : 'bg-slate-50 border-slate-100 text-slate-500'}`}>
+                                                    <span className="text-[10px] uppercase font-bold">{dateObj.toLocaleString('default', {month: 'short'})}</span>
+                                                    <span className="text-xl font-bold leading-none">{dateObj.getDate()}</span>
+                                                    <span className="text-[10px] font-medium">{dateObj.toLocaleString('default', {weekday: 'short'})}</span>
                                                 </div>
-                                                <p className="text-sm font-medium text-slate-600 mt-0.5">{task.notes}</p>
-                                            </div>
+                                                
+                                                <div className="flex-1">
+                                                    <div className="flex items-center gap-2">
+                                                        <h3 className="font-bold text-slate-800">{animal.name}</h3>
+                                                        <span className="text-xs text-slate-500 bg-slate-100 px-1.5 rounded">{animal.species}</span>
+                                                    </div>
+                                                    <p className="text-sm font-medium text-slate-600 mt-0.5">{task.notes}</p>
+                                                </div>
 
-                                            <button 
-                                                onClick={() => deleteTask(task.id)}
-                                                className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
-                                                title="Delete Schedule Item"
-                                            >
-                                                <Trash2 size={18} />
-                                            </button>
+                                                <button 
+                                                    onClick={() => deleteTask(task.id)}
+                                                    className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
+                                                    title="Delete Schedule Item"
+                                                >
+                                                    <Trash2 size={18} />
+                                                </button>
+                                            </div>
+                                        )
+                                    })}
+                                </div>
+                            ) : (
+                                <div className="space-y-4">
+                                    {animalGroups.map(({ animal, tasks }) => (
+                                        <div key={animal.id} className="bg-white border-2 border-slate-100 rounded-xl p-4 hover:border-emerald-100 transition-colors shadow-sm">
+                                            <div className="flex justify-between items-start mb-3">
+                                                <div className="flex items-center gap-3">
+                                                    <img src={animal.imageUrl} className="w-10 h-10 rounded-full object-cover border border-slate-200" alt=""/>
+                                                    <div>
+                                                        <h3 className="font-bold text-slate-800">{animal.name}</h3>
+                                                        <p className="text-[10px] font-black text-slate-400 uppercase">{tasks.length} {viewScope} entries</p>
+                                                    </div>
+                                                </div>
+                                                <button 
+                                                    onClick={() => handleQuickExtend(animal.id)}
+                                                    className="bg-emerald-50 text-emerald-700 hover:bg-emerald-100 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-colors flex items-center gap-1"
+                                                    title="Extend Schedule"
+                                                >
+                                                    <Copy size={12}/> Extend
+                                                </button>
+                                            </div>
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-slate-600">
+                                                <div className="bg-slate-50 p-2 rounded-lg border border-slate-100">
+                                                    <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Date Range</span>
+                                                    <div className="font-medium flex items-center gap-2">
+                                                        {new Date(tasks[0].dueDate).toLocaleDateString()} 
+                                                        <ArrowRight size={10}/> 
+                                                        {new Date(tasks[tasks.length - 1].dueDate).toLocaleDateString()}
+                                                    </div>
+                                                </div>
+                                                <div className="bg-slate-50 p-2 rounded-lg border border-slate-100">
+                                                    <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Diet Info</span>
+                                                    <div className="font-medium truncate" title={tasks[0].notes}>{tasks[0].notes || 'See details'}</div>
+                                                </div>
+                                            </div>
                                         </div>
-                                    )
-                                })}
-                            </div>
+                                    ))}
+                                </div>
+                            )
                         ) : (
                             <div className="flex flex-col items-center justify-center h-64 text-slate-400">
                                 <Calendar size={48} className="mb-4 opacity-20" />
-                                <p className="font-medium">No scheduled feeds found.</p>
+                                <p className="font-medium">No {viewScope} feeds found.</p>
                                 <p className="text-sm opacity-70">Use the creation tool to add new feeds.</p>
                             </div>
                         )}

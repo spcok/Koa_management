@@ -14,6 +14,7 @@ interface DailyLogProps {
 }
 
 const DailyLog: React.FC<DailyLogProps> = ({ activeCategory, setActiveCategory, viewDate, setViewDate }) => {
+  // FIX: Get data from context instead of props
   const { 
     animals, updateAnimal, foodOptions, feedMethods, eventTypes, 
     sortOption, setSortOption, currentUser 
@@ -81,8 +82,8 @@ const DailyLog: React.FC<DailyLogProps> = ({ activeCategory, setActiveCategory, 
   };
 
   const isExotic = activeCategory === AnimalCategory.EXOTICS;
-  const isOwl = activeCategory === AnimalCategory.OWLS;
-  const cellPadding = isExotic ? "px-2 md:px-4 py-3" : "px-5 py-4";
+  // Adjusted padding for mobile to allow more space
+  const cellPadding = isExotic ? "px-2 md:px-4 py-3" : "px-2 md:px-5 py-4";
   const headerFontSize = isExotic ? "text-[9px]" : "text-[10px]";
 
   return (
@@ -109,6 +110,7 @@ const DailyLog: React.FC<DailyLogProps> = ({ activeCategory, setActiveCategory, 
       </div>
 
       <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+        {/* FIX: Explicitly cast Object.values(AnimalCategory) to string array to fix 'unknown' type error in JSX mapping. */}
         {(Object.values(AnimalCategory) as string[]).map((cat) => (
             <button key={String(cat)} type="button" onClick={() => setActiveCategory(cat as AnimalCategory)} className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all border-2 ${activeCategory === cat ? 'bg-slate-900 text-white border-slate-900' : 'bg-white border-slate-200 text-slate-400 hover:border-slate-300'}`}>{cat}</button>
         ))}
@@ -121,7 +123,7 @@ const DailyLog: React.FC<DailyLogProps> = ({ activeCategory, setActiveCategory, 
                         <tr>
                             <th className={`${cellPadding} ${headerFontSize} font-black text-slate-500 uppercase`}>Identity</th>
                             <th className={`${cellPadding} ${headerFontSize} font-black text-slate-500 uppercase`}>{isExotic ? 'Gradient' : 'Live Wt'}</th>
-                            {!isExotic && !isOwl && <th className={`${cellPadding} ${headerFontSize} font-black text-slate-500 uppercase`}>Envir.</th>}
+                            {!isExotic && <th className={`${cellPadding} ${headerFontSize} font-black text-slate-500 uppercase`}>Envir.</th>}
                             <th className={`${cellPadding} ${headerFontSize} font-black text-slate-500 uppercase`}>Intake</th>
                             {isExotic && <th className={`${cellPadding} ${headerFontSize} font-black text-slate-500 uppercase text-center`}>Tasks</th>}
                         </tr>
@@ -139,23 +141,23 @@ const DailyLog: React.FC<DailyLogProps> = ({ activeCategory, setActiveCategory, 
                                 <tr key={animal.id} className="bg-white hover:bg-slate-50/50 group border-l-4 border-l-transparent hover:border-l-emerald-500">
                                     <td className={`${cellPadding} border-b border-slate-100`}>
                                         <div className="flex items-center gap-2">
-                                            <img src={animal.imageUrl} alt="" className="w-8 h-8 rounded-full object-cover border-2 border-slate-200 shrink-0" />
-                                            <div>
-                                                <p className="font-black text-slate-900 uppercase truncate">{animal.name}</p>
-                                                <p className="text-[10px] font-bold text-slate-400 uppercase truncate">{animal.species}</p>
+                                            <img src={animal.imageUrl} alt="" className="hidden md:block w-8 h-8 rounded-full object-cover border-2 border-slate-200 shrink-0" />
+                                            <div className="min-w-0">
+                                                <p className="font-black text-slate-900 uppercase text-xs md:text-sm break-words whitespace-normal leading-tight">{animal.name}</p>
+                                                <p className="text-[10px] font-bold text-slate-400 uppercase break-words whitespace-normal leading-tight">{animal.species}</p>
                                             </div>
                                         </div>
                                     </td>
                                     <td className={`${cellPadding} border-b border-slate-100`}>
                                         <button type="button" onClick={() => handleCellClick(animal.id, isExotic ? LogType.TEMPERATURE : LogType.WEIGHT, isExotic ? logs.temp : logs.weight)} className={`w-full flex items-center justify-between min-h-[2.5rem] px-2 -mx-2 rounded-xl border-2 hover:border-emerald-200 hover:bg-emerald-50/50 text-left ${!(isExotic ? logs.temp : logs.weight) ? 'border-dashed border-slate-200' : 'border-transparent'}`}>
-                                            <div>
-                                                {isExotic ? (logs.temp ? <span><Thermometer size={12}/> {logs.temp.baskingTemp}°/{logs.temp.coolTemp}°</span> : <span className="text-slate-300 font-bold uppercase">Gradient</span>) : (logs.weight ? <span><Scale size={14}/> {formatWeightDisplay(logs.weight.weightGrams, animal.weightUnit)}</span> : <span className="text-slate-300 font-bold uppercase">Weight</span>)}
+                                            <div className="min-w-0">
+                                                {isExotic ? (logs.temp ? <span><Thermometer size={12}/> {logs.temp.baskingTemp}°/{logs.temp.coolTemp}°</span> : <span className="text-slate-300 font-bold uppercase text-[10px]">Gradient</span>) : (logs.weight ? <span><Scale size={14}/> {formatWeightDisplay(logs.weight.weightGrams, animal.weightUnit)}</span> : <span className="text-slate-300 font-bold uppercase text-[10px]">Weight</span>)}
                                             </div>
-                                            <div className="opacity-0 group-hover:opacity-100">{logs.weight ? <Check size={14} /> : <Plus size={14} />}</div>
+                                            <div className="opacity-0 group-hover:opacity-100 shrink-0 ml-1">{logs.weight ? <Check size={14} /> : <Plus size={14} />}</div>
                                         </button>
                                     </td>
-                                    {!isExotic && !isOwl && <td className={`${cellPadding} border-b border-slate-100`}><button type="button" onClick={() => handleCellClick(animal.id, LogType.TEMPERATURE, logs.temp)} className={`w-full flex items-center justify-between min-h-[2.5rem] px-2 -mx-2 rounded-xl border-2 hover:border-emerald-200 hover:bg-emerald-50/50 text-left ${!logs.temp ? 'border-dashed border-slate-200' : 'border-transparent'}`}><div>{logs.temp ? <span><Thermometer size={14}/> {logs.temp.temperature}°C</span> : <span className="text-slate-300 font-bold uppercase">Temp</span>}</div><div className="opacity-0 group-hover:opacity-100">{logs.temp ? <Check size={14} /> : <Plus size={14} />}</div></button></td>}
-                                    <td className={`${cellPadding} border-b border-slate-100`}><button type="button" onClick={() => handleCellClick(animal.id, LogType.FEED, logs.feed)} className={`w-full flex items-center justify-between min-h-[2.5rem] px-2 -mx-2 rounded-xl border-2 hover:border-emerald-200 hover:bg-emerald-50/50 text-left ${!logs.feed ? 'border-dashed border-slate-200' : 'border-transparent'}`}><div>{logs.feed ? <span className="font-black text-emerald-700 uppercase truncate"><Utensils size={10}/> {logs.feed.value}</span> : <span className="text-slate-300 font-bold uppercase">Intake</span>}</div><div className="opacity-0 group-hover:opacity-100">{logs.feed ? <Check size={14} /> : <Plus size={14} />}</div></button></td>
+                                    {!isExotic && <td className={`${cellPadding} border-b border-slate-100`}><button type="button" onClick={() => handleCellClick(animal.id, LogType.TEMPERATURE, logs.temp)} className={`w-full flex items-center justify-between min-h-[2.5rem] px-2 -mx-2 rounded-xl border-2 hover:border-emerald-200 hover:bg-emerald-50/50 text-left ${!logs.temp ? 'border-dashed border-slate-200' : 'border-transparent'}`}><div className="min-w-0">{logs.temp ? <span><Thermometer size={14}/> {logs.temp.temperature}°C</span> : <span className="text-slate-300 font-bold uppercase text-[10px]">Temp</span>}</div><div className="opacity-0 group-hover:opacity-100 shrink-0 ml-1">{logs.temp ? <Check size={14} /> : <Plus size={14} />}</div></button></td>}
+                                    <td className={`${cellPadding} border-b border-slate-100`}><button type="button" onClick={() => handleCellClick(animal.id, LogType.FEED, logs.feed)} className={`w-full flex items-center justify-between min-h-[2.5rem] px-2 -mx-2 rounded-xl border-2 hover:border-emerald-200 hover:bg-emerald-50/50 text-left ${!logs.feed ? 'border-dashed border-slate-200' : 'border-transparent'}`}><div className="min-w-0">{logs.feed ? <span className="font-black text-emerald-700 uppercase truncate block"><Utensils size={10} className="inline mr-1"/>{logs.feed.value}</span> : <span className="text-slate-300 font-bold uppercase text-[10px]">Intake</span>}</div><div className="opacity-0 group-hover:opacity-100 shrink-0 ml-1">{logs.feed ? <Check size={14} /> : <Plus size={14} />}</div></button></td>
                                     {isExotic && <td className={`${cellPadding} text-center border-b border-slate-100`}><div className="flex justify-center gap-4"><button type="button" onClick={() => handleQuickCheck(animal, LogType.MISTING)}><Droplets className={logs.mist ? 'text-emerald-500' : 'text-slate-200 hover:text-emerald-300'} /></button><button type="button" onClick={() => handleQuickCheck(animal, LogType.WATER)}><Check className={logs.water ? 'text-blue-500' : 'text-slate-200 hover:text-blue-300'} /></button></div></td>}
                                 </tr>
                             );

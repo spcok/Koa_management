@@ -1,3 +1,4 @@
+
 import React, { useState, use, useEffect, useCallback } from 'react';
 import { AppContext } from '../context/AppContext';
 import { dataService } from '../services/dataService';
@@ -30,7 +31,7 @@ const initialDataPromise = Promise.all([
   dataService.fetchEventTypes()     // 16
 ]).catch(err => {
     console.error("Critical Data Fetch Failure:", err);
-    return Array(17).fill(null); // Fallback to avoid breaking .use()
+    return Array(17).fill(null); 
 });
 
 const upsert = <T extends { id: string }>(items: T[], item: T): T[] => {
@@ -47,6 +48,8 @@ const upsert = <T extends { id: string }>(items: T[], item: T): T[] => {
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const initialData = use(initialDataPromise);
 
+  const [isOffline, setIsOffline] = useState(!navigator.onLine);
+  
   // Robust initialization with guarded fallbacks
   const [animals, setAnimals] = useState<Animal[]>(initialData[0] || []);
   const [tasks, setTasks] = useState<Task[]>(initialData[1] || []);
@@ -69,8 +72,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [activeShift, setActiveShift] = useState<TimeLogEntry | null>(null);
 
+  // Connectivity Listeners
+  useEffect(() => {
+    const handleOnline = () => setIsOffline(false);
+    const handleOffline = () => setIsOffline(true);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
   // Weather Sync (ZLA Compliance)
   useEffect(() => {
+    if (isOffline) return;
+    
     const todayStr = new Date().toISOString().split('T')[0];
     const checkWeatherSync = async () => {
         const owls = (animals || []).filter(a => a.category === AnimalCategory.OWLS);
@@ -114,7 +133,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     const timer = setTimeout(checkWeatherSync, 10000);
     return () => clearTimeout(timer);
-  }, [animals]);
+  }, [animals, isOffline]);
 
   useEffect(() => {
     if (currentUser && (timeLogs || []).length > 0) {
@@ -309,7 +328,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const contextValue = {
     currentUser, users, animals, tasks, siteLogs, incidents, firstAidLogs, timeLogs,
     holidayRequests, foodOptions, feedMethods, eventTypes, locations, contacts,
-    orgProfile, systemPreferences, sortOption, isOrderLocked, activeShift,
+    orgProfile, systemPreferences, sortOption, isOrderLocked, activeShift, isOffline,
     login, logout, setSortOption, toggleOrderLock, clockIn, clockOut,
     updateAnimal, addAnimal, deleteAnimal, reorderAnimals,
     addTask, addTasks, updateTask, deleteTask, addSiteLog, deleteSiteLog,

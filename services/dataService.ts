@@ -1,8 +1,8 @@
 
 import { supabase } from './supabaseClient';
-// Fix: Changed OrganizationProfile to OrganisationProfile
 import { Animal, AnimalCategory, Task, User, UserRole, SiteLogEntry, Contact, OrganisationProfile, Incident, FirstAidLogEntry, TimeLogEntry, GlobalDocument, AuditLogEntry, LocalBackupConfig, LocalBackupEntry, HolidayRequest, SystemPreferences } from '../types';
-import { DEFAULT_FOOD_OPTIONS, DEFAULT_FEED_METHODS, MOCK_ANIMALS, DEFAULT_SYSTEM_PREFERENCES, DEFAULT_EVENT_TYPES } from '../constants';
+// Fix: Added DEFAULT_LOCAL_BACKUP_CONFIG to the imports from constants
+import { DEFAULT_FOOD_OPTIONS, DEFAULT_FEED_METHODS, MOCK_ANIMALS, DEFAULT_SYSTEM_PREFERENCES, DEFAULT_EVENT_TYPES, DEFAULT_LOCAL_BACKUP_CONFIG } from '../constants';
 import { RealtimeChannel } from '@supabase/supabase-js';
 
 const DEFAULT_USERS: User[] = [
@@ -30,15 +30,38 @@ const DEFAULT_USERS: User[] = [
     }
 ];
 
-const DEFAULT_LOCAL_BACKUP_CONFIG: LocalBackupConfig = {
-    enabled: true,
-    frequency: 'daily',
-    retentionCount: 10
+const CACHE_KEYS = {
+    ANIMALS: 'koa_cache_animals',
+    TASKS: 'koa_cache_tasks',
+    USERS: 'koa_cache_users',
+    SITE_LOGS: 'koa_cache_site_logs',
+    INCIDENTS: 'koa_cache_incidents',
+    FIRST_AID: 'koa_cache_first_aid',
+    TIME_LOGS: 'koa_cache_time_logs',
+    HOLIDAYS: 'koa_cache_holidays',
+    SETTINGS: 'koa_cache_settings_prefix_'
+};
+
+const getLocal = <T>(key: string, fallback: T): T => {
+    try {
+        const item = localStorage.getItem(key);
+        return item ? JSON.parse(item) : fallback;
+    } catch {
+        return fallback;
+    }
+};
+
+const setLocal = (key: string, data: any) => {
+    try {
+        localStorage.setItem(key, JSON.stringify(data));
+    } catch (e) {
+        console.warn("Storage full or unavailable", e);
+    }
 };
 
 const handleSupabaseError = (error: any, context: string) => {
     if (error?.code === 'PGRST204' || error?.code === 'PGRST205') {
-        console.warn(`[Statutory Records] Table for ${context} is pending creation. Using offline mocks.`);
+        console.warn(`[Statutory Records] Table for ${context} is pending creation.`);
         return true; 
     }
     console.error(`[Supabase Critical] ${context}:`, error);
@@ -62,37 +85,45 @@ export const dataService = {
     fetchAnimals: async (): Promise<Animal[]> => {
         try {
             const { data, error } = await supabase.from('animals').select('json');
-            if (error) {
-                handleSupabaseError(error, 'fetchAnimals');
-                return MOCK_ANIMALS; 
-            }
-            return (data || []).map((row: any) => row.json);
+            if (error) throw error;
+            const animals = (data || []).map((row: any) => row.json);
+            setLocal(CACHE_KEYS.ANIMALS, animals);
+            return animals;
         } catch (e) {
-            return MOCK_ANIMALS;
+            handleSupabaseError(e, 'fetchAnimals');
+            return getLocal(CACHE_KEYS.ANIMALS, MOCK_ANIMALS);
         }
     },
 
     saveAnimal: async (animal: Animal): Promise<void> => {
+        // Optimistic local update of cache is handled by caller/AppProvider, 
+        // but we ensure this call is resilient
         const { error } = await supabase.from('animals').upsert({ id: animal.id, json: animal });
-        if (error) { handleSupabaseError(error, 'saveAnimal'); throw error; }
+        if (error) handleSupabaseError(error, 'saveAnimal');
     },
 
     saveAnimalsBulk: async (animals: Animal[]): Promise<void> => {
         const rows = animals.map(a => ({ id: a.id, json: a }));
         const { error } = await supabase.from('animals').upsert(rows);
-        if (error) { handleSupabaseError(error, 'saveAnimalsBulk'); throw error; }
+        if (error) handleSupabaseError(error, 'saveAnimalsBulk');
     },
 
     deleteAnimal: async (id: string): Promise<void> => {
         const { error } = await supabase.from('animals').delete().eq('id', id);
-        if (error) { handleSupabaseError(error, 'deleteAnimal'); throw error; }
+        if (error) handleSupabaseError(error, 'deleteAnimal');
     },
 
     fetchUsers: async (): Promise<User[]> => {
-        const { data, error } = await supabase.from('users').select('json');
-        if (error) { handleSupabaseError(error, 'fetchUsers'); return DEFAULT_USERS; }
-        if (!data || data.length === 0) return DEFAULT_USERS;
-        return data.map((row: any) => row.json);
+        try {
+            const { data, error } = await supabase.from('users').select('json');
+            if (error) throw error;
+            const users = data && data.length > 0 ? data.map((row: any) => row.json) : DEFAULT_USERS;
+            setLocal(CACHE_KEYS.USERS, users);
+            return users;
+        } catch (e) {
+            handleSupabaseError(e, 'fetchUsers');
+            return getLocal(CACHE_KEYS.USERS, DEFAULT_USERS);
+        }
     },
 
     saveUsers: async (users: User[]): Promise<void> => {
@@ -106,9 +137,16 @@ export const dataService = {
     },
 
     fetchTasks: async (): Promise<Task[]> => {
-        const { data, error } = await supabase.from('tasks').select('json');
-        if (error) { handleSupabaseError(error, 'fetchTasks'); return []; }
-        return (data || []).map((row: any) => row.json);
+        try {
+            const { data, error } = await supabase.from('tasks').select('json');
+            if (error) throw error;
+            const tasks = (data || []).map((row: any) => row.json);
+            setLocal(CACHE_KEYS.TASKS, tasks);
+            return tasks;
+        } catch (e) {
+            handleSupabaseError(e, 'fetchTasks');
+            return getLocal(CACHE_KEYS.TASKS, []);
+        }
     },
 
     saveTasks: async (tasks: Task[]): Promise<void> => {
@@ -123,9 +161,16 @@ export const dataService = {
     },
 
     fetchSiteLogs: async (): Promise<SiteLogEntry[]> => {
-        const { data, error } = await supabase.from('site_logs').select('json');
-        if (error) { handleSupabaseError(error, 'fetchSiteLogs'); return []; }
-        return (data || []).map((row: any) => row.json);
+        try {
+            const { data, error } = await supabase.from('site_logs').select('json');
+            if (error) throw error;
+            const logs = (data || []).map((row: any) => row.json);
+            setLocal(CACHE_KEYS.SITE_LOGS, logs);
+            return logs;
+        } catch (e) {
+            handleSupabaseError(e, 'fetchSiteLogs');
+            return getLocal(CACHE_KEYS.SITE_LOGS, []);
+        }
     },
 
     saveSiteLog: async (log: SiteLogEntry): Promise<void> => {
@@ -139,12 +184,16 @@ export const dataService = {
     },
 
     fetchIncidents: async (): Promise<Incident[]> => {
-        const { data, error } = await supabase.from('incidents').select('json');
-        if (error) {
-            handleSupabaseError(error, 'fetchIncidents');
-            return [];
+        try {
+            const { data, error } = await supabase.from('incidents').select('json');
+            if (error) throw error;
+            const incidents = (data || []).map((row: any) => row.json);
+            setLocal(CACHE_KEYS.INCIDENTS, incidents);
+            return incidents;
+        } catch (e) {
+            handleSupabaseError(e, 'fetchIncidents');
+            return getLocal(CACHE_KEYS.INCIDENTS, []);
         }
-        return (data || []).map((row: any) => row.json);
     },
 
     saveIncident: async (incident: Incident): Promise<void> => {
@@ -158,12 +207,16 @@ export const dataService = {
     },
 
     fetchFirstAidLogs: async (): Promise<FirstAidLogEntry[]> => {
-        const { data, error } = await supabase.from('first_aid_logs').select('json');
-        if (error) {
-            handleSupabaseError(error, 'fetchFirstAidLogs');
-            return [];
+        try {
+            const { data, error } = await supabase.from('first_aid_logs').select('json');
+            if (error) throw error;
+            const logs = (data || []).map((row: any) => row.json);
+            setLocal(CACHE_KEYS.FIRST_AID, logs);
+            return logs;
+        } catch (e) {
+            handleSupabaseError(e, 'fetchFirstAidLogs');
+            return getLocal(CACHE_KEYS.FIRST_AID, []);
         }
-        return (data || []).map((row: any) => row.json);
     },
 
     saveFirstAidLog: async (log: FirstAidLogEntry): Promise<void> => {
@@ -177,9 +230,16 @@ export const dataService = {
     },
 
     fetchTimeLogs: async (): Promise<TimeLogEntry[]> => {
-        const { data, error } = await supabase.from('time_logs').select('json');
-        if (error) { handleSupabaseError(error, 'fetchTimeLogs'); return []; }
-        return (data || []).map((row: any) => row.json);
+        try {
+            const { data, error } = await supabase.from('time_logs').select('json');
+            if (error) throw error;
+            const logs = (data || []).map((row: any) => row.json);
+            setLocal(CACHE_KEYS.TIME_LOGS, logs);
+            return logs;
+        } catch (e) {
+            handleSupabaseError(e, 'fetchTimeLogs');
+            return getLocal(CACHE_KEYS.TIME_LOGS, []);
+        }
     },
 
     saveTimeLog: async (log: TimeLogEntry): Promise<void> => {
@@ -193,9 +253,16 @@ export const dataService = {
     },
 
     fetchHolidayRequests: async (): Promise<HolidayRequest[]> => {
-        const { data, error } = await supabase.from('holiday_requests').select('json');
-        if (error) { handleSupabaseError(error, 'fetchHolidayRequests'); return []; }
-        return (data || []).map((row: any) => row.json).sort((a, b) => b.timestamp - a.timestamp);
+        try {
+            const { data, error } = await supabase.from('holiday_requests').select('json');
+            if (error) throw error;
+            const logs = (data || []).map((row: any) => row.json);
+            setLocal(CACHE_KEYS.HOLIDAYS, logs);
+            return logs;
+        } catch (e) {
+            handleSupabaseError(e, 'fetchHolidayRequests');
+            return getLocal(CACHE_KEYS.HOLIDAYS, []);
+        }
     },
 
     saveHolidayRequest: async (req: HolidayRequest): Promise<void> => {
@@ -252,11 +319,16 @@ export const dataService = {
     },
 
     fetchSettingsKey: async (key: string, defaultValue: any): Promise<any> => {
-        const { data, error } = await supabase.from('settings').select('value').eq('key', key).single();
-        if (error && error.code !== 'PGRST116') {
-            handleSupabaseError(error, `fetchSettings:${key}`);
+        try {
+            const { data, error } = await supabase.from('settings').select('value').eq('key', key).single();
+            if (error && error.code !== 'PGRST116') throw error;
+            const value = data ? data.value : defaultValue;
+            setLocal(`${CACHE_KEYS.SETTINGS}${key}`, value);
+            return value;
+        } catch (e) {
+            handleSupabaseError(e, `fetchSettings:${key}`);
+            return getLocal(`${CACHE_KEYS.SETTINGS}${key}`, defaultValue);
         }
-        return data ? data.value : defaultValue;
     },
 
     saveSettingsKey: async (key: string, value: any): Promise<void> => {
@@ -280,7 +352,6 @@ export const dataService = {
     saveContacts: async (val: Contact[]) => dataService.saveSettingsKey('contacts', val),
 
     fetchOrgProfile: async () => dataService.fetchSettingsKey('org_profile', null),
-    // Fix: Changed OrganizationProfile to OrganisationProfile
     saveOrgProfile: async (val: OrganisationProfile) => dataService.saveSettingsKey('org_profile', val),
 
     fetchLocalBackupConfig: async (): Promise<LocalBackupConfig> => dataService.fetchSettingsKey('local_backup_config', DEFAULT_LOCAL_BACKUP_CONFIG),

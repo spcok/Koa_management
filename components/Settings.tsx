@@ -216,7 +216,18 @@ const Settings: React.FC<SettingsProps> = ({ onLaunchBenchmark }) => {
   }, [animals, tasks, users]);
 
   useEffect(() => {
-      if (orgProfile) setOrgForm(orgProfile);
+      if (orgProfile) {
+          setOrgForm({
+              name: orgProfile.name || '',
+              address: orgProfile.address || '',
+              licenceNumber: orgProfile.licenceNumber || '',
+              contactEmail: orgProfile.contactEmail || '',
+              contactPhone: orgProfile.contactPhone || '',
+              logoUrl: orgProfile.logoUrl || '',
+              websiteUrl: orgProfile.websiteUrl || '',
+              adoptionUrl: orgProfile.adoptionUrl || ''
+          });
+      }
   }, [orgProfile]);
 
   useEffect(() => {
@@ -322,6 +333,19 @@ const Settings: React.FC<SettingsProps> = ({ onLaunchBenchmark }) => {
           : [...users, newUser];
       updateUsers(updatedUsers);
       setIsUserModalOpen(false);
+  };
+
+  const togglePermission = (key: keyof UserPermissions) => {
+      setUserForm(prev => {
+          const currentPerms = prev.permissions || {} as UserPermissions;
+          return {
+              ...prev,
+              permissions: {
+                  ...currentPerms,
+                  [key]: !currentPerms[key]
+              }
+          };
+      });
   };
 
   // --- DOCUMENTS HANDLERS ---
@@ -607,6 +631,45 @@ const Settings: React.FC<SettingsProps> = ({ onLaunchBenchmark }) => {
 
   const inputClass = "w-full px-4 py-3 bg-slate-50 border-2 border-slate-200 rounded-xl text-sm font-black text-slate-900 focus:outline-none focus:border-emerald-500 transition-all placeholder-slate-300 uppercase tracking-widest";
   const activeTestLogs = testResults.find(r => r.id === activeTestLogId)?.logs || [];
+
+  const permissionGroups = [
+    {
+        title: "Core Operations",
+        items: [
+            { key: 'dashboard', label: 'Dashboard' },
+            { key: 'dailyLog', label: 'Daily Logs' },
+            { key: 'rounds', label: 'Daily Rounds' },
+            { key: 'tasks', label: 'Tasks' },
+        ]
+    },
+    {
+        title: "Animal Management",
+        items: [
+            { key: 'medical', label: 'Medical Records' },
+            { key: 'feedingSchedule', label: 'Feeding Sched.' },
+            { key: 'flightRecords', label: 'Flight Logs' },
+            { key: 'movements', label: 'Stock Movements' },
+        ]
+    },
+    {
+        title: "Site Management",
+        items: [
+            { key: 'safety', label: 'Health & Safety' },
+            { key: 'maintenance', label: 'Maintenance' },
+            { key: 'reports', label: 'Reports' },
+            { key: 'missingRecords', label: 'Data Audits' },
+        ]
+    },
+    {
+        title: "HR & System",
+        items: [
+            { key: 'attendance', label: 'View Timesheets' },
+            { key: 'attendanceManager', label: 'Manage Time' },
+            { key: 'holidayApprover', label: 'Approve Leave' },
+            { key: 'settings', label: 'System Settings' },
+        ]
+    }
+  ];
 
   return (
     <div className="flex h-full max-h-[calc(100vh-4rem)] overflow-hidden bg-white animate-in fade-in duration-500">
@@ -1013,6 +1076,49 @@ const Settings: React.FC<SettingsProps> = ({ onLaunchBenchmark }) => {
                             </div>
                         ))}
                     </div>
+
+                    {/* Animal Issues */}
+                    <div className="space-y-6">
+                        {groupedAuditIssues.sortedIds.map(animalId => {
+                            const issues = groupedAuditIssues.groups.get(animalId);
+                            const animal = animals.find(a => a.id === animalId);
+                            if (!issues || !animal) return null;
+
+                            return (
+                                <div key={animalId} className="bg-white rounded-2xl border-2 border-slate-200 p-6 shadow-sm animate-in slide-in-from-bottom-2">
+                                    <div className="flex items-center gap-4 mb-4 border-b border-slate-100 pb-3">
+                                        <div className="w-10 h-10 rounded-xl bg-slate-100 overflow-hidden">
+                                            <img src={animal.imageUrl} alt="" className="w-full h-full object-cover"/>
+                                        </div>
+                                        <div>
+                                            <h4 className="font-black text-slate-900 text-sm uppercase">{animal.name}</h4>
+                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{animal.species}</p>
+                                        </div>
+                                        <div className="ml-auto flex gap-2">
+                                            {issues.some(i => i.severity === 'Critical') && <span className="px-2 py-1 bg-rose-100 text-rose-700 rounded-lg text-[9px] font-black uppercase">Critical</span>}
+                                            {issues.some(i => i.severity === 'Warning') && <span className="px-2 py-1 bg-amber-100 text-amber-700 rounded-lg text-[9px] font-black uppercase">Warning</span>}
+                                        </div>
+                                    </div>
+                                    <div className="space-y-3">
+                                        {issues.map(issue => (
+                                            <div key={issue.id} className="flex items-start gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
+                                                {issue.severity === 'Critical' ? <XCircle size={16} className="text-rose-500 mt-0.5"/> : <AlertCircle size={16} className="text-amber-500 mt-0.5"/>}
+                                                <div className="flex-1">
+                                                    <p className="text-xs font-bold text-slate-700">{issue.message}</p>
+                                                    <p className="text-[10px] text-slate-500 mt-1">{issue.remediation}</p>
+                                                    {issue.category === 'Compliance' && (
+                                                        <button onClick={() => setRemediationIssue(issue)} className="text-[10px] font-black text-emerald-600 uppercase mt-2 hover:underline flex items-center gap-1">
+                                                            <Wrench size={10}/> Auto-Remediate
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
                 </div>
             )}
 
@@ -1026,10 +1132,46 @@ const Settings: React.FC<SettingsProps> = ({ onLaunchBenchmark }) => {
                             <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">Automated Taxonomy & Conservation Status Sync</p>
                         </div>
                     </div>
-                    {/* ... Intelligence Content ... */}
-                    <button onClick={handleRunIUCNScan} disabled={isScanning} className="bg-purple-600 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2">
-                        {isScanning ? <Loader2 className="animate-spin"/> : <RefreshCw/>} Run Auto-Discovery
-                    </button>
+                    {/* Action Area with Progress Indicator */}
+                    <div className="bg-white p-8 rounded-[2rem] border-2 border-slate-200 shadow-sm flex flex-col items-center text-center space-y-6">
+                        <div className="p-4 bg-purple-50 text-purple-600 rounded-full mb-2">
+                            <Globe2 size={48} />
+                        </div>
+                        <div>
+                            <h4 className="text-lg font-black text-slate-900 uppercase tracking-tight mb-2">Global IUCN Database Sync</h4>
+                            <p className="text-sm font-medium text-slate-500 max-w-lg mx-auto">
+                                Scan your entire animal collection against the IUCN Red List database to automatically update conservation status and scientific taxonomy.
+                            </p>
+                        </div>
+
+                        {/* Progress Indicator */}
+                        {isScanning ? (
+                            <div className="w-full max-w-md space-y-2">
+                                <div className="flex justify-between text-xs font-bold text-slate-500 uppercase tracking-widest">
+                                    <span>Analyzing Collection...</span>
+                                    <span>{scanProgress}%</span>
+                                </div>
+                                <div className="h-4 bg-slate-100 rounded-full overflow-hidden border border-slate-200">
+                                    <div 
+                                        className="h-full bg-purple-600 transition-all duration-300 ease-out flex items-center justify-center"
+                                        style={{ width: `${scanProgress}%` }}
+                                    >
+                                        <div className="w-full h-full opacity-20 bg-[linear-gradient(45deg,rgba(255,255,255,0.15)_25%,transparent_25%,transparent_50%,rgba(255,255,255,0.15)_50%,rgba(255,255,255,0.15)_75%,transparent_75%,transparent)] bg-[length:1rem_1rem] animate-[progress-bar-stripes_1s_linear_infinite]"></div>
+                                    </div>
+                                </div>
+                                <p className="text-[10px] font-bold text-purple-600 uppercase tracking-widest animate-pulse">
+                                    AI Processing Active - Do not close tab
+                                </p>
+                            </div>
+                        ) : (
+                            <button 
+                                onClick={handleRunIUCNScan} 
+                                className="bg-purple-600 text-white px-8 py-4 rounded-2xl font-black uppercase text-xs tracking-[0.2em] hover:bg-purple-700 transition-all shadow-xl active:scale-95 flex items-center gap-3"
+                            >
+                                <RefreshCw size={18} /> Run Auto-Discovery
+                            </button>
+                        )}
+                    </div>
                 </div>
             )}
 
@@ -1087,8 +1229,91 @@ const Settings: React.FC<SettingsProps> = ({ onLaunchBenchmark }) => {
                             <div><label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1 text-slate-900">Security PIN</label>
                             <input type="password" maxLength={4} value={userForm.pin || ''} onChange={e => setUserForm({...userForm, pin: e.target.value})} className={inputClass}/></div>
                             <div><label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1 text-slate-900">Academy Role</label>
-                            <select value={userForm.role} onChange={e => setUserForm({...userForm, role: e.target.value as UserRole})} className={inputClass}><option value={UserRole.VOLUNTEER}>Volunteer</option><option value={UserRole.ADMIN}>Admin</option></select></div>
+                            <select value={userForm.role || UserRole.VOLUNTEER} onChange={e => setUserForm({...userForm, role: e.target.value as UserRole})} className={inputClass}><option value={UserRole.VOLUNTEER}>Volunteer</option><option value={UserRole.ADMIN}>Admin</option></select></div>
                         </div>
+
+                        {/* Access Control Section */}
+                        <div className="bg-slate-50 border-2 border-slate-200 rounded-2xl p-6 space-y-4">
+                            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-200 pb-2 flex items-center gap-2">
+                                <ShieldCheck size={14}/> Access Control
+                            </h4>
+                            
+                            <div className="flex items-center justify-between p-3 bg-white rounded-xl border border-slate-100 shadow-sm">
+                                <span className="text-xs font-bold text-slate-700 uppercase tracking-wide">Account Status</span>
+                                <label className="flex items-center gap-3 cursor-pointer">
+                                    <span className={`text-[10px] font-black uppercase tracking-widest ${userForm.active !== false ? 'text-emerald-600' : 'text-rose-500'}`}>{userForm.active !== false ? 'Active' : 'Suspended'}</span>
+                                    <div className={`w-12 h-6 rounded-full p-1 transition-colors ${userForm.active !== false ? 'bg-emerald-500' : 'bg-slate-300'}`}>
+                                        <div className={`w-4 h-4 bg-white rounded-full shadow-sm transition-transform ${userForm.active !== false ? 'translate-x-6' : 'translate-x-0'}`} />
+                                    </div>
+                                    <input type="checkbox" className="hidden" checked={userForm.active !== false} onChange={e => setUserForm({...userForm, active: e.target.checked})}/>
+                                </label>
+                            </div>
+
+                            <div className="space-y-4">
+                                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Granular Privileges</label>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 h-64 overflow-y-auto pr-2 bg-slate-100/50 p-4 rounded-xl border border-slate-200">
+                                    {[
+                                        {
+                                            title: "Core Operations",
+                                            items: [
+                                                { key: 'dashboard', label: 'Dashboard' },
+                                                { key: 'dailyLog', label: 'Daily Logs' },
+                                                { key: 'rounds', label: 'Daily Rounds' },
+                                                { key: 'tasks', label: 'Tasks' },
+                                            ]
+                                        },
+                                        {
+                                            title: "Animal Management",
+                                            items: [
+                                                { key: 'medical', label: 'Medical Records' },
+                                                { key: 'feedingSchedule', label: 'Feeding Sched.' },
+                                                { key: 'flightRecords', label: 'Flight Logs' },
+                                                { key: 'movements', label: 'Stock Movements' },
+                                            ]
+                                        },
+                                        {
+                                            title: "Site Management",
+                                            items: [
+                                                { key: 'safety', label: 'Health & Safety' },
+                                                { key: 'maintenance', label: 'Maintenance' },
+                                                { key: 'reports', label: 'Reports' },
+                                                { key: 'missingRecords', label: 'Data Audits' },
+                                            ]
+                                        },
+                                        {
+                                            title: "HR & System",
+                                            items: [
+                                                { key: 'attendance', label: 'View Timesheets' },
+                                                { key: 'attendanceManager', label: 'Manage Time' },
+                                                { key: 'holidayApprover', label: 'Approve Leave' },
+                                                { key: 'settings', label: 'System Settings' },
+                                            ]
+                                        }
+                                    ].map(group => (
+                                        <div key={group.title} className="space-y-2">
+                                            <h5 className="text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-200 pb-1 mb-2">{group.title}</h5>
+                                            <div className="space-y-2">
+                                                {group.items.map(({ key, label }) => (
+                                                    <label key={key} className={`flex items-center gap-3 p-2 rounded-lg border cursor-pointer transition-all ${userForm.permissions?.[key as keyof UserPermissions] ? 'bg-slate-800 border-slate-800 text-white' : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'}`}>
+                                                        <div className={`w-3 h-3 rounded border flex items-center justify-center ${userForm.permissions?.[key as keyof UserPermissions] ? 'border-white bg-transparent' : 'border-slate-300 bg-slate-100'}`}>
+                                                            {userForm.permissions?.[key as keyof UserPermissions] && <Check size={8} />}
+                                                        </div>
+                                                        <span className="text-[10px] font-bold uppercase tracking-wide">{label}</span>
+                                                        <input 
+                                                            type="checkbox" 
+                                                            className="hidden" 
+                                                            checked={!!userForm.permissions?.[key as keyof UserPermissions]}
+                                                            onChange={() => togglePermission(key as keyof UserPermissions)}
+                                                        />
+                                                    </label>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+
                         <div className="space-y-4">
                             <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1 text-slate-900">Authorised Digital Signature</label>
                             <SignaturePad value={userForm.signature || ''} onChange={(v) => setUserForm({...userForm, signature: v})}/>
