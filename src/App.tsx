@@ -52,6 +52,8 @@ const AppContent: React.FC = () => {
       <Layout 
         activeView={view} 
         onNavigate={setView}
+        fontScale={fontScale}
+        setFontScale={setFontScale}
       >
         {view === 'dashboard' && <Dashboard onSelectAnimal={selectAnimalAndNavigate} activeTab={activeCategory} setActiveTab={setActiveCategory} viewDate={viewDate} setViewDate={setViewDate} />}
         {view === 'timesheets' && <TimeSheets />}

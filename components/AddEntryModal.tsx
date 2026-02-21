@@ -3,6 +3,7 @@ import { Animal, LogType, LogEntry, AnimalCategory, HealthCondition, HealthRecor
 import { X, Check, Utensils, Scale, Heart, Plane, Trophy, Star, Thermometer, Camera, MapPin, CloudSun, Wind, Droplets, ArrowLeftRight, Sparkles, Clock, Sun, Moon, FileText, Pill, Trash2, Plus, ListFilter, Loader2, Egg, AlertTriangle, Ticket, Users } from 'lucide-react';
 import { getCurrentWeather } from '../services/weatherService';
 import { BCSSelector } from './BCSSelector';
+import { parseWeightInputToGrams } from '../services/weightUtils';
 
 interface AddEntryModalProps {
   isOpen: boolean;
@@ -57,6 +58,9 @@ const AddEntryModal: React.FC<AddEntryModalProps> = ({
   const [feedQuantity, setFeedQuantity] = useState('');
   const [hasCast, setHasCast] = useState<string>('');
   const [weightValue, setWeightValue] = useState('');
+  const [weightLbs, setWeightLbs] = useState('');
+  const [weightOz, setWeightOz] = useState('');
+  const [weightEighths, setWeightEighths] = useState('');
   const [healthType, setHealthType] = useState<HealthRecordType>(HealthRecordType.OBSERVATION);
   const [healthBcs, setHealthBcs] = useState<number>(3);
   const [tempBasking, setTempBasking] = useState('');
@@ -82,7 +86,49 @@ const AddEntryModal: React.FC<AddEntryModalProps> = ({
                 setFeedType(parts.slice(1).join(' ') || '');
                 setHasCast(existingLog.hasCast === true ? 'yes' : 'no');
             }
-            if (existingLog.type === LogType.WEIGHT) setWeightValue(existingLog.weightGrams?.toString() || existingLog.value || '');
+            if (existingLog.type === LogType.WEIGHT) {
+                if (animal.weightUnit === 'lbs_oz' && existingLog.weightGrams) {
+                    const totalOz = existingLog.weightGrams * 0.035274;
+                    const lbs = Math.floor(totalOz / 16);
+                    const remainingOz = totalOz % 16;
+                    const wholeOz = Math.floor(remainingOz);
+                    let eighths = Math.round((remainingOz - wholeOz) * 8);
+                    
+                    let finalLbs = lbs;
+                    let finalOz = wholeOz;
+                    
+                    if (eighths === 8) {
+                        finalOz += 1;
+                        eighths = 0;
+                    }
+                    if (finalOz === 16) {
+                        finalLbs += 1;
+                        finalOz = 0;
+                    }
+
+                    setWeightLbs(finalLbs.toString());
+                    setWeightOz(finalOz.toString());
+                    setWeightEighths(eighths > 0 ? eighths.toString() : '');
+                    setWeightValue('');
+                } else if (animal.weightUnit === 'oz' && existingLog.weightGrams) {
+                    const totalOz = existingLog.weightGrams * 0.035274;
+                    const wholeOz = Math.floor(totalOz);
+                    let eighths = Math.round((totalOz - wholeOz) * 8);
+                    
+                    let finalOz = wholeOz;
+                    if (eighths === 8) {
+                        finalOz += 1;
+                        eighths = 0;
+                    }
+
+                    setWeightOz(finalOz.toString());
+                    setWeightEighths(eighths > 0 ? eighths.toString() : '');
+                    setWeightLbs('');
+                    setWeightValue('');
+                } else {
+                    setWeightValue(existingLog.weightGrams?.toString() || existingLog.value || '');
+                }
+            }
             if (existingLog.type === LogType.HEALTH) { setHealthType(existingLog.healthType || HealthRecordType.OBSERVATION); setHealthBcs(existingLog.bcs || 3); }
             if (existingLog.type === LogType.TEMPERATURE) { setTempBasking(existingLog.baskingTemp?.toString() || ''); setTempCool(existingLog.coolTemp?.toString() || ''); }
             if (existingLog.type === LogType.EGG) setShellQuality(existingLog.shellQuality || ShellQuality.NORMAL);
@@ -93,7 +139,7 @@ const AddEntryModal: React.FC<AddEntryModalProps> = ({
             setLogDate(initialDate || now.toISOString().split('T')[0]);
             setLogTime(now.toTimeString().slice(0, 5));
             setLogNotes(defaultNotes || '');
-            setFeedType(''); setFeedQuantity(''); setHasCast(''); setWeightValue(''); setHealthType(HealthRecordType.OBSERVATION); setHealthBcs(3); setTempBasking(''); setTempCool(''); setShellQuality(ShellQuality.NORMAL); setEventType(''); setEventStartTime(''); setEventEndTime(''); setSelectedEventAnimals([animal.id]);
+            setFeedType(''); setFeedQuantity(''); setHasCast(''); setWeightValue(''); setWeightLbs(''); setWeightOz(''); setWeightEighths(''); setHealthType(HealthRecordType.OBSERVATION); setHealthBcs(3); setTempBasking(''); setTempCool(''); setShellQuality(ShellQuality.NORMAL); setEventType(''); setEventStartTime(''); setEventEndTime(''); setSelectedEventAnimals([animal.id]);
         }
     }
   }, [isOpen, existingLog, initialType, defaultNotes, initialDate]);
@@ -101,7 +147,25 @@ const AddEntryModal: React.FC<AddEntryModalProps> = ({
   const submitAction = async (prevState: any, formDataObj: FormData) => {
     let value = '', weightGrams: number | undefined;
     if (logFormType === LogType.FEED) value = `${feedQuantity} ${feedType}`.trim();
-    if (logFormType === LogType.WEIGHT) { value = weightValue; weightGrams = parseFloat(weightValue); }
+    if (logFormType === LogType.WEIGHT) { 
+        if (animal.weightUnit === 'lbs_oz') {
+            const lbs = parseInt(weightLbs) || 0;
+            const oz = parseInt(weightOz) || 0;
+            const eighths = parseInt(weightEighths) || 0;
+            const totalOz = (lbs * 16) + oz + (eighths / 8);
+            weightGrams = parseWeightInputToGrams(totalOz, 'oz');
+            value = `${lbs}lb ${oz}${eighths > 0 ? ` ${eighths}/8` : ''}oz`;
+        } else if (animal.weightUnit === 'oz') {
+            const oz = parseInt(weightOz) || 0;
+            const eighths = parseInt(weightEighths) || 0;
+            const totalOz = oz + (eighths / 8);
+            weightGrams = parseWeightInputToGrams(totalOz, 'oz');
+            value = `${oz}${eighths > 0 ? ` ${eighths}/8` : ''}oz`;
+        } else {
+            weightGrams = parseWeightInputToGrams(parseFloat(weightValue), animal.weightUnit);
+            value = weightValue; 
+        }
+    }
     if (logFormType === LogType.HEALTH) value = healthType;
     const dateTime = `${logDate}T${logTime}:00`;
     
@@ -190,7 +254,20 @@ const AddEntryModal: React.FC<AddEntryModalProps> = ({
 
                     {logFormType === LogType.WEIGHT && (
                       <div className="bg-blue-50/30 p-6 rounded-[2rem] border-2 border-blue-100/50">
-                        <label className={labelClass}>Subject Weight ({animal.weightUnit})<input type="number" step="0.1" required value={weightValue} onChange={e => setWeightValue(e.target.value)} className={inputClass}/></label>
+                        {animal.weightUnit === 'lbs_oz' ? (
+                            <div className="grid grid-cols-3 gap-4">
+                                <label className={labelClass}>Pounds (lbs)<input type="number" step="1" min="0" required value={weightLbs} onChange={e => setWeightLbs(e.target.value)} className={inputClass}/></label>
+                                <label className={labelClass}>Ounces (oz)<input type="number" step="1" min="0" max="15" required value={weightOz} onChange={e => setWeightOz(e.target.value)} className={inputClass}/></label>
+                                <label className={labelClass}>Eighths (1/8 oz)<select value={weightEighths} onChange={e => setWeightEighths(e.target.value)} className={inputClass}><option value="">0</option>{[1,2,3,4,5,6,7].map(n => <option key={n} value={n}>{n}/8</option>)}</select></label>
+                            </div>
+                        ) : animal.weightUnit === 'oz' ? (
+                            <div className="grid grid-cols-2 gap-4">
+                                <label className={labelClass}>Ounces (oz)<input type="number" step="1" min="0" required value={weightOz} onChange={e => setWeightOz(e.target.value)} className={inputClass}/></label>
+                                <label className={labelClass}>Eighths (1/8 oz)<select value={weightEighths} onChange={e => setWeightEighths(e.target.value)} className={inputClass}><option value="">0</option>{[1,2,3,4,5,6,7].map(n => <option key={n} value={n}>{n}/8</option>)}</select></label>
+                            </div>
+                        ) : (
+                            <label className={labelClass}>Subject Weight ({animal.weightUnit})<input type="number" step="0.1" required value={weightValue} onChange={e => setWeightValue(e.target.value)} className={inputClass}/></label>
+                        )}
                       </div>
                     )}
 

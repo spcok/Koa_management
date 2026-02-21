@@ -5,7 +5,8 @@ import {
   ArrowLeftRight, ShieldAlert, AlertTriangle, Stethoscope, Heart, Wrench, 
   AlertOctagon, Clock, Settings, LogOut, Menu, Power, 
   ChevronLeft, ChevronRight, Maximize, Minimize,
-  HelpCircle, FileText, Calendar, ClipboardCheck, Wifi, WifiOff
+  HelpCircle, FileText, Calendar, ClipboardCheck, Wifi, WifiOff,
+  Type, Minus, Plus
 } from 'lucide-react';
 import { UserRole, User, TimeLogEntry, UserPermissions, OrganisationProfile } from '../types';
 import { useAppData } from '../hooks/useAppData';
@@ -14,10 +15,12 @@ interface LayoutProps {
   children: React.ReactNode;
   activeView: string;
   onNavigate: (view: any) => void;
+  fontScale: number;
+  setFontScale: (scale: number) => void;
 }
 
 const Layout: React.FC<LayoutProps> = ({ 
-  children, activeView, onNavigate
+  children, activeView, onNavigate, fontScale, setFontScale
 }) => {
   const { 
     currentUser, logout, activeShift, clockIn, clockOut, orgProfile, isOffline 
@@ -149,7 +152,30 @@ const Layout: React.FC<LayoutProps> = ({
         {isAdmin && <NavItem view="settings" icon={Settings} label="Settings" permission={p.settings} />}
         <NavItem view="help" icon={HelpCircle} label="Help & Support" permission={true} />
 
-        <div className={`mt-6 mb-2 px-4`}>
+        <div className={`mt-6 mb-2 px-4 space-y-2`}>
+            {!isSidebarCollapsed && (
+                <div className="flex items-center gap-2 bg-slate-800 rounded-xl p-1 border border-slate-700">
+                    <button 
+                        onClick={() => setFontScale(Math.max(70, fontScale - 10))}
+                        className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors flex-1 flex justify-center"
+                        title="Decrease Font Size"
+                    >
+                        <Minus size={16} />
+                    </button>
+                    <div className="flex items-center gap-1 text-slate-500 font-bold text-xs px-2">
+                        <Type size={14} />
+                        <span>{fontScale}%</span>
+                    </div>
+                    <button 
+                        onClick={() => setFontScale(Math.min(150, fontScale + 10))}
+                        className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors flex-1 flex justify-center"
+                        title="Increase Font Size"
+                    >
+                        <Plus size={16} />
+                    </button>
+                </div>
+            )}
+
             {!isSidebarCollapsed && (
                 <button
                     onClick={toggleFullscreen}

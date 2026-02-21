@@ -1,5 +1,5 @@
 
-import React, { useState, Suspense } from 'react';
+import React, { useState, Suspense, useEffect } from 'react';
 import { Animal, AnimalCategory } from './types';
 import Layout from './components/Layout';
 import Dashboard from './components/Dashboard';
@@ -37,6 +37,10 @@ const AppContent: React.FC = () => {
   const [viewDate, setViewDate] = useState(new Date().toISOString().split('T')[0]);
   const [fontScale, setFontScale] = useState(100);
 
+  useEffect(() => {
+    document.documentElement.style.fontSize = `${fontScale}%`;
+  }, [fontScale]);
+
   // Robust selection logic: ensure ID comparison is safe (string vs string)
   const selectedAnimal = selectedAnimalId 
     ? animals.find(a => String(a.id) === String(selectedAnimalId)) 
@@ -52,10 +56,12 @@ const AppContent: React.FC = () => {
   }
 
   return (
-    <div style={{ fontSize: `${fontScale}%` }}>
+    <div>
       <Layout 
         activeView={view} 
         onNavigate={setView}
+        fontScale={fontScale}
+        setFontScale={setFontScale}
       >
         {view === 'dashboard' && (
           <Dashboard 
@@ -86,7 +92,7 @@ const AppContent: React.FC = () => {
         )}
 
         {view === 'daily' && <DailyLog activeCategory={activeCategory} setActiveCategory={setActiveCategory} viewDate={viewDate} setViewDate={setViewDate} />}
-        {view === 'rounds' && <DailyRounds />}
+        {view === 'rounds' && <DailyRounds viewDate={viewDate} setViewDate={setViewDate} />}
         {view === 'tasks' && <Tasks />}
         {view === 'flight_records' && <FlightRecords />}
         {view === 'schedule' && <Schedule />}

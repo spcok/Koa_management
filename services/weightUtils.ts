@@ -47,3 +47,20 @@ export const formatWeightDisplay = (grams: number | undefined | null, unit: 'g' 
     // Fallback
     return `${Math.round(grams)}g`;
 };
+
+/**
+ * Converts a numeric input value from the specified unit back to grams.
+ * For 'lbs_oz', we assume the input is in total ounces if it's a single number field, 
+ * but ideally the UI should provide two fields. If it's a single number, we treat it as ounces.
+ */
+export const parseWeightInputToGrams = (value: number, unit: 'g' | 'oz' | 'lbs_oz'): number => {
+    if (unit === 'g') {
+        return value;
+    }
+    // 1 ounce = 28.349523125 grams
+    if (unit === 'oz' || unit === 'lbs_oz') {
+        return value * 28.349523125;
+    }
+    return value;
+};
+
