@@ -176,16 +176,6 @@ export const dataService = {
     saveSiteLog: async (log: SiteLogEntry): Promise<void> => {
         const { error } = await supabase.from('site_logs').upsert({ id: log.id, json: log });
         if (error) throw error;
-        
-        // Update local cache
-        const currentLogs = getLocal<SiteLogEntry[]>(CACHE_KEYS.SITE_LOGS, []);
-        const index = currentLogs.findIndex(l => l.id === log.id);
-        if (index > -1) {
-            currentLogs[index] = log;
-        } else {
-            currentLogs.unshift(log);
-        }
-        setLocal(CACHE_KEYS.SITE_LOGS, currentLogs);
     },
 
     deleteSiteLog: async (id: string): Promise<void> => {

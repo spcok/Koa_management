@@ -8,7 +8,7 @@ import {
 import { useAppData } from '../hooks/useAppData';
 
 interface CheckState {
-    isAlive?: boolean;
+    isAlive: boolean;
     isWatered: boolean;
     isSecure: boolean;
     healthIssue?: string;
@@ -80,8 +80,7 @@ const DailyRounds: React.FC<DailyRoundsProps> = ({ viewDate, setViewDate }) => {
     const completedChecks = categoryAnimals.reduce((acc, animal) => {
         const check = checks[animal.id];
         if (!check) return acc;
-        if (check.isAlive === false) return acc + 1; 
-        if (check.isAlive === undefined) return acc;
+        if (!check.isAlive) return acc + 1; 
         
         const isSecureChecked = check.isSecure || !!check.securityIssue;
         const isWateredChecked = check.isWatered;
@@ -112,7 +111,7 @@ const DailyRounds: React.FC<DailyRoundsProps> = ({ viewDate, setViewDate }) => {
     const toggleWater = (id: string) => {
         setChecks(prev => ({
             ...prev,
-            [id]: { ...prev[id] || { isAlive: undefined, isWatered: false, isSecure: false }, isWatered: !prev[id]?.isWatered }
+            [id]: { ...prev[id] || { isAlive: true, isWatered: false, isSecure: false }, isWatered: !prev[id]?.isWatered }
         }));
     };
 
@@ -126,20 +125,20 @@ const DailyRounds: React.FC<DailyRoundsProps> = ({ viewDate, setViewDate }) => {
         } else {
             setChecks(prev => ({
                 ...prev,
-                [id]: { ...prev[id] || { isAlive: undefined, isWatered: false, isSecure: false }, isSecure: true, securityIssue: undefined }
+                [id]: { ...prev[id] || { isAlive: true, isWatered: false, isSecure: false }, isSecure: true, securityIssue: undefined }
             }));
         }
     };
 
     const handleHealthToggle = (id: string) => {
-        const current = checks[id]?.isAlive;
-        if (current === true) {
+        const current = checks[id]?.isAlive ?? true;
+        if (current) {
             setReportType('HEALTH');
             setReportAnimalId(id);
             setIssueText('');
             setReportModalOpen(true);
         } else {
-            setChecks(prev => ({ ...prev, [id]: { ...prev[id] || { isWatered: false, isSecure: false }, isAlive: true, healthIssue: undefined } }));
+            setChecks(prev => ({ ...prev, [id]: { ...prev[id], isAlive: true, healthIssue: undefined } }));
         }
     };
 
@@ -149,7 +148,7 @@ const DailyRounds: React.FC<DailyRoundsProps> = ({ viewDate, setViewDate }) => {
         setChecks(prev => ({
             ...prev,
             [reportAnimalId]: { 
-                ...prev[reportAnimalId] || { isAlive: undefined, isWatered: false, isSecure: false },
+                ...prev[reportAnimalId] || { isAlive: true, isWatered: false, isSecure: false },
                 ...(reportType === 'HEALTH' 
                     ? { isAlive: false, healthIssue: issueText } 
                     : { isSecure: false, securityIssue: issueText, isWatered: prev[reportAnimalId]?.isWatered ?? false })
@@ -168,7 +167,7 @@ const DailyRounds: React.FC<DailyRoundsProps> = ({ viewDate, setViewDate }) => {
         categoryAnimals.forEach(animal => {
             const check = checks[animal.id];
             if (!check) return;
-            const issueType = check.isAlive === false ? 'Injury' : (!check.isSecure ? 'Security' : null);
+            const issueType = !check.isAlive ? 'Injury' : (!check.isSecure ? 'Security' : null);
             if (issueType) {
                 addIncident({
                     id: `inc_round_${timestamp}_${animal.id}`,
@@ -192,7 +191,7 @@ const DailyRounds: React.FC<DailyRoundsProps> = ({ viewDate, setViewDate }) => {
             title: `${roundType} Round: ${activeTab}`,
             description: JSON.stringify({
                 type: roundType, section: activeTab, staff: currentUser?.name || 'Unknown', signedBy: signingInitials, userId: currentUser?.id || 'unknown',
-                totalChecked: totalAnimals, issuesFound: categoryAnimals.filter(a => checks[a.id]?.isAlive === false || checks[a.id]?.securityIssue).length,
+                totalChecked: totalAnimals, issuesFound: categoryAnimals.filter(a => !checks[a.id]?.isAlive || checks[a.id]?.securityIssue).length,
                 notes: generalNotes, details: checks
             }),
             location: `${activeTab} Section`, priority: 'Medium', status: 'Completed', loggedBy: signingInitials, timestamp: timestamp
@@ -240,32 +239,32 @@ const DailyRounds: React.FC<DailyRoundsProps> = ({ viewDate, setViewDate }) => {
                     <div className="text-center py-12 opacity-50"><p className="font-bold text-slate-400 text-sm">No animals in this section.</p></div>
                 ) : (
                     categoryAnimals.map(animal => {
-                        const state = checks[animal.id] || { isAlive: undefined, isWatered: false, isSecure: false };
+                        const state = checks[animal.id] || { isAlive: true, isWatered: false, isSecure: false };
                         const isDone = (activeTab === AnimalCategory.OWLS || activeTab === AnimalCategory.RAPTORS) 
-                            ? (state.isAlive !== undefined && (state.isSecure || !!state.securityIssue))
-                            : (state.isAlive !== undefined && state.isWatered && (state.isSecure || !!state.securityIssue));
+                            ? (state.isAlive && (state.isSecure || !!state.securityIssue))
+                            : (state.isAlive && state.isWatered && (state.isSecure || !!state.securityIssue));
                         
                         return (
-                            <div key={animal.id} className={`bg-white border-2 rounded-xl p-2 md:p-3 flex items-center gap-2 md:gap-4 transition-all ${isDone ? 'border-emerald-100 shadow-sm' : (state.isAlive === false || state.securityIssue) ? 'border-rose-100 bg-rose-50' : 'border-slate-200'}`}>
+                            <div key={animal.id} className={`bg-white border-2 rounded-xl p-2 md:p-3 flex items-center gap-2 md:gap-4 transition-all ${isDone ? 'border-emerald-100 shadow-sm' : (!state.isAlive || state.securityIssue) ? 'border-rose-100 bg-rose-50' : 'border-slate-200'}`}>
                                 <div className="flex items-center gap-3 flex-1 min-w-0">
                                     <img src={animal.imageUrl} alt={animal.name} className="hidden md:block w-12 h-12 rounded-lg object-cover bg-slate-200 shadow-sm shrink-0" />
                                     <div className="flex-1 min-w-0">
                                         <h3 className="font-bold text-slate-800 text-sm truncate">{animal.name}</h3>
                                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{animal.location}</p>
-                                        {state.isAlive === false && (<span className="text-[9px] font-black text-rose-600 bg-rose-100 px-1.5 py-0.5 rounded flex items-center gap-1 mt-1 w-fit"><AlertTriangle size={10}/> HEALTH</span>)}
+                                        {!state.isAlive && (<span className="text-[9px] font-black text-rose-600 bg-rose-100 px-1.5 py-0.5 rounded flex items-center gap-1 mt-1 w-fit"><AlertTriangle size={10}/> HEALTH</span>)}
                                         {state.securityIssue && (<span className="text-[9px] font-black text-rose-600 bg-rose-100 px-1.5 py-0.5 rounded flex items-center gap-1 mt-1 w-fit"><ShieldCheck size={10}/> ALERT</span>)}
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-1 md:gap-4 shrink-0">
-                                    <button onClick={() => handleHealthToggle(animal.id)} disabled={isPastRound} className={`flex flex-col items-center justify-center w-12 h-12 md:w-14 md:h-14 rounded-xl border-2 transition-all ${state.isAlive === true ? 'border-emerald-100 bg-emerald-50 text-emerald-600' : state.isAlive === false ? 'border-rose-200 bg-rose-100 text-rose-600' : 'border-slate-100 bg-slate-50 text-slate-300'} disabled:opacity-50`}>
-                                        <Heart size={20} fill={state.isAlive === true ? "currentColor" : "none"} className="md:w-5 md:h-5"/>
-                                        <span className="text-[7px] md:text-[8px] font-black uppercase mt-0.5 hidden md:block">{state.isAlive === true ? 'WELL' : state.isAlive === false ? 'SICK' : 'HEALTH'}</span>
+                                    <button onClick={() => handleHealthToggle(animal.id)} disabled={isPastRound} className={`flex flex-col items-center justify-center w-12 h-12 md:w-14 md:h-14 rounded-xl border-2 transition-all ${state.isAlive ? 'border-emerald-100 bg-emerald-50 text-emerald-600' : 'border-rose-200 bg-rose-100 text-rose-600'} disabled:opacity-50`}>
+                                        <Heart size={20} fill={state.isAlive ? "currentColor" : "none"} className="md:w-5 md:h-5"/>
+                                        <span className="text-[7px] md:text-[8px] font-black uppercase mt-0.5 hidden md:block">{state.isAlive ? 'WELL' : 'SICK'}</span>
                                     </button>
-                                    <button onClick={() => toggleWater(animal.id)} disabled={state.isAlive === false || isPastRound} className={`flex flex-col items-center justify-center w-12 h-12 md:w-14 md:h-14 rounded-xl border-2 transition-all ${state.isWatered ? 'border-blue-100 bg-blue-50 text-blue-500' : 'border-slate-100 bg-slate-50 text-slate-300'} disabled:opacity-50`}>
+                                    <button onClick={() => toggleWater(animal.id)} disabled={!state.isAlive || isPastRound} className={`flex flex-col items-center justify-center w-12 h-12 md:w-14 md:h-14 rounded-xl border-2 transition-all ${state.isWatered ? 'border-blue-100 bg-blue-50 text-blue-500' : 'border-slate-100 bg-slate-50 text-slate-300'} disabled:opacity-50`}>
                                         {state.isWatered ? <Check size={24} className="md:w-6 md:h-6" strokeWidth={4} /> : <Droplets size={20} className="md:w-5 md:h-5"/>}
                                         <span className="text-[7px] md:text-[8px] font-black uppercase mt-0.5 hidden md:block">WATER</span>
                                     </button>
-                                    <button onClick={() => toggleSecure(animal.id)} disabled={state.isAlive === false || isPastRound} className={`flex flex-col items-center justify-center w-12 h-12 md:w-14 md:h-14 rounded-xl border-2 transition-all ${state.isSecure ? 'border-emerald-100 bg-emerald-50 text-emerald-600' : (state.securityIssue ? 'border-rose-200 bg-rose-100 text-rose-600' : 'border-slate-100 bg-slate-50 text-slate-300')} disabled:opacity-50`}>
+                                    <button onClick={() => toggleSecure(animal.id)} disabled={!state.isAlive || isPastRound} className={`flex flex-col items-center justify-center w-12 h-12 md:w-14 md:h-14 rounded-xl border-2 transition-all ${state.isSecure ? 'border-emerald-100 bg-emerald-50 text-emerald-600' : (state.securityIssue ? 'border-rose-200 bg-rose-100 text-rose-600' : 'border-slate-100 bg-slate-50 text-slate-300')} disabled:opacity-50`}>
                                         {state.isSecure ? <Check size={24} className="md:w-6 md:h-6" strokeWidth={4} /> : (!!state.securityIssue ? <X size={24} className="md:w-6 md:h-6" strokeWidth={4} /> : <Lock size={20} className="md:w-5 md:h-5"/>)}
                                         <span className="text-[7px] md:text-[8px] font-black uppercase mt-0.5 hidden md:block">{state.isSecure ? 'SAFE' : (!!state.securityIssue ? 'RISK' : 'SECURE')}</span>
                                     </button>
